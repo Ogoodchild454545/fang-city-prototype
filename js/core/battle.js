@@ -9,7 +9,7 @@ import { rngNext, rngInt } from './rng.js';
 export const W = 10, H = 7;
 export const T = { FLOOR: 0, COVER: 1, WALL: 2 };
 export const MAX_TURNS = 20;
-export const COST = { shot: 2, aimed: 3, suppress: 2, patch: 2, gadget: 1, strike: 2 };
+export const COST = { shot: 2, aimed: 3, suppress: 2, patch: 2, gadget: 1, strike: 2, skill: 1 };
 
 const idx = (b, x, y) => y * b.w + x;
 const inB = (b, x, y) => x >= 0 && y >= 0 && x < b.w && y < b.h;
@@ -66,9 +66,10 @@ function genStreet(b, h) {
 
 // ---------------------------------------------------------------- units
 export function unitFromMember(m, side, uid) {
-  const s = memberStats(m);
+  const s = m.stats || memberStats(m);
   return {
     uid, side, memberId: side === 'player' ? m.id : null,
+    troop: m.troop || null, troopLv: m.troopLv || 0, bossId: m.bossId || null, skill: m.skill || null, skillUsed: false, img: m.img || null,
     name: m.name, boss: !!m.boss, species: m.species, role: m.role, rarity: m.rarity, level: m.level,
     x: 0, y: 0, hp: s.hp, maxHp: s.hp, ap: s.ap, maxAp: s.ap,
     muscle: s.muscle, aim: s.aim, nerve: s.nerve, def: s.def, crit: s.crit,
@@ -259,6 +260,33 @@ export function applyAction(b, a) {
     b.log.push(`${u.name} ${p.melee ? 'hits' : 'shoots'} ${t.name} for ${dmg}${crit ? ' (CRIT)' : ''}${kill ? (t.structure ? (t.loot ? ' and loots it' : ' and wrecks it') : ' and drops them') : ''}.`);
     checkEnd(b, ev);
     return { ok: true, ev };
+  }
+
+  if (a.type === 'skill') {
+    if (!u.skill || u.skillUsed || u.ap < COST.skill) return { ok: false, ev };
+    if (u.skill === 'howl') {
+      u.ap -= COST.skill; u.skillUsed = true;
+      for (const o of living(b, u.side)) if (!o.structure) { o.ap += 2; ev.push({ type: 'buff', uid: o.uid, text: '+2 AP' }); }
+      b.log.push(`${u.name} lets out a Rally Howl: the whole crew gets +2 AP.`);
+      return { ok: true, ev };
+    }
+    if (u.skill === 'roll') {
+      const t = unitById(b, a.target);
+      if (!t || !t.alive || t.side === u.side || dist(u, t) !== 1) return { ok: false, ev };
+      u.ap -= COST.skill; u.skillUsed = true;
+      const dmg = Math.round(u.weapon.dmg * (1 + (u.muscle - 50) / 150) * 3);
+      t.hp = Math.max(0, t.hp - dmg);
+      const kill = t.hp <= 0;
+      if (kill) { t.alive = false; if (t.loot) { b.looted.cash += t.loot.cash || 0; b.looted.influence += t.loot.influence || 0; t.lootTaken = true; } }
+      const heal = Math.min(u.maxHp - u.hp, Math.round(dmg / 2));
+      u.hp += heal;
+      ev.push({ type: 'attack', uid: u.uid, target: t.uid, hit: true, dmg, crit: true, kill, melee: true, chance: 100 });
+      if (heal) ev.push({ type: 'heal', uid: u.uid, target: u.uid, amt: heal });
+      b.log.push(`${u.name} Death Rolls ${t.name} for ${dmg}${kill ? (t.structure ? ' and wrecks it' : ' and drops them') : ''}.`);
+      checkEnd(b, ev);
+      return { ok: true, ev };
+    }
+    return { ok: false, ev };
   }
 
   if (a.type === 'patch' || a.type === 'gadget') {

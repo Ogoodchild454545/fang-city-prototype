@@ -69,6 +69,14 @@ export function aiNextAction(b) {
   for (const u of living(b, 'enemy')) {
     if (b.meta.aiDone.includes(u.uid) || u.ap <= 0 || !u.weapon) continue;
 
+    // 0) boss skills
+    if (u.skill && !u.skillUsed && u.ap >= COST.skill) {
+      if (u.skill === 'howl' && b.turn >= 2 && living(b, 'enemy').filter((a) => !a.structure).length >= 3) return { type: 'skill', uid: u.uid };
+      if (u.skill === 'roll') {
+        const adj = foes.filter((f) => dist(f, u) === 1).sort((a, c) => (a.structure ? 1 : 0) - (c.structure ? 1 : 0) || a.hp - c.hp)[0];
+        if (adj) return { type: 'skill', uid: u.uid, target: adj.uid };
+      }
+    }
     // 1) heal
     if (u.role === 'doc' && !u.patched && u.ap >= COST.patch) {
       const hurt = living(b, 'enemy').filter((a) => dist(a, u) <= 1 && a.hp < a.maxHp * 0.6).sort((a, c) => a.hp / a.maxHp - c.hp / c.maxHp)[0];

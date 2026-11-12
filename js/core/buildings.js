@@ -9,7 +9,7 @@ export const BUILDINGS = {
   den:      { name: 'The Den', cat: 'core', size: 3, res: 'cash', maxLv: 6, unlock: 1, counts: [0, 1, 1, 1, 1, 1, 1],
               costs: [0, 0, 1000, 6000, 30000, 140000, 700000], times: [0, 0, 60, 300, 1200, 3600, 10800],
               store: { cash: [0, 1500, 5000, 15000, 50000, 150000, 450000], influence: [0, 200, 500, 1200, 3000, 8000, 20000] },
-              housing: [0, 3, 3, 4, 4, 5, 5],
+              housing: [0, 10, 12, 15, 20, 25, 30],
               desc: 'Your headquarters. Its level decides which buildings you can put up, how many, and how far they can be upgraded. Holds some cash and influence.' },
   // ---- money makers (cash)
   stall:    { name: 'Knock-off Stall', cat: 'money', size: 2, res: 'cash', cost0: 60, g: 2.0, t0: 5, maxLv: 10, unlock: 1, counts: [0, 1, 2, 2, 3, 3, 4],
@@ -42,11 +42,11 @@ export const BUILDINGS = {
               store: { influence: { base: 300, g: 2.0 } }, desc: 'Names, favours and debts. Stores influence.' },
   // ---- crew
   gym:      { name: 'Training Yard', cat: 'crew', size: 2, res: 'influence', cost0: 60, g: 2.1, t0: 10, maxLv: 10, unlock: 1, counts: [0, 1, 1, 1, 2, 2, 2],
-              desc: 'Where your crew level up. Each yard trains one member at a time; higher levels train faster.' },
+              desc: 'Trains troops in a queue. Its level unlocks new troop types (Wolf Bruiser at 2, Snake Medic at 3, Badger Tank at 4, Croc Heavy at 5, Bear Breacher at 7) and trains a little faster.' },
   bunk:     { name: 'Bunkhouse', cat: 'crew', size: 2, res: 'influence', cost0: 80, g: 2.1, t0: 15, maxLv: 10, unlock: 1, counts: [0, 1, 1, 2, 2, 3, 3],
-              housing: 2, desc: 'Beds for your crew. More bunks, bigger roster.' },
+              housing: { base: 6, per: 4 }, desc: 'Bunks for your troops. Every level houses 4 more space worth of crew.' },
   armoury:  { name: 'Armoury', cat: 'crew', size: 2, res: 'influence', cost0: 250, g: 2.1, t0: 60, maxLv: 10, unlock: 2, counts: [0, 0, 1, 1, 1, 1, 1],
-              desc: 'Unlocks buying gear. Level 3 stocks rare gear, level 5 epic.' },
+              desc: 'Upgrades troop types: better weapons, armour and health. Max troop level is the Armoury level + 1.' },
   family:   { name: 'Family Club', cat: 'social', size: 3, res: 'cash', cost0: 20000, g: 2.0, t0: 600, maxLv: 1, unlock: 3, counts: [0, 0, 0, 1, 1, 1, 1],
               desc: 'Join or start a Family: shared chat, crew donations and Family wars. (Coming soon: online feature.)' },
   // ---- defence (only matter when your base is raided; act as turrets in raid battles)
@@ -112,7 +112,7 @@ export function storeOf(type, lv, res) {
 export function housingOf(type, lv) {
   const d = BUILDINGS[type];
   if (lv <= 0 || !d.housing) return 0;
-  return Array.isArray(d.housing) ? d.housing[lv] : d.housing + lv;
+  return Array.isArray(d.housing) ? d.housing[lv] : d.housing.base + d.housing.per * lv;
 }
 export function turretOf(type, lv) {
   const t = BUILDINGS[type].turret;

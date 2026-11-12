@@ -1,6 +1,6 @@
 // Static game definitions. Pure data: safe to share between client and a future server.
 
-export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.2.0' };
+export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.3.0' };
 
 export const SPECIES = {
   wolf:   { name: 'Wolf',      gang: 'grey',  img: 'assets/wolf.jpg',   base: { muscle: 55, aim: 60, nerve: 62 }, trait: 'pack',  traitName: 'Pack Tactics', traitDesc: '+15% damage when next to an ally' },
@@ -94,6 +94,59 @@ export const REP_TIERS = [
   { min: 2200, name: 'Kingpin' },
 ];
 
+// Troop types: one shared roster for every player, mixed species. Trained in batches at the
+// Training Yard (unlocked by its level), upgraded in the Armoury. space = housing it takes.
+// weapons/armour lists are indexed by troop level tier (level 1-3, 4-6, 7+).
+export const TROOPS = {
+  rat:    { name: 'Rat Runner',    species: 'rat',    role: 'enforcer', space: 1, cost: 25,  time: 8,   yard: 1, hp: 0.8, base: { muscle: 46, aim: 40, nerve: 50 },
+            weapons: ['knife', 'bat', 'machete'], armour: ['hoodie', 'hoodie', 'leather'], gadget: null,
+            blurb: 'Cheap and quick. Scurry gives +1 AP, so they reach shooters first.' },
+  fox:    { name: 'Fox Shooter',   species: 'fox',    role: 'shooter',  space: 2, cost: 60,  time: 15,  yard: 1, hp: 0.9, base: { muscle: 40, aim: 72, nerve: 64 },
+            weapons: ['pocket', 'pistol9', 'smg'], armour: ['hoodie', 'leather', 'leather'], gadget: null,
+            blurb: 'Mid-range gunner with a cold eye: +15% crit. Can pin enemies down.' },
+  wolf:   { name: 'Wolf Bruiser',  species: 'wolf',   role: 'enforcer', space: 3, cost: 120, time: 30,  yard: 2, hp: 1.1, base: { muscle: 70, aim: 50, nerve: 64 },
+            weapons: ['bat', 'machete', 'sledge'], armour: ['leather', 'leather', 'ironhide'], gadget: null,
+            blurb: 'Front-line muscle. Pack Tactics: +15% damage next to an ally.' },
+  snake:  { name: 'Snake Medic',   species: 'snake',  role: 'doc',      space: 3, cost: 150, time: 45,  yard: 3, hp: 0.9, base: { muscle: 40, aim: 60, nerve: 70 },
+            weapons: ['pocket', 'pistol9', 'pistol9'], armour: ['hoodie', 'leather', 'leather'], gadget: 'medkit',
+            blurb: 'Patches up the crew and carries a Med Kit. Its shots poison.' },
+  badger: { name: 'Badger Tank',   species: 'badger', role: 'enforcer', space: 5, cost: 300, time: 75,  yard: 4, hp: 1.6, base: { muscle: 74, aim: 40, nerve: 70 },
+            weapons: ['bat', 'bat', 'machete'], armour: ['leather', 'ironhide', 'kevlar'], gadget: null,
+            blurb: 'Soaks up fire. Thick Hide takes 1 less damage from every hit.' },
+  croc:   { name: 'Croc Heavy',    species: 'croc',   role: 'enforcer', space: 6, cost: 500, time: 120, yard: 5, hp: 1.5, base: { muscle: 82, aim: 42, nerve: 60 },
+            weapons: ['machete', 'sledge', 'sledge'], armour: ['leather', 'ironhide', 'ironhide'], gadget: null,
+            blurb: 'Huge melee hits. Death Roll: +25% melee damage.' },
+  bear:   { name: 'Bear Breacher', species: 'bear',   role: 'shooter',  space: 8, cost: 800, time: 180, yard: 7, hp: 1.7, base: { muscle: 80, aim: 56, nerve: 56 },
+            weapons: ['sawnoff', 'sawnoff', 'sawnoff'], armour: ['leather', 'ironhide', 'kevlar'], gadget: 'spikes',
+            blurb: 'Walks through gunfire with a sawn-off. Bulk: +30% health.' },
+};
+export const TROOP_ORDER = ['rat', 'fox', 'wolf', 'snake', 'badger', 'croc', 'bear'];
+export const TROOP_MAX_LV = 10;
+export const DEPLOY_CAP = 8; // troops per battle (bosses come on top)
+
+// Bosses: named, collectable heroes with a once-per-battle skill. Unlocked by Den level.
+export const BOSSES = {
+  magrey: { name: 'Ma Grey', species: 'wolf', img: 'assets/boss-magrey.jpg', den: 2, cost: 2500, role: 'shooter', base: { muscle: 66, aim: 74, nerve: 80 }, weapon: 'smg', armour: 'leather', hp: 1.5,
+            skill: 'howl', skillName: 'Rally Howl', skillDesc: 'Every crew member gets +2 AP right now. Once per battle.' },
+  scales: { name: 'Old Scales', species: 'croc', img: 'assets/boss.jpg', den: 4, cost: 40000, role: 'enforcer', base: { muscle: 92, aim: 50, nerve: 76 }, weapon: 'sledge', armour: 'ironhide', hp: 1.9,
+            skill: 'roll', skillName: 'Death Roll', skillDesc: 'A crushing bite on an adjacent enemy: triple damage that ignores armour, and he heals half of it. Once per battle.' },
+};
+export const BOSS_ORDER = ['magrey', 'scales'];
+export const BOSS_SLOTS = 3; // the third slot is a teaser (Den 6, coming soon)
+export const BOSS_REST_MIN = 10; // minutes a knocked-out boss needs before the next fight
+
+// PvE missions: the four gang districts as enemy maps, three missions each.
+export const MISSIONS = [
+  { gang: 'grey',   name: "Grey Pack Turf",      img: 'concept/turf/grey-pack-turf.jpg',      den: 1, blurb: 'Tower blocks and a scrapyard held by wolves and rats.',
+    stages: [{ name: 'Corner Shakedown', count: 3, level: 1, tier: 0 }, { name: 'Scrapyard Ambush', count: 4, level: 3, tier: 1 }, { name: 'The Pack Leader', count: 4, level: 5, tier: 1 }] },
+  { gang: 'iron',   name: 'Iron Claw Yards',     img: 'concept/turf/iron-claw-turf.jpg',      den: 2, blurb: 'Warehouses, trucks and a boxing gym run by badgers and bears.',
+    stages: [{ name: 'Loading Bay', count: 4, level: 5, tier: 1 }, { name: 'Gym Brawl', count: 4, level: 7, tier: 2 }, { name: 'Iron Foreman', count: 5, level: 9, tier: 2 }] },
+  { gang: 'velvet', name: 'Velvet Den Strip',    img: 'concept/turf/velvet-den-turf.jpg',     den: 3, blurb: 'Neon clubs and a casino where the foxes count the money.',
+    stages: [{ name: 'Velvet Rope', count: 4, level: 9, tier: 2 }, { name: 'Casino Floor', count: 5, level: 11, tier: 3 }, { name: 'The Gryphon Penthouse', count: 5, level: 13, tier: 3 }] },
+  { gang: 'swamp',  name: 'Swamp Syndicate Docks', img: 'concept/turf/swamp-syndicate-turf.jpg', den: 4, blurb: 'Fog, containers and a pawn shop. Crocs and snakes own the harbour.',
+    stages: [{ name: 'Fog on the Quay', count: 5, level: 13, tier: 3 }, { name: 'Container Maze', count: 5, level: 16, tier: 4 }, { name: 'Deacon Mire', count: 5, level: 19, tier: 4, boss: true }] },
+];
+
 export const RECRUIT = {
   street:  { name: 'Street Recruit', currency: 'cash', odds: [['common', 72], ['rare', 24], ['epic', 4]] },
   premium: { name: 'Gold Teeth Recruit', currency: 'teeth', cost: 100, odds: [['rare', 62], ['epic', 31], ['legendary', 7]], pity: 30 },
@@ -102,14 +155,14 @@ export const ROSTER_BASE = 10;
 export const SQUAD_SIZE = 4;
 
 export const DAILY_REWARDS = [
-  { cash: 500 }, { teeth: 20 }, { influence: 25 }, { gear: 'medkit' }, { teeth: 40 }, { influence: 60 }, { ticket: 1, teeth: 60 },
+  { cash: 500 }, { teeth: 20 }, { influence: 25 }, { cash: 1500 }, { teeth: 40 }, { influence: 60 }, { ticket: 1, teeth: 60 },
 ];
 
 export const JOB_TEMPLATES = [
   { id: 'collect', text: 'Collect from your buildings 20 times', goal: 20, stat: 'collects', reward: { teeth: 10 } },
   { id: 'clear',   text: 'Clear 5 pieces of junk from your land', goal: 5, stat: 'cleared', reward: { teeth: 10 } },
   { id: 'win',     text: 'Win 2 street fights',               goal: 2,  stat: 'wins',     reward: { influence: 30 } },
-  { id: 'train',   text: 'Train a crew member',               goal: 1,  stat: 'trains',   reward: { teeth: 10 } },
+  { id: 'train',   text: 'Train 6 troops',                    goal: 6,  stat: 'trains',   reward: { teeth: 10 } },
   { id: 'upgrade', text: 'Start 3 building upgrades',          goal: 3,  stat: 'upgrades', reward: { cash: 1500 } },
   { id: 'taps',    text: 'Shake down the street 100 times',   goal: 100, stat: 'taps',    reward: { influence: 15 } },
 ];
@@ -125,11 +178,11 @@ export const SHOP = {
     { id: 't6', teeth: 14000, price: '£99.99', tag: 'Best value' },
   ],
   offers: [
-    { id: 'starter', name: 'Starter Crate', price: '£2.99', once: true, desc: '500 Gold Teeth, an Epic Fox marksman and a Kevlar Vest. One per player.', grant: { teeth: 500, member: { species: 'fox', role: 'marksman', rarity: 'epic' }, gear: 'kevlar' } },
+    { id: 'starter', name: 'Starter Crate', price: '£2.99', once: true, desc: '500 Gold Teeth, Ma Grey unlocked early, and your army topped up with Wolf Bruisers. One per player.', grant: { teeth: 500, boss: 'magrey', troops: { wolf: 3 } } },
     { id: 'builder', name: 'Second Builder', price: '£3.99', once: true, desc: 'A second builder for your base: two upgrades or clear-ups at once. Permanent. (Also buyable for 250 Gold Teeth.)', grant: { builder: 1 } },
-    { id: 'vip',     name: 'Made Member (monthly)', price: '£4.99 / month', desc: '50 Gold Teeth daily, offline earnings up to 12h, all buildings auto-collect, one extra training slot, gold name badge.', grant: { vip: 30 } },
-    { id: 'pass',    name: 'Street Pass (season)', price: '£7.99', desc: 'Premium reward track for this 30-day season: exclusive Neon Rain skin, 1,000+ Gold Teeth, recruit tickets.', grant: { pass: true } },
-    { id: 'bench',   name: 'Extra Training Slot', price: '£2.99', once: true, desc: 'Train one more crew member at once (needs a Training Yard). Permanent.', grant: { bench: 1 } },
+    { id: 'vip',     name: 'Made Member (monthly)', price: '£4.99 / month', desc: '50 Gold Teeth daily, offline earnings up to 12h, all buildings auto-collect, troops train 25% faster, gold name badge.', grant: { vip: 30 } },
+    { id: 'pass',    name: 'Street Pass (season)', price: '£7.99', desc: 'Premium reward track for this 30-day season: exclusive Neon Rain skin, 1,000+ Gold Teeth, training boosts.', grant: { pass: true } },
+    { id: 'bench',   name: 'Drill Sergeant', price: '£2.99', once: true, desc: 'Troops train 25% faster, for good.', grant: { bench: 1 } },
     { id: 'noads',   name: 'No Ads', price: '£3.99', once: true, desc: 'Removes interstitial ads. Reward ads stay optional and still pay out.', grant: { noads: true } },
   ],
   cosmetics: [
