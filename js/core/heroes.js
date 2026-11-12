@@ -10,7 +10,7 @@ export const HEROES = {
     blurb: 'A steady street rifleman. Every new crew starts with him.',
     portrait: 'assets/heroes/rook.jpg', thumb: 'assets/heroes/rook-64.jpg',
     mood: 'heroic',
-    hp: 12, ap: 4, move: 5, aim: 72, armor: 0,
+    hp: 12, ap: 4, move: 5, aim: 72, armor: 0, speed: 8,
     weapon: { name: 'Carbine', dmg: [3, 5], range: 8, typ: 'rifle' },
     abilities: [
       { id: 'shot', name: 'Snap Shot', ap: 2, kind: 'shot', text: 'Standard carbine shot.' },
@@ -25,7 +25,7 @@ export const HEROES = {
     blurb: 'Tiny, fast, and always first around a corner.',
     portrait: 'assets/heroes/pip.jpg', thumb: 'assets/heroes/pip-64.jpg',
     mood: 'heroic',
-    hp: 8, ap: 5, move: 7, aim: 68, armor: 0,
+    hp: 8, ap: 5, move: 7, aim: 68, armor: 0, speed: 12,
     weapon: { name: 'Holdout pistol', dmg: [2, 4], range: 6, typ: 'pistol' },
     abilities: [
       { id: 'dash', name: 'Dash', ap: 1, kind: 'dash', text: 'Move again this turn with +2 range. Once per turn.' },
@@ -40,7 +40,7 @@ export const HEROES = {
     blurb: 'A rooftop shot. She prefers to stand still and pick her moment.',
     portrait: 'assets/heroes/lumen.jpg', thumb: 'assets/heroes/lumen-64.jpg',
     mood: 'heroic',
-    hp: 9, ap: 4, move: 4, aim: 82, armor: 0,
+    hp: 9, ap: 4, move: 4, aim: 82, armor: 0, speed: 7,
     weapon: { name: 'Long rifle', dmg: [4, 6], range: 11, typ: 'rifle' },
     abilities: [
       { id: 'aimed', name: 'Aimed Shot', ap: 3, kind: 'aimed', text: '+25% hit. Best when she has not moved.' },
@@ -55,7 +55,7 @@ export const HEROES = {
     blurb: 'Walks into the street first and dares anyone to move him.',
     portrait: 'assets/heroes/brick.jpg', thumb: 'assets/heroes/brick-64.jpg',
     mood: 'heroic',
-    hp: 16, ap: 4, move: 4, aim: 62, armor: 1,
+    hp: 16, ap: 4, move: 4, aim: 62, armor: 1, speed: 5,
     weapon: { name: 'Heavy SMG', dmg: [3, 4], range: 6, typ: 'smg' },
     abilities: [
       { id: 'suppress', name: 'Suppress', ap: 2, kind: 'suppress', text: 'A pinning burst. Half damage, and the target aims worse until their next turn.' },
@@ -70,7 +70,7 @@ export const HEROES = {
     blurb: 'Keeps the crew standing and makes sharpshooters miss.',
     portrait: 'assets/heroes/vesper.jpg', thumb: 'assets/heroes/vesper-64.jpg',
     mood: 'heroic',
-    hp: 10, ap: 4, move: 5, aim: 70, armor: 0,
+    hp: 10, ap: 4, move: 5, aim: 70, armor: 0, speed: 8,
     weapon: { name: 'Dart pistol', dmg: [2, 3], range: 7, typ: 'pistol' },
     abilities: [
       { id: 'patch', name: 'Patch Up', ap: 2, kind: 'heal', range: 3, heal: 4, text: 'Restore 4 HP to an ally within 3 tiles.' },
@@ -85,7 +85,7 @@ export const HEROES = {
     blurb: 'Closes the gap and finishes the job with a short-barrel shotgun.',
     portrait: 'assets/heroes/ivory.jpg', thumb: 'assets/heroes/ivory-64.jpg',
     mood: 'heroic',
-    hp: 11, ap: 4, move: 6, aim: 70, armor: 0,
+    hp: 11, ap: 4, move: 6, aim: 70, armor: 0, speed: 9,
     weapon: { name: 'Street shotgun', dmg: [5, 7], range: 5, typ: 'shotgun' },
     abilities: [
       { id: 'blast', name: 'Point Blank', ap: 2, kind: 'shot', text: 'Shotgun blast. Much more accurate up close.' },
@@ -100,7 +100,7 @@ export const HEROES = {
     blurb: 'Crosses the street in two strides and ends the argument up close.',
     portrait: 'assets/heroes/nile.jpg', thumb: 'assets/heroes/nile-64.jpg',
     mood: 'heroic',
-    hp: 14, ap: 4, move: 5, aim: 64, armor: 0,
+    hp: 14, ap: 4, move: 5, aim: 64, armor: 0, speed: 10,
     weapon: { name: 'Jaw and hook', dmg: [4, 6], range: 1, typ: 'melee' },
     abilities: [
       { id: 'lunge', name: 'Close In', ap: 2, kind: 'lunge', range: 3, text: 'Move up to 3 tiles toward a foe and strike.' },
@@ -115,7 +115,7 @@ export const HEROES = {
     blurb: 'Opens a route through parked cars and anything else in the way.',
     portrait: 'assets/heroes/marlow.jpg', thumb: 'assets/heroes/marlow-64.jpg',
     mood: 'heroic',
-    hp: 18, ap: 3, move: 3, aim: 60, armor: 1,
+    hp: 18, ap: 3, move: 3, aim: 60, armor: 1, speed: 4,
     weapon: { name: 'Drum shotgun', dmg: [5, 8], range: 5, typ: 'shotgun' },
     abilities: [
       { id: 'breach', name: 'Breach', ap: 2, kind: 'breach', range: 1, text: 'Smash an adjacent car, crate or barrier off the map.' },
@@ -132,7 +132,7 @@ export const RIVALS = {
   hook: {
     id: 'hook', name: 'Hook', species: 'Fox', role: 'Thug',
     portrait: 'assets/fox.jpg', thumb: 'assets/fox.jpg',
-    hp: 8, ap: 4, move: 5, aim: 58, armor: 0,
+    hp: 8, ap: 4, move: 5, aim: 58, armor: 0, speed: 7,
     weapon: { name: 'Pistol', dmg: [2, 3], range: 6, typ: 'pistol' },
     abilities: [
       { id: 'shot', name: 'Shot', ap: 2, kind: 'shot', text: '' },
@@ -144,7 +144,7 @@ export const RIVALS = {
   knack: {
     id: 'knack', name: 'Knack', species: 'Rat', role: 'Runner',
     portrait: 'assets/rat.jpg', thumb: 'assets/rat.jpg',
-    hp: 7, ap: 5, move: 7, aim: 64, armor: 0,
+    hp: 7, ap: 5, move: 7, aim: 64, armor: 0, speed: 12,
     weapon: { name: 'Holdout', dmg: [2, 3], range: 6, typ: 'pistol' },
     abilities: [
       { id: 'shot', name: 'Shot', ap: 2, kind: 'shot', text: '' },
@@ -156,7 +156,7 @@ export const RIVALS = {
   slab: {
     id: 'slab', name: 'Slab', species: 'Badger', role: 'Anchor',
     portrait: 'assets/badger.jpg', thumb: 'assets/badger.jpg',
-    hp: 14, ap: 4, move: 4, aim: 58, armor: 1,
+    hp: 14, ap: 4, move: 4, aim: 58, armor: 1, speed: 5,
     weapon: { name: 'SMG', dmg: [3, 4], range: 6, typ: 'smg' },
     abilities: [
       { id: 'shot', name: 'Shot', ap: 2, kind: 'shot', text: '' },
@@ -168,7 +168,7 @@ export const RIVALS = {
   rill: {
     id: 'rill', name: 'Rill', species: 'Croc', role: 'Closer',
     portrait: 'assets/croc.jpg', thumb: 'assets/croc.jpg',
-    hp: 13, ap: 4, move: 5, aim: 60, armor: 0,
+    hp: 13, ap: 4, move: 5, aim: 60, armor: 0, speed: 10,
     weapon: { name: 'Hook', dmg: [4, 6], range: 1, typ: 'melee' },
     abilities: [
       { id: 'lunge', name: 'Close In', ap: 2, kind: 'lunge', range: 3, text: '' },
@@ -180,7 +180,7 @@ export const RIVALS = {
   pact: {
     id: 'pact', name: 'Pact', species: 'Snake', role: 'Support',
     portrait: 'assets/snake.jpg', thumb: 'assets/snake.jpg',
-    hp: 9, ap: 4, move: 5, aim: 68, armor: 0,
+    hp: 9, ap: 4, move: 5, aim: 68, armor: 0, speed: 8,
     weapon: { name: 'Dart gun', dmg: [2, 3], range: 7, typ: 'pistol' },
     abilities: [
       { id: 'venom', name: 'Venom Round', ap: 2, kind: 'venom', text: '' },
@@ -192,7 +192,7 @@ export const RIVALS = {
   bruno: {
     id: 'bruno', name: 'Bruno', species: 'Bear', role: 'Heavy',
     portrait: 'assets/bear.jpg', thumb: 'assets/bear.jpg',
-    hp: 16, ap: 3, move: 3, aim: 58, armor: 1,
+    hp: 16, ap: 3, move: 3, aim: 58, armor: 1, speed: 4,
     weapon: { name: 'Drum gun', dmg: [5, 7], range: 5, typ: 'shotgun' },
     abilities: [
       { id: 'shot', name: 'Shot', ap: 3, kind: 'shot', text: '' },
@@ -204,7 +204,7 @@ export const RIVALS = {
   ash: {
     id: 'ash', name: 'Ash', species: 'Wolf', role: 'Assault',
     portrait: 'assets/wolf.jpg', thumb: 'assets/wolf.jpg',
-    hp: 11, ap: 4, move: 5, aim: 70, armor: 0,
+    hp: 11, ap: 4, move: 5, aim: 70, armor: 0, speed: 8,
     weapon: { name: 'Carbine', dmg: [3, 5], range: 8, typ: 'rifle' },
     abilities: [
       { id: 'shot', name: 'Snap Shot', ap: 2, kind: 'shot', text: '' },
@@ -216,7 +216,7 @@ export const RIVALS = {
   mica: {
     id: 'mica', name: 'Mica', species: 'Fox', role: 'Marksman',
     portrait: 'assets/fox.jpg', thumb: 'assets/fox.jpg',
-    hp: 8, ap: 4, move: 4, aim: 80, armor: 0,
+    hp: 8, ap: 4, move: 4, aim: 80, armor: 0, speed: 7,
     weapon: { name: 'Long rifle', dmg: [4, 6], range: 11, typ: 'rifle' },
     abilities: [
       { id: 'aimed', name: 'Aimed Shot', ap: 3, kind: 'aimed', text: '' },

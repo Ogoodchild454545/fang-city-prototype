@@ -5,7 +5,7 @@ import { defOf, HEROES, matchup, synergiesFor } from './heroes.js';
 import { starBonus, tutorialShardGift } from './shards.js';
 import { levelBonus, perkMods, addXp, xpFromBattle, resetAfterKo, perkChoices, xpToNext } from './progress.js';
 import { kitMods, returnUnused, commitLoadout, defaultLoadout, carryOf } from './loadout.js';
-import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, DIRS4 } from './tmaps.js';
+import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, DIRS4, docklandsMap } from './tmaps.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
 
@@ -34,8 +34,8 @@ export function hasLOS(b, ax, ay, tx, ty) {
     if (e2 < dx) { err += dx; y += sy; }
     if (x === tx && y === ty) return true;
     const t = tile(b.map, x, y);
-    // Walls block LOS. Cars, crates and barriers give cover but you can fire past them.
-    if (!t || t.decor === 'wall') return false;
+    // Tall solids (containers, building walls) block LOS. Vans, crates, barriers and barrels give cover but you can fire past them.
+    if (!t || t.los) return false;
   }
   return true;
 }
@@ -213,6 +213,7 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
     aimMod: sb.aim + lb.aim + pm.aim + (km.aim || 0),
     armor: km.armor || 0, rangeBonus: km.range || 0, mdmg: km.mdmg || 0,
     ap: d.ap + extraAp, maxAp: d.ap + extraAp, move, baseMove: move,
+    speed: d.speed || 8, init: 0,
     ammo: opts.ammo == null ? (side === 'enemy' ? 8 : 0) : opts.ammo,
     medkits: opts.medkits || 0, kills: 0,
     overwatch: false, moved: 0, acted: 0, fired: 0, lastFired: 0,
@@ -226,7 +227,7 @@ function packFromState(s, id) {
   return { stars: rec.stars || 1, lv: rec.lv || 1, perks: rec.perks || [], gear: rec.gear || null };
 }
 
-export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes }) {
+export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes, pvp }) {
   const b = {
     kind: kind || (tutorial ? 'tutorial' : 'street'),
     label: label || (tutorial ? 'Street lesson' : 'Street fight'),
@@ -234,6 +235,8 @@ export function startBattle({ map, player, enemy, seed, label, tutorial, reward,
     status: 'active', side: 'player', turn: 1, tutorial: tutorial || 0,
     reward: reward || { cash: 200, influence: 20 },
     units: [], log: [], highStakes: !!highStakes,
+    pvp: !!(pvp || (!tutorial && (kind || 'street') === 'street')),
+    queue: [], qIndex: 0, acting: null, turnSec: 30,
   };
   const pSpots = pickDeploys(map, 'player', player.length, b.seed);
   const eSpots = pickDeploys(map, 'enemy', enemy.length, b.seed + 17);
@@ -249,6 +252,7 @@ export function startBattle({ map, player, enemy, seed, label, tutorial, reward,
     const spt = eSpots[i] || { x: map.w - 2, y: 1 + i };
     b.units.push(freshUnit(id, 'enemy', spt.x, spt.y, 'e' + i, { ammo: 8 }));
   });
+  beginRound(b, true);
   return b;
 }
 
@@ -286,8 +290,7 @@ export function startStreet(s, seed, committed) {
     const i = rngInt(holder, 0, left.length - 1);
     enemy.push(left.splice(i, 1)[0]);
   }
-  const maps = [avenueMap, alleyMap, crossingMap];
-  const map = maps[rngInt(holder, 0, maps.length - 1)](holder.rng);
+  const map = docklandsMap();
   const recs = {};
   for (const id of squad) recs[id] = packFromState(s, id);
   const high = !!(committed && committed.highStakes);
@@ -295,8 +298,8 @@ export function startStreet(s, seed, committed) {
   if (high) { reward.cash *= 3; reward.influence *= 3; }
   return startBattle({
     map, player: squad, enemy, seed: holder.rng,
-    label: high ? 'High Stakes' : 'Street fight', kind: 'street',
-    reward, highStakes: high,
+    label: high ? 'High Stakes · Docklands PvP' : 'Docklands · PvP', kind: 'street',
+    reward, highStakes: high, pvp: true,
     loadout: { recs, ammo: committed?.ammo || {}, medkits: committed?.medkits || {} },
   });
 }
@@ -379,11 +382,12 @@ function nameOf(u) { return defOf(u.hero).name; }
 export function apply(b, action) {
   if (b.status !== 'active') return { ok: false, reason: 'Fight is over' };
   const events = [];
-  if (action.type === 'endTurn') {
-    return endTurn(b);
+  if (action.type === 'endTurn' || action.type === 'timeout') {
+    return endUnitTurn(b, action.type === 'timeout');
   }
   const u = b.units.find((x) => x.uid === action.uid);
   if (!u || u.hp <= 0) return { ok: false, reason: 'No such operator' };
+  if (b.acting && u.uid !== b.acting) return { ok: false, reason: 'Not their turn' };
   if (u.side !== b.side) return { ok: false, reason: 'Not their turn' };
 
   if (action.type === 'move') {
@@ -427,6 +431,7 @@ export function apply(b, action) {
   }
 
   if (action.type === 'breach') {
+    return { ok: false, reason: 'Cover cannot be destroyed' };
     const { x, y } = action;
     if (MANH(u.x, u.y, x, y) !== 1) return { ok: false, reason: 'Must be adjacent' };
     const t = tile(b.map, x, y);
@@ -447,7 +452,8 @@ export function apply(b, action) {
 
   if (action.type === 'heal' || action.type === 'patch') {
     const t = b.units.find((x) => x.uid === action.target);
-    if (!t || t.side !== u.side || t.hp <= 0) return { ok: false, reason: 'No ally there' };
+    if (!t || t.side !== u.side) return { ok: false, reason: 'No ally there' };
+    if (t.hp <= 0) return reviveAlly(b, u, t, events);
     const defn = defOf(u.hero);
     const ab = defn.abilities.find((a) => a.kind === 'heal') || { range: 3, heal: 4, ap: 2 };
     if (MANH(u.x, u.y, t.x, t.y) > ab.range) return { ok: false, reason: 'Out of range' };
@@ -482,17 +488,22 @@ export function apply(b, action) {
     return { ok: true, events, status: b.status };
   }
 
-  if (action.type === 'medkit') {
+  if (action.type === 'medkit' || action.type === 'revive') {
     if ((u.medkits || 0) < 1) return { ok: false, reason: 'No medkit loaded' };
     const t = action.target ? b.units.find((x) => x.uid === action.target) : u;
-    if (!t || t.side !== u.side || t.hp <= 0) return { ok: false, reason: 'No ally there' };
+    if (!t || t.side !== u.side) return { ok: false, reason: 'No ally there' };
     if (MANH(u.x, u.y, t.x, t.y) > 1) return { ok: false, reason: 'Must be adjacent or self' };
+    if (t.hp <= 0) return reviveAlly(b, u, t, events);
     if (!spend(u, 2)) return { ok: false, reason: 'Not enough AP' };
     const extra = (u.perks || []).includes('field') ? 2 : 0;
     const heal = Math.min(5 + extra, t.maxHp - t.hp);
     t.hp += heal; u.medkits -= 1; u.acted = 1;
     log(b, `${nameOf(u)} uses a medkit on ${nameOf(t)} (+${heal}).`);
     return { ok: true, events: [{ typ: 'heal', uid: u.uid, target: t.uid, heal, medkit: 1 }], status: b.status };
+  }
+
+  if (action.type === 'shootProp' || ((action.x != null && action.y != null) && !action.target && isExplosiveAt(b, action.x, action.y))) {
+    return shootProp(b, u, action.x, action.y, action.mode || 'shot');
   }
 
   // generic offensive: shot, aimed, suppress, venom, melee, knife, roll, blast
@@ -514,44 +525,209 @@ export function apply(b, action) {
   return { ok: true, events, status: b.status };
 }
 
-function startSide(b, side) {
-  b.side = side;
-  for (const u of b.units) {
-    if (u.side !== side || u.hp <= 0) continue;
-    const d = defOf(u.hero);
-    u.ap = u.maxAp;
-    u.moved = 0; u.acted = 0; u.dashUsed = 0; u.rollUsed = 0; u.sprint = 0;
-    u.move = (u.baseMove || d.move) + (u.sprint || 0);
-    u.overwatch = false;
-    // suppressed lasts through this turn (it was applied on the enemy's previous turn)
-    u.fortify = 0;
-    if (u.venom > 0) {
-      u.hp = Math.max(0, u.hp - 1);
-      u.venom -= 1;
-      log(b, `${nameOf(u)} takes venom damage.`);
-      if (u.hp <= 0) { u.ko = 1; checkEnd(b); }
+export function speedOf(u) { return u.speed || defOf(u.hero).speed || 8; }
+
+export function actingUnit(b) {
+  return (b.units || []).find((u) => u.uid === b.acting) || null;
+}
+
+export function queueUnits(b) {
+  return (b.queue || []).map((id) => b.units.find((u) => u.uid === id)).filter(Boolean);
+}
+
+function sortBySpeed(units) {
+  return units.slice().sort((a, c) => (speedOf(c) - speedOf(a)) || (c.init - a.init) || a.uid.localeCompare(c.uid));
+}
+
+export function beginRound(b, first) {
+  const holder = { rng: b.rng || 1 };
+  if (first) {
+    for (const u of b.units) u.init = rngInt(holder, 0, 99);
+    b.rng = holder.rng;
+  }
+  const living = b.units.filter((u) => u.hp > 0);
+  let order = sortBySpeed(living);
+  if (b.tutorial) {
+    const rook = order.find((u) => u.hero === 'rook' && u.side === 'player');
+    if (rook) order = [rook, ...order.filter((u) => u !== rook)];
+  }
+  b.queue = order.map((u) => u.uid);
+  b.qIndex = 0;
+  b.turn = first ? 1 : (b.turn || 1) + (first ? 0 : 1);
+  if (!first) log(b, `Round ${b.turn}.`);
+  return startUnitTurn(b, order[0]);
+}
+
+function startUnitTurn(b, u) {
+  const events = [];
+  if (!u || u.hp <= 0) return advanceQueue(b, events);
+  const d = defOf(u.hero);
+  u.ap = u.maxAp;
+  u.moved = 0; u.acted = 0; u.dashUsed = 0; u.rollUsed = 0; u.sprint = 0;
+  u.move = (u.baseMove || d.move);
+  u.overwatch = false;
+  u.fortify = 0;
+  b.acting = u.uid;
+  b.side = u.side;
+  if (u.venom > 0) {
+    u.hp = Math.max(0, u.hp - 1);
+    u.venom -= 1;
+    log(b, `${nameOf(u)} takes venom damage.`);
+    events.push({ typ: 'venom', uid: u.uid, hp: u.hp });
+    if (u.hp <= 0) { u.ko = 1; checkEnd(b); if (b.status !== 'active') return { ok: true, events, status: b.status }; return advanceQueue(b, events); }
+  }
+  if (d.passive?.id === 'kit' && u.lastFired !== b.turn && u.hp > 0) {
+    u.hp = Math.min(u.maxHp, u.hp + 1);
+  }
+  events.push({ typ: 'act', uid: u.uid, side: u.side, turn: b.turn, name: nameOf(u) });
+  log(b, `${nameOf(u)} is up.`);
+  return { ok: true, events, status: b.status };
+}
+
+function advanceQueue(b, events) {
+  if (b.status !== 'active') return { ok: true, events, status: b.status };
+  const q = b.queue || [];
+  let i = (b.qIndex || 0) + 1;
+  while (i < q.length) {
+    const u = b.units.find((x) => x.uid === q[i]);
+    if (u && u.hp > 0) {
+      b.qIndex = i;
+      const r = startUnitTurn(b, u);
+      events.push(...(r.events || []));
+      return { ok: true, events, status: b.status };
     }
-    if (d.passive?.id === 'kit' && u.lastFired !== b.turn - 1 && u.hp > 0) {
-      u.hp = Math.min(u.maxHp, u.hp + 1);
+    i++;
+  }
+  // new round
+  const r = beginRound(b, false);
+  events.push(...(r.events || []));
+  return { ok: true, events, status: b.status };
+}
+
+function endUnitTurn(b, timedOut) {
+  const events = [{ typ: 'endTurn', uid: b.acting, side: b.side, timeout: !!timedOut }];
+  const u = actingUnit(b);
+  if (timedOut && u && u.hp > 0 && !u.overwatch && u.ap >= 2 && !u.acted) {
+    u.ap = Math.max(0, u.ap - 2);
+    u.overwatch = true; u.acted = 1;
+    log(b, `${nameOf(u)} runs out of time and watches the yard.`);
+    events.push({ typ: 'overwatch', uid: u.uid, timeout: 1 });
+  } else if (timedOut && u) {
+    log(b, `${nameOf(u)} runs out of time.`);
+  }
+  if (u) u.suppressed = 0;
+  checkEnd(b);
+  if (b.status !== 'active') return { ok: true, events, status: b.status };
+  return advanceQueue(b, events);
+}
+
+export function timeoutTurn(b) { return endUnitTurn(b, true); }
+
+function reviveAlly(b, u, t, events) {
+  if (t.hp > 0) return { ok: false, reason: 'They are still up' };
+  if (MANH(u.x, u.y, t.x, t.y) > 1) return { ok: false, reason: 'Must be adjacent' };
+  if (!spend(u, 2)) return { ok: false, reason: 'Not enough AP' };
+  if ((u.medkits || 0) < 1) return { ok: false, reason: 'No medkit loaded' };
+  u.medkits -= 1; u.acted = 1;
+  const hp = Math.max(1, Math.ceil(t.maxHp * 0.4));
+  t.hp = hp; t.ko = 0;
+  log(b, `${nameOf(u)} revives ${nameOf(t)} (${hp} HP).`);
+  events.push({ typ: 'revive', uid: u.uid, target: t.uid, heal: hp });
+  return { ok: true, events, status: b.status };
+}
+
+export function isExplosiveAt(b, x, y) {
+  const t = tile(b.map, x, y);
+  return !!(t && t.explosive && (t.decor === 'barrel' || t.decor === 'van' || t.decor === 'van2' || t.decor === 'car' || t.decor === 'car2'));
+}
+
+export function blastRadiusOf(t) {
+  if (!t) return 0;
+  if (t.decor === 'barrel') return 1;
+  if (t.decor === 'van' || t.decor === 'van2' || t.decor === 'car' || t.decor === 'car2') return 2;
+  return 0;
+}
+
+export function previewProp(b, att, x, y, mode = 'shot') {
+  if (!att || att.hp <= 0) return { ok: false, reason: 'No shooter' };
+  if (!isExplosiveAt(b, x, y)) return { ok: false, reason: 'Nothing to shoot' };
+  const defn = defOf(att.hero);
+  const w = defn.weapon;
+  const dist = MANH(att.x, att.y, x, y);
+  const melee = mode === 'melee' || w.typ === 'melee';
+  const range = melee ? 1 : (w.range + (att.rangeBonus || 0));
+  if (!melee && (att.ammo || 0) <= 0) return { ok: false, reason: 'Out of ammo', empty: true, dist };
+  if (dist > range) return { ok: false, reason: 'Out of range', dist };
+  if (!melee && !hasLOS(b, att.x, att.y, x, y)) return { ok: false, reason: 'No line of sight', dist };
+  const t = tile(b.map, x, y);
+  return { ok: true, dist, melee, radius: blastRadiusOf(t), chance: 100, ap: 2, mode, x, y };
+}
+
+function explodeTile(b, x, y, events, seen) {
+  const t = tile(b.map, x, y);
+  if (!t || !t.explosive) return;
+  const key = x + ',' + y;
+  if (seen.has(key)) return;
+  seen.add(key);
+  const radius = blastRadiusOf(t);
+  const dmg = t.decor === 'barrel' ? 4 : 5;
+  // partner van tile goes at the same time
+  const spots = [{ x, y }];
+  if (t.partner) spots.push({ x: t.partner.x, y: t.partner.y });
+  for (const s of spots) {
+    const tt = tile(b.map, s.x, s.y);
+    if (!tt) continue;
+    seen.add(s.x + ',' + s.y);
+    const was = tt.decor;
+    tt.explosive = 0;
+    if (was === 'barrel') tt.decor = 'barrelWreck';
+    else if (was === 'van2' || was === 'car2') tt.decor = 'wreck2';
+    else tt.decor = 'wreck';
+    // cover, block and los stay as they were
+  }
+  log(b, `A ${t.decor === 'barrel' || t.decor === 'barrelWreck' ? 'barrel' : 'van'} explodes!`);
+  events.push({ typ: 'boom', x, y, radius, dmg, spots });
+  const centers = spots;
+  for (const u of b.units) {
+    if (u.hp <= 0) continue;
+    const dist = Math.min(...centers.map((s) => MANH(u.x, u.y, s.x, s.y)));
+    if (dist > radius) continue;
+    let take = dmg;
+    if (defOf(u.hero).passive?.id === 'hide') take = Math.max(1, take - 1);
+    if (u.armor) take = Math.max(1, take - u.armor);
+    u.hp = Math.max(0, u.hp - take);
+    events.push({ typ: 'boomhit', uid: u.uid, dmg: take, x: u.x, y: u.y });
+    log(b, `${nameOf(u)} is caught in the blast (${take}).`);
+    if (u.hp <= 0) { u.ko = 1; }
+  }
+  checkEnd(b);
+  // chain nearby unexploded barrels / vans
+  if (b.status !== 'active') return;
+  for (let yy = 0; yy < b.map.h; yy++) {
+    for (let xx = 0; xx < b.map.w; xx++) {
+      const n = tile(b.map, xx, yy);
+      if (!n || !n.explosive) continue;
+      const dist = Math.min(...centers.map((s) => MANH(xx, yy, s.x, s.y)));
+      if (dist <= radius) explodeTile(b, xx, yy, events, seen);
     }
   }
 }
 
-function endTurn(b) {
-  const events = [{ typ: 'endTurn', side: b.side }];
-  for (const u of b.units) if (u.side === b.side) u.suppressed = 0;
-  if (b.side === 'player') {
-    startSide(b, 'enemy');
-    events.push({ typ: 'side', side: 'enemy' });
-  } else {
-    b.turn += 1;
-    startSide(b, 'player');
-    events.push({ typ: 'side', side: 'player', turn: b.turn });
-    log(b, `Turn ${b.turn}.`);
-  }
-  checkEnd(b);
+function shootProp(b, u, x, y, mode) {
+  const prev = previewProp(b, u, x, y, mode);
+  if (!prev.ok) return { ok: false, reason: prev.reason };
+  if (!spend(u, prev.ap || 2)) return { ok: false, reason: 'Not enough AP' };
+  if (!prev.melee && (u.ammo || 0) > 0) u.ammo -= 1;
+  u.acted = 1;
+  const events = [{ typ: 'shot', uid: u.uid, x, y, hit: 1, mode: mode || 'shot', prop: 1 }];
+  log(b, `${nameOf(u)} shoots the ${tile(b.map, x, y)?.decor || 'object'}.`);
+  explodeTile(b, x, y, events, new Set());
   return { ok: true, events, status: b.status };
 }
+
+// kept name so older calls still compile; ends the current operator's go
+function endTurn(b) { return endUnitTurn(b, false); }
+
 
 
 function approachScore(b, u, x, y, foes) {
@@ -575,7 +751,8 @@ export function think(b) {
   if (b.status !== 'active') return { type: 'endTurn' };
   const me = b.side;
   const foes = living(b, me === 'player' ? 'enemy' : 'player');
-  const mine = living(b, me).filter((u) => u.ap > 0);
+  const actor = actingUnit(b);
+  const mine = (actor && actor.hp > 0 && actor.ap > 0 && actor.side === me) ? [actor] : living(b, me).filter((u) => u.ap > 0 && (!b.acting || u.uid === b.acting));
   if (!mine.length || !foes.length) return { type: 'endTurn' };
   let best = null, bestScore = -999;
 
@@ -599,6 +776,22 @@ export function think(b) {
       if (defn.abilities.some((a) => a.kind === 'lunge') && u.ap >= 2) {
         const dist = MANH(u.x, u.y, f.x, f.y);
         if (dist > 1 && dist <= 4) consider({ type: 'lunge', uid: u.uid, target: f.uid }, 50 + (5 - dist) * 6);
+      }
+    }
+    // Shoot a barrel or van if the blast hurts more foes than friends
+    if (u.ap >= 2 && (u.ammo || 0) > 0) {
+      for (let y = 0; y < b.map.h; y++) for (let x = 0; x < b.map.w; x++) {
+        if (!isExplosiveAt(b, x, y)) continue;
+        const prev = previewProp(b, u, x, y, 'shot');
+        if (!prev || !prev.ok) continue;
+        const t = tile(b.map, x, y);
+        const r = blastRadiusOf(t);
+        let foesHit = 0, friendsHit = 0;
+        for (const o of b.units) {
+          if (o.hp <= 0) continue;
+          if (MANH(o.x, o.y, x, y) <= r) { if (o.side === u.side) friendsHit++; else foesHit++; }
+        }
+        if (foesHit > friendsHit) consider({ type: 'shootProp', uid: u.uid, x, y, mode: 'shot' }, 30 + foesHit * 18 - friendsHit * 22);
       }
     }
     const { dist } = reachable(b, u);

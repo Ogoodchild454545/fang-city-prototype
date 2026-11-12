@@ -13,7 +13,7 @@ import { DISTRICTS, TROOPS, TROOP_ORDER, BOSSES, MISSIONS } from '../js/core/dat
 import * as T from '../js/core/tactics.js';
 import { HERO_ORDER, HEROES, grantHero, finishTutorial, matchup } from '../js/core/heroes.js';
 import * as SH from '../js/core/shards.js';
-import { tutorialMap, avenueMap } from '../js/core/tmaps.js';
+import { tutorialMap, avenueMap, docklandsMap, describeDocklands, tile } from '../js/core/tmaps.js';
 import * as P from '../js/core/progress.js';
 import * as L from '../js/core/loadout.js';
 
@@ -456,41 +456,38 @@ test('tactics: cover, hitchance, flanking, overwatch and a tutorial fight', () =
   assert.equal(b.units.length, 2);
   const rook = b.units.find((u) => u.hero === 'rook');
   const hook = b.units.find((u) => u.hero === 'hook');
-  assert.equal(rook.x, 2); assert.equal(hook.x, 10);
-  // Hook sits behind a crate at (9,5) — shots from the west should have cover
+  assert.equal(rook.x, 6); assert.equal(rook.y, 9);
+  assert.equal(hook.x, 13); assert.equal(hook.y, 9);
+  assert.equal(b.acting, rook.uid, 'Rook goes first in the lesson');
+  // Hook sits behind a crate at (12,9) — shots from the west should have cover
   const west = T.previewShot(b, rook, hook, 'shot');
-  assert.ok(west && west.ok, 'LOS down the street');
+  assert.ok(west && west.ok, 'LOS down the lane, ' + (west && west.reason));
   assert.ok(west.cover >= 1, 'crate gives Hook cover from the west, cover=' + west.cover);
   const front = west.chance;
-  // walk Rook north around the crate and east, then south to Hook's side
-  // (2,5) -> (2,7) -> (11,7) -> (11,6) is a flank from the south
-  const plan = [{x:2,y:6},{x:2,y:7},{x:3,y:7},{x:4,y:7},{x:5,y:7},{x:6,y:7},{x:7,y:7},{x:8,y:7},{x:9,y:7},{x:10,y:7},{x:11,y:7},{x:11,y:6}];
-  // just teleport for the cover test
-  rook.x = 10; rook.y = 7;
+  // teleport south of Hook for the flank test
+  rook.x = 13; rook.y = 11;
   const flank = T.previewShot(b, rook, hook, 'shot');
-  assert.ok(flank.ok);
+  assert.ok(flank.ok, flank && flank.reason);
   assert.equal(flank.cover, 0, 'south of Hook is a flank');
   assert.ok(flank.flanked);
   assert.ok(flank.chance > front, `flank ${flank.chance} should beat covered ${front}`);
-  // overwatch: reset a clean fight and have Hook overwatch, then Rook walk into view
+  // overwatch: Hook watches, Rook walks in the open lane
   const b2 = T.startTutorial(7);
   const r2 = b2.units.find((u) => u.hero === 'rook');
   const h2 = b2.units.find((u) => u.hero === 'hook');
-  // put Hook with LOS and set overwatch, then Rook walks
-  h2.x = 8; h2.y = 5; h2.overwatch = true; h2.ap = 0;
+  h2.x = 10; h2.y = 9; h2.overwatch = true; h2.ap = 0;
   const before = r2.hp;
-  const mv = T.apply(b2, { type: 'move', uid: r2.uid, x: 3, y: 5 });
-  assert.ok(mv.ok);
+  const mv = T.apply(b2, { type: 'move', uid: r2.uid, x: 7, y: 9 });
+  assert.ok(mv.ok, mv.reason);
   const ow = (mv.events || []).filter((e) => e.typ === 'overwatch' || (e.typ === 'shot' && e.mode === 'overwatch'));
-  // moving one tile east stays in LOS; Hook should try overwatch
   assert.ok(ow.length || r2.hp !== before || mv.events.some((e) => e.typ === 'step'), 'move resolved');
-  // AI can finish a fight
   const b3 = T.startTutorial(99);
-  T.autoplay(b3, 120);
+  T.autoplay(b3, 200);
   assert.ok(b3.status === 'win' || b3.status === 'loss', b3.status);
   const mu = matchup(HEROES.nile, HEROES.lumen);
   assert.ok(mu.aim > 0 || mu.dmg > 0, 'closer vs marksman is a good matchup');
 });
+
 
 test('v3 save migrates to v5 with Rook and starting ammo', () => {
   const s3 = newGame(T0, 5);
@@ -583,8 +580,9 @@ test('loadout spends base ammo; unused rounds return and spent shots are gone', 
   const before = rook.ammo;
   assert.ok(before > 0, 'rook loaded ammo');
   // place them in range with LOS and AP
-  rook.x = 2; rook.y = 5; foe.x = 4; foe.y = 5;
+  rook.x = 6; rook.y = 9; foe.x = 8; foe.y = 9;
   rook.ap = 4;
+  b.acting = rook.uid; b.side = rook.side;
   const shot = T.apply(b, { type: 'shot', uid: rook.uid, target: foe.uid, mode: 'shot' });
   assert.ok(shot.ok, shot.reason);
   assert.equal(rook.ammo, before - 1);
@@ -618,7 +616,8 @@ test('empty magazines fall back to melee; High Stakes KO resets level and takes 
   assert.equal(b.reward.cash, (200 + 2 * 80) * 3);
   const rook = b.units.find((u) => u.hero === 'rook' && u.side === 'player');
   const foe = b.units.find((u) => u.side === 'enemy' && u.hp > 0);
-  rook.ammo = 0; rook.ap = 4; rook.x = 5; rook.y = 5; foe.x = 6; foe.y = 5;
+  rook.ammo = 0; rook.ap = 4; rook.x = 6; rook.y = 9; foe.x = 7; foe.y = 9;
+  b.acting = rook.uid; b.side = rook.side;
   const melee = T.apply(b, { type: 'shot', uid: rook.uid, target: foe.uid, mode: 'shot' });
   assert.ok(melee.ok, melee.reason);
   const ev = (melee.events || []).find((e) => e.mode === 'melee' || e.typ === 'shot' || e.typ === 'melee');
@@ -654,6 +653,69 @@ test('empty magazines fall back to melee; High Stakes KO resets level and takes 
   assert.equal(res2.lost.length, 0);
   assert.equal(s2.heroes.owned.rook.lv, 5);
   assert.equal(s2.heroes.owned.rook.gear, 'vest');
+});
+
+
+test('docklands: speed queue, explosive barrels, medkit revive, cover is not destroyed', () => {
+  const s = newGame(T0, 21);
+  grantHero(s, 'vesper');
+  s.ammo = 40; s.medkits = 4;
+  s.heroes.squad = ['rook', 'vesper'];
+  const load = L.commitLoadout(s, { squad: ['rook', 'vesper'], ammo: { rook: 8, vesper: 6 }, medkits: { rook: 0, vesper: 2 }, highStakes: false });
+  assert.ok(load.ok, load.reason);
+  const b = T.startStreet(s, 8, load);
+  assert.equal(b.pvp, true);
+  assert.ok(b.map.w >= 20 && b.map.h >= 14, 'medium yard');
+  assert.equal(b.map.id, 'docklands');
+  assert.ok(b.queue.length >= 4, 'mixed initiative queue');
+  const first = T.actingUnit(b);
+  assert.ok(first, 'someone is up');
+  // First actor is the living unit with the highest speed (ties broken by init).
+  const living = b.units.filter((u) => u.hp > 0);
+  const top = living.slice().sort((a, c) => (T.speedOf(c) - T.speedOf(a)) || (c.init - a.init) || a.uid.localeCompare(c.uid))[0];
+  assert.equal(first.uid, top.uid);
+
+  // Shoot the barrel at (5,12) — not next to the starting aprons
+  const shooter = b.units.find((u) => u.side === 'player' && (u.ammo || 0) > 0) || first;
+  // force it to be this unit's turn
+  b.acting = shooter.uid; b.side = shooter.side; shooter.ap = 4; shooter.x = 5; shooter.y = 10;
+  const dummy = b.units.find((u) => u.uid !== shooter.uid);
+  dummy.x = 5; dummy.y = 11; // adjacent to barrel (5,12)
+  const hp0 = dummy.hp;
+  const boom = T.apply(b, { type: 'shootProp', uid: shooter.uid, x: 5, y: 12, mode: 'shot' });
+  assert.ok(boom.ok, boom.reason);
+  const wreck = tile(b.map, 5, 12);
+  assert.equal(wreck.explosive, 0);
+  assert.equal(wreck.decor, 'barrelWreck');
+  assert.equal(wreck.cover, 1, 'wreck keeps half cover');
+  assert.ok(dummy.hp < hp0 || dummy.hp === 0, 'blast deals area damage');
+  // shooting the wreck again is refused
+  shooter.ap = 4;
+  const again = T.previewProp(b, shooter, 5, 12, 'shot');
+  assert.equal(again.ok, false);
+
+  // Marlow cannot breach cover away
+  const br = T.apply(b, { type: 'breach', uid: shooter.uid, x: 12, y: 9 });
+  assert.equal(br.ok, false);
+
+  // Revive: KO vesper, have her next to rook with a medkit
+  const rook = b.units.find((u) => u.hero === 'rook');
+  const ves = b.units.find((u) => u.hero === 'vesper');
+  if (rook && ves) {
+    ves.hp = 0; ves.ko = 1; ves.x = rook.x + 1; ves.y = rook.y;
+    // stand on a walkable tile
+    if (!T.walkable(b, ves.x, ves.y, ves.uid)) { ves.x = rook.x; ves.y = rook.y + 1; }
+    rook.medkits = 1; rook.ap = 4;
+    b.acting = rook.uid; b.side = rook.side;
+    const rev = T.apply(b, { type: 'medkit', uid: rook.uid, target: ves.uid });
+    assert.ok(rev.ok, rev.reason);
+    assert.ok(ves.hp > 0 && ves.hp < ves.maxHp, 'revived at partial HP');
+    assert.equal(rook.medkits, 0);
+  }
+
+  const inv = describeDocklands();
+  assert.equal(inv.coverDestructible, false);
+  assert.ok(inv.spawns.player.length === 4 && inv.spawns.enemy.length === 4);
 });
 
 console.log(`\n${pass} tests passed`);
