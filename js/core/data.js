@@ -1,6 +1,6 @@
 // Static game definitions. Pure data: safe to share between client and a future server.
 
-export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.1.0' };
+export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.2.0' };
 
 export const SPECIES = {
   wolf:   { name: 'Wolf',      gang: 'grey',  img: 'assets/wolf.jpg',   base: { muscle: 55, aim: 60, nerve: 62 }, trait: 'pack',  traitName: 'Pack Tactics', traitDesc: '+15% damage when next to an ally' },
@@ -106,10 +106,11 @@ export const DAILY_REWARDS = [
 ];
 
 export const JOB_TEMPLATES = [
-  { id: 'collect', text: 'Collect from your rackets 20 times', goal: 20, stat: 'collects', reward: { teeth: 10 } },
+  { id: 'collect', text: 'Collect from your buildings 20 times', goal: 20, stat: 'collects', reward: { teeth: 10 } },
+  { id: 'clear',   text: 'Clear 5 pieces of junk from your land', goal: 5, stat: 'cleared', reward: { teeth: 10 } },
   { id: 'win',     text: 'Win 2 street fights',               goal: 2,  stat: 'wins',     reward: { influence: 30 } },
   { id: 'train',   text: 'Train a crew member',               goal: 1,  stat: 'trains',   reward: { teeth: 10 } },
-  { id: 'buyrk',   text: 'Buy 15 racket upgrades',            goal: 15, stat: 'racketBuys', reward: { cash: 2000 } },
+  { id: 'upgrade', text: 'Start 3 building upgrades',          goal: 3,  stat: 'upgrades', reward: { cash: 1500 } },
   { id: 'taps',    text: 'Shake down the street 100 times',   goal: 100, stat: 'taps',    reward: { influence: 15 } },
 ];
 
@@ -125,9 +126,10 @@ export const SHOP = {
   ],
   offers: [
     { id: 'starter', name: 'Starter Crate', price: '£2.99', once: true, desc: '500 Gold Teeth, an Epic Fox marksman and a Kevlar Vest. One per player.', grant: { teeth: 500, member: { species: 'fox', role: 'marksman', rarity: 'epic' }, gear: 'kevlar' } },
-    { id: 'vip',     name: 'Made Member (monthly)', price: '£4.99 / month', desc: '50 Gold Teeth daily, offline earnings up to 12h, all rackets auto-collect, second training bench, gold name badge.', grant: { vip: 30 } },
+    { id: 'builder', name: 'Second Builder', price: '£3.99', once: true, desc: 'A second builder for your base: two upgrades or clear-ups at once. Permanent. (Also buyable for 250 Gold Teeth.)', grant: { builder: 1 } },
+    { id: 'vip',     name: 'Made Member (monthly)', price: '£4.99 / month', desc: '50 Gold Teeth daily, offline earnings up to 12h, all buildings auto-collect, one extra training slot, gold name badge.', grant: { vip: 30 } },
     { id: 'pass',    name: 'Street Pass (season)', price: '£7.99', desc: 'Premium reward track for this 30-day season: exclusive Neon Rain skin, 1,000+ Gold Teeth, recruit tickets.', grant: { pass: true } },
-    { id: 'bench',   name: 'Second Training Bench', price: '£3.99', once: true, desc: 'Train two crew members at once. Permanent.', grant: { bench: 1 } },
+    { id: 'bench',   name: 'Extra Training Slot', price: '£2.99', once: true, desc: 'Train one more crew member at once (needs a Training Yard). Permanent.', grant: { bench: 1 } },
     { id: 'noads',   name: 'No Ads', price: '£3.99', once: true, desc: 'Removes interstitial ads. Reward ads stay optional and still pay out.', grant: { noads: true } },
   ],
   cosmetics: [

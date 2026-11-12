@@ -1,2 +1,2 @@
-{ "name": "Fang City: Animal Gangs", "short_name": "Fang City", "start_url": "./", "display": "standalone", "background_color": "#0b0a0a", "theme_color": "#0b0a0a", "orientation": "portrait",
+{ "name": "Fang City: Animal Gangs", "short_name": "Fang City", "start_url": "./", "display": "standalone", "background_color": "#0b0a0a", "theme_color": "#0b0a0a", "orientation": "landscape",
   "icons": [{ "src": "assets/wolf.jpg", "sizes": "384x384", "type": "image/jpeg" }] }

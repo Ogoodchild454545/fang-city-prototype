@@ -1,6 +1,7 @@
 // Crew screen: roster + squad, member detail (gear, training), armoury, recruiting.
 import { SPECIES, ROLES, RARITY, GEAR, RECRUIT, SQUAD_SIZE } from '../core/data.js';
 import * as C from '../core/crew.js';
+import * as BS from '../core/base.js';
 import { fmt, money, dur, esc } from './fmt.js';
 
 const GEAR_ICON = { melee: '🔪', ranged: '🔫', armour: '🧥', gadget: '🧪' };
@@ -30,9 +31,9 @@ function roster(ctx) {
   return `
   <div class="sect">Strike squad · power ${C.squadPower(s)}</div>
   <div class="squad">${slots.map((m) => m ? `<div class="slot rar-${m.rarity}" data-act="openMember" data-id="${m.id}" style="border-style:solid;background-image:url(${SPECIES[m.species].img})"><span class="lvl">${ROLES[m.role].icon} L${m.level}</span></div>` : `<div class="slot" style="display:grid;place-items:center;color:var(--faint)">empty</div>`).join('')}</div>
-  <div class="tiny dim" style="margin:6px 2px">Tap a member to equip, train or swap them in. Up to ${SQUAD_SIZE} fight in battles. Training benches: ${s.training.length}/${C.benches(s, ctx.now())}</div>
-  <div class="sect">Roster ${s.crew.length}/${C.rosterCap(s)}</div>
-  ${[...s.crew].sort((a, b) => C.memberPower(b) - C.memberPower(a)).map((m) => memberCard(ctx, m)).join('')}`;
+  <div class="tiny dim" style="margin:6px 2px">Tap a member to equip, train or swap them in. Up to ${SQUAD_SIZE} fight in battles. ${C.benches(s, ctx.now()) ? `Training slots: ${s.training.length}/${C.benches(s, ctx.now())} (one per Training Yard)` : '<span class="red">Build a Training Yard at the Hideout to train crew.</span>'}</div>
+  <div class="sect">Roster ${s.crew.length}/${C.rosterCap(s)} <span class="tiny dim" style="text-transform:none">housing from The Den + Bunkhouses</span></div>
+  <div class="grid2">${[...s.crew].sort((a, b) => C.memberPower(b) - C.memberPower(a)).map((m) => memberCard(ctx, m)).join('')}</div>`;
 }
 
 function armoury(ctx) {
@@ -43,12 +44,13 @@ function armoury(ctx) {
   <div class="sect">Your stash</div>
   ${inv.length ? `<div class="card"><div class="row" style="flex-wrap:wrap;gap:6px">${inv.map(([id, n]) => `<span class="pill t-${GEAR[id].rarity}">${gearIcon(GEAR[id])} ${GEAR[id].name} x${n}</span>`).join('')}</div><div class="tiny dim" style="margin-top:6px">Equip gear from a crew member's page.</div></div>` : '<div class="card tiny dim">Nothing spare. Buy gear below or win it in fights.</div>'}
   <div class="sect">Black market dealer</div>
-  ${rows.map(([id, g]) => `<div class="card gear">
+  <div class="tiny dim" style="margin:-2px 2px 6px">${BS.armouryLevel(s) ? `Armoury level ${BS.armouryLevel(s)}: rare gear at Lv 3, epic at Lv 5, legendary at Lv 7.` : '<span class="red">Build an Armoury at the Hideout (Den level 2) to buy gear.</span>'}</div>
+  <div class="grid2">${rows.map(([id, g]) => `<div class="card gear" style="${BS.armouryLevel(s) >= C.ARMOURY_FOR[g.rarity] ? '' : 'opacity:.5'}">
     <div class="gi">${gearIcon(g)}</div>
     <div><div class="h t-${g.rarity}">${g.name}</div>
       <div class="tiny dim">${g.slot === 'weapon' ? `${g.kind === 'melee' ? 'Melee (Enforcers)' : 'Ranged'} · DMG ${g.dmg} · range ${g.range}${g.acc ? ` · acc ${g.acc > 0 ? '+' : ''}${g.acc}` : ''}` : g.slot === 'armour' ? `Armour · DEF ${g.def}` : `Gadget · ${g.desc}`}</div></div>
-    <button class="btn sm red" data-act="buyGear" data-id="${id}" data-live-buy="g${id}" data-cost="${g.price}">${money(g.price)}</button>
-  </div>`).join('')}`;
+    ${BS.armouryLevel(s) >= C.ARMOURY_FOR[g.rarity] ? `<button class="btn sm red" data-act="buyGear" data-id="${id}" data-live-buy="g${id}" data-cost="${g.price}">${money(g.price)}</button>` : `<span class="pill">🔒 Armoury ${C.ARMOURY_FOR[g.rarity]}</span>`}
+  </div>`).join('')}</div>`;
 }
 
 function recruitTab(ctx) {
@@ -115,7 +117,7 @@ export function memberSheet(ctx, id) {
       <div><div class="tiny red h">${label}</div><div class="h">${g ? g.name : '—'}</div><div class="tiny dim">${desc}</div></div>
       <span class="btn sm ghost">Change</span></div>`;
   };
-  return `
+  return `<div class="msheet"><div class="mleft">
   <div class="detail-hero">
     <div class="big rar-${m.rarity}" style="background-image:url(${sp.img})"></div>
     <div class="namebox">
@@ -126,8 +128,8 @@ export function memberSheet(ctx, id) {
       <div class="bar"><i style="width:${(m.level / RARITY[m.rarity].maxLevel) * 100}%"></i></div>
       <div class="quote">“${quote}”</div>
     </div>
-  </div>
-  <div class="card" style="margin-top:8px"><div class="tiny red h">Trait · ${sp.traitName}</div><div class="small">${sp.traitDesc}</div><div class="tiny dim" style="margin-top:4px">${ROLES[m.role].desc}</div></div>
+  </div></div><div class="mright">
+  <div class="card"><div class="tiny red h">Trait · ${sp.traitName}</div><div class="small">${sp.traitDesc}</div><div class="tiny dim" style="margin-top:4px">${ROLES[m.role].desc}</div></div>
   ${slot('weapon', 'Weapon')}${slot('armour', 'Armour')}${slot('gadget', 'Gadget')}
   <div class="card"><div class="tiny red h" style="margin-bottom:6px">Crew member stats</div>
     <div class="stat3">${statBar('Muscle', st.muscle)}${statBar('Aim', st.aim)}${statBar('Nerve', st.nerve)}</div>
@@ -141,10 +143,10 @@ export function memberSheet(ctx, id) {
   <div class="row" style="margin-top:4px">
     <button class="btn block" data-act="toggleSquad" data-id="${m.id}">${s.squad.includes(m.id) ? 'Bench from squad' : 'Add to squad'}</button>
     <button class="btn ghost" data-act="dismiss" data-id="${m.id}">Dismiss</button>
-  </div>`;
+  </div></div></div>`;
 }
 
-function openMember(ctx, id) { ctx.sub.openMember = id; ctx.modal(memberSheet(ctx, id), { onClose: () => { ctx.sub.openMember = null; ctx.render(); } }); }
+function openMember(ctx, id) { ctx.sub.openMember = id; ctx.modal(memberSheet(ctx, id), { cls: 'wide', onClose: () => { ctx.sub.openMember = null; ctx.render(); } }); }
 function refreshMember(ctx) { const el = document.querySelector('.overlay .sheet'); if (el && ctx.sub.openMember) el.innerHTML = '<button class="x" data-act="closeModal">✕</button>' + memberSheet(ctx, ctx.sub.openMember); }
 
 export const actions = {
@@ -152,7 +154,7 @@ export const actions = {
   openMember(ctx, el) { openMember(ctx, el.dataset.id); },
   train(ctx, el) {
     const r = C.startTraining(ctx.state, el.dataset.id, ctx.now());
-    const msg = { bench: 'All training benches busy. A second bench is in the Market.', cash: 'Not enough cash', influence: 'Not enough influence: win fights and hold turf', max: 'Max level' };
+    const msg = { yard: 'Build a Training Yard at the Hideout first', bench: 'All training slots busy. Build another Training Yard or buy an extra slot in the Market.', cash: 'Not enough cash', influence: 'Not enough influence: win fights and hold turf', max: 'Max level' };
     ctx.toast(r.ok ? 'Training started' : msg[r.reason] || 'Cannot train');
     refreshMember(ctx);
   },
@@ -186,10 +188,10 @@ export const actions = {
     openMember(ctx, el.dataset.id);
   },
   openMemberBack(ctx, el) { openMember(ctx, el.dataset.id); },
-  buyGear(ctx, el) { const r = C.buyGear(ctx.state, el.dataset.id); ctx.toast(r.ok ? `Bought ${GEAR[el.dataset.id].name}` : 'Not enough cash'); ctx.render(); },
+  buyGear(ctx, el) { const r = C.buyGear(ctx.state, el.dataset.id); ctx.toast(r.ok ? `Bought ${GEAR[el.dataset.id].name}` : r.reason === 'armoury' ? `Needs Armoury level ${r.need}` : 'Not enough cash'); ctx.render(); },
   recruit(ctx, el) {
     const r = C.recruit(ctx.state, el.dataset.type);
-    if (!r.ok) { ctx.toast({ roster: 'Roster full. Dismiss someone first.', cash: 'Not enough cash', teeth: 'Not enough Gold Teeth' }[r.reason]); return; }
+    if (!r.ok) { ctx.toast({ roster: 'No beds left. Build or upgrade a Bunkhouse (or upgrade The Den).', cash: 'Not enough cash', teeth: 'Not enough Gold Teeth' }[r.reason]); return; }
     const m = r.member;
     ctx.render();
     ctx.modal(`<div class="result win"><div class="h dim">New recruit</div>

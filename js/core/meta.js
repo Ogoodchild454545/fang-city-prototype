@@ -2,7 +2,10 @@
 import { DISTRICTS, DAILY_REWARDS, JOB_TEMPLATES, REP_TIERS, GANGS, NAMES, SHOP, GEAR, RARITY, ROLES, SQUAD_SIZE } from './data.js';
 import { makeMember, squadMembers, squadPower, memberPower } from './crew.js';
 import { totalIncome } from './economy.js';
-import { createBattle } from './battle.js';
+import { createBattle, raidStars } from './battle.js';
+import { gain, denLevel } from './base.js';
+import { generateRivalBase, baseToRaidLayout, rivalLoot, RAID_W, RAID_H } from './raid.js';
+import { turretOf } from './buildings.js';
 import { rngNext, rngPick, rngInt } from './rng.js';
 
 export const dayKey = (now) => new Date(now).toISOString().slice(0, 10);
@@ -11,12 +14,14 @@ const prevDay = (now) => dayKey(now - 86400000);
 export const repTier = (rep) => [...REP_TIERS].reverse().find((t) => rep >= t.min);
 export const nextRepTier = (rep) => REP_TIERS.find((t) => t.min > rep) || null;
 
-function grant(state, g) {
-  if (g.cash) { state.cash += g.cash; state.lifetime += g.cash; state.runEarnings += g.cash; }
+export function grant(state, g) {
+  const got = { cash: 0, influence: 0 };
+  if (g.cash) got.cash = gain(state, 'cash', g.cash);
   if (g.teeth) state.teeth += g.teeth;
-  if (g.influence) state.influence += g.influence;
+  if (g.influence) got.influence = gain(state, 'influence', g.influence);
   if (g.ticket) state.tickets += g.ticket;
   if (g.gear) state.inventory[g.gear] = (state.inventory[g.gear] || 0) + 1;
+  return got;
 }
 
 // ---------------------------------------------------------------- daily login
@@ -113,35 +118,42 @@ export function districtEnemy(d, state) {
 
 export function districtReward(state, d, now) {
   return {
-    cash: Math.round(400 * Math.pow(4.5, d.tier) + totalIncome(state, now) * 90),
+    cash: Math.round(300 * Math.pow(3, d.tier) + totalIncome(state, now) * 120),
     influence: 20 + 15 * d.tier, teeth: 15 + 5 * d.tier, rep: 40 + 20 * d.tier, gearChance: 0.6,
   };
 }
 
 // ---------------------------------------------------------------- rival players (async PvP, mocked)
 export function refreshRivals(state, now, force = false) {
-  if (!force && state.rivals.length && now - state.rivalsAt < 15 * 60 * 1000) return;
+  if (!force && state.rivals.length && state.rivals[0].base && now - state.rivalsAt < 15 * 60 * 1000) return;
   const h = { rng: (state.rng ^ Math.floor(now / 1000)) >>> 0 };
   const myPow = Math.max(300, squadPower(state));
   const avgLvl = Math.max(1, Math.round(squadMembers(state).reduce((s, m) => s + m.level, 0) / Math.max(1, state.squad.length)));
-  const income = totalIncome(state, now);
-  const gangs = Object.keys(GANGS);
+  const myDen = denLevel(state);
+  const gangs = Object.keys(GANGS).filter((g) => g !== state.gang);
   state.rivals = [-1, 0, 1].map((delta, i) => {
-    const level = Math.max(1, avgLvl + delta * 2 + rngInt(h, -1, 1));
+    const level = Math.max(1, avgLvl + delta * 2 + rngInt(h, -1, 0));
     const gang = rngPick(h, gangs);
     const tier = Math.min(5, Math.floor(level / 5));
     const seed = (h.rng = (h.rng * 1664525 + 1013904223) >>> 0);
-    const count = 3 + (delta >= 0 ? 1 : 0);
+    const denLv = Math.max(1, Math.min(6, myDen + (delta > 0 ? 1 : delta < 0 ? -1 : 0)));
+    const count = Math.min(4, 2 + Math.floor((denLv + (delta >= 0 ? 1 : 0)) / 2));
+    const base = generateRivalBase(seed ^ 0xb5297a4d, denLv);
+    const loot = rivalLoot(h, denLv);
     const preview = makeEnemyCrew(seed, gang, count, level, tier);
-    const power = preview.reduce((s, m) => s + memberPower(m), 0);
+    const turrets = base.filter((b) => turretOf(b.t, b.lv)).map((b) => turretOf(b.t, b.lv));
+    const power = preview.reduce((s, m) => s + memberPower(m), 0) + turrets.reduce((s, t) => s + t.hp * 0.8 + t.dmg * 5 + 40, 0);
     return {
-      id: `r${now}${i}`, name: `${rngPick(h, NAMES.rivalTags)}_${rngInt(h, 10, 99)}`, gang, level, count, tier, seed, power,
+      id: `r${now}${i}`, name: `${rngPick(h, NAMES.rivalTags)}_${rngInt(h, 10, 99)}`, gang, level, count, tier, seed, power, denLv, base, loot,
       rep: Math.max(0, state.rep + delta * 60 + rngInt(h, -20, 20)),
-      stash: Math.round(250 * level + income * (60 + 40 * (delta + 1))),
-      odds: power < myPow * 0.85 ? 'Easy' : power > myPow * 1.15 ? 'Risky' : 'Even',
+      odds: power < myPow * 1.05 ? 'Easy' : power > myPow * 1.45 ? 'Risky' : 'Even',
     };
   });
   state.rivalsAt = now;
+}
+
+export function rivalLayout(r) {
+  return baseToRaidLayout(r.base, 0, 0, RAID_W, RAID_H, r.loot);
 }
 
 // ---------------------------------------------------------------- battle setup / resolution
@@ -167,15 +179,15 @@ export function startDistrictBattle(state, districtId, now) {
 
 export function startRaid(state, rivalId) {
   const r = state.rivals.find((x) => x.id === rivalId);
-  if (!r || state.battle) return { ok: false };
+  if (!r || state.battle || !r.base) return { ok: false };
   const sq = squadMembers(state);
   if (!sq.length) return { ok: false, reason: 'squad' };
   const seed = battleSeed(state);
   state.battle = createBattle({
-    seed, kind: 'raid', label: `Raid: ${r.name}`, enemyGang: r.gang,
+    seed, kind: 'raid', label: `Raid: ${r.name}`, enemyGang: r.gang, layout: rivalLayout(r),
     playerMembers: sq, enemyMembers: makeEnemyCrew(r.seed, r.gang, r.count, r.level, r.tier),
-    reward: { cash: r.stash, influence: 10 + r.tier * 4, teeth: 0, rep: 25 + Math.max(0, r.rep - state.rep) / 10 | 0, gearChance: 0.25 },
-    meta: { rivalId: r.id, rivalName: r.name },
+    reward: { cash: 0, influence: 6 + r.tier * 3, teeth: 0, rep: 25 + Math.max(0, r.rep - state.rep) / 10 | 0, gearChance: 0.25 },
+    meta: { rivalId: r.id, rivalName: r.name, denLv: r.denLv },
   });
   state.stats.battles++;
   return { ok: true };
@@ -188,7 +200,8 @@ export function resolveBattle(state, now) {
   if (!b || b.status !== 'done') return null;
   const win = b.result === 'win';
   const r = b.reward;
-  const out = { win, kind: b.kind, label: b.label, cash: 0, influence: 0, teeth: 0, rep: 0, gear: null, district: null, reason: b.endReason || null };
+  const out = { win, kind: b.kind, label: b.label, cash: 0, influence: 0, teeth: 0, rep: 0, gear: null, district: null, reason: b.endReason || null, lost: { cash: 0, influence: 0 } };
+  if (b.kind === 'raid') { const st = raidStars(b); out.stars = st.stars; out.pct = st.pct; out.looted = { ...b.looted }; }
   if (win) {
     out.cash = r.cash; out.influence = r.influence; out.teeth = r.teeth; out.rep = r.rep;
     if (rngNext(state) < r.gearChance) {
@@ -203,7 +216,9 @@ export function resolveBattle(state, now) {
     out.influence = 3;
     out.rep = b.kind === 'raid' ? -15 : 0;
   }
-  grant(state, { cash: out.cash, influence: out.influence, teeth: out.teeth, gear: out.gear });
+  if (b.kind === 'raid') { out.cash += b.looted.cash; out.influence += b.looted.influence; if (out.stars >= 3) out.teeth += 5; }
+  const got = grant(state, { cash: out.cash, influence: out.influence, teeth: out.teeth, gear: out.gear });
+  out.lost = { cash: Math.max(0, Math.round(out.cash - got.cash)), influence: Math.max(0, Math.round(out.influence - got.influence)) };
   state.rep = Math.max(0, state.rep + out.rep);
   state.passXp += win ? 60 : 15;
   state.lastResult = out;
@@ -230,6 +245,7 @@ export function mockPurchase(state, kind, id, now) {
     if (g.vip) state.vipUntil = Math.max(now, state.vipUntil) + g.vip * 86400000;
     if (g.pass) state.pass = true;
     if (g.bench) state.extraBench += g.bench;
+    if (g.builder) state.base.builders = Math.min(5, state.base.builders + g.builder);
     if (g.noads) state.noads = true;
     state.purchases[id] = true;
     return { ok: true, text: `${o.name} unlocked` };
@@ -245,16 +261,23 @@ export const PASS_TIERS = Array.from({ length: 30 }, (_, i) => ({
 }));
 
 // ---------------------------------------------------------------- guided objectives (first-session flow)
+const has = (s, t, lv = 1) => s.base.buildings.some((b) => b.t === t && b.lv >= lv);
 export const OBJECTIVES = [
-  { text: 'Shake down the street 10 times', check: (s) => s.stats.taps >= 10, reward: { cash: 60 } },
-  { text: 'Collect the till at your Market Stall', check: (s) => s.stats.collects >= 1, reward: { cash: 60 } },
-  { text: 'Upgrade the Market Stall to level 10', check: (s) => s.rackets.stall.level >= 10, reward: { teeth: 10 } },
-  { text: 'Open a Hand Car Wash', check: (s) => s.rackets.carwash.level >= 1, reward: { influence: 10 } },
+  { text: 'Build a Knock-off Stall (BUILD button)', check: (s) => has(s, 'stall'), reward: { cash: 100 } },
+  { text: 'Collect cash from your stall when the bubble appears', check: (s) => s.stats.collects >= 1, reward: { cash: 100 } },
+  { text: 'Clear 3 pieces of junk to free up land', check: (s) => (s.stats.cleared || 0) >= 3, reward: { teeth: 10 } },
+  { text: 'Build a Pirate Radio to earn influence (🐾)', check: (s) => has(s, 'radio'), reward: { influence: 50 } },
+  { text: 'Build a Strongbox to hold more cash', check: (s) => has(s, 'strongbox'), reward: { cash: 200 } },
+  { text: 'Build a Training Yard', check: (s) => has(s, 'gym'), reward: { influence: 40 } },
   { text: 'Train a crew member (Crew tab)', check: (s) => s.stats.trains >= 1, reward: { teeth: 10 } },
+  { text: 'Upgrade the Knock-off Stall to level 3', check: (s) => has(s, 'stall', 3), reward: { cash: 300 } },
+  { text: 'Upgrade The Den to level 2', check: (s) => has(s, 'den', 2), reward: { teeth: 20 } },
+  { text: 'Put up a Sniper Nest to defend the base', check: (s) => has(s, 'sniper'), reward: { influence: 60 } },
+  { text: 'Raid a rival base (City tab)', check: (s) => (s.stats.raidWins || 0) >= 1, reward: { teeth: 20 } },
   { text: 'Take the Rail Yards in a turf war (City tab)', check: (s) => s.districts.rail.owner === 'player', reward: { teeth: 20 } },
-  { text: 'Hire a lieutenant so a racket runs itself', check: (s) => Object.values(s.rackets).some((r) => r.lieutenant), reward: { influence: 20 } },
-  { text: 'Win a raid against a rival crew', check: (s) => (s.stats.raidWins || 0) >= 1, reward: { teeth: 20 } },
-  { text: 'Recruit a fourth crew member', check: (s) => s.crew.length >= 4, reward: { influence: 25 } },
+  { text: 'Hire a lieutenant so a building collects by itself', check: (s) => s.base.buildings.some((b) => b.lt), reward: { influence: 40 } },
+  { text: 'Upgrade The Den to level 3 (unlocks Barricades)', check: (s) => has(s, 'den', 3), reward: { teeth: 30 } },
+  { text: 'Recruit a fourth crew member', check: (s) => s.crew.length >= 4, reward: { influence: 50 } },
   { text: 'Take the Neon Strip', check: (s) => s.districts.neon.owner === 'player', reward: { teeth: 30 } },
   { text: 'Take the Night Market', check: (s) => s.districts.market.owner === 'player', reward: { teeth: 40 } },
   { text: 'Take Glass Uptown', check: (s) => s.districts.uptown.owner === 'player', reward: { teeth: 50 } },

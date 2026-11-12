@@ -6,7 +6,9 @@ import * as E from '../core/economy.js';
 import * as C from '../core/crew.js';
 import * as M from '../core/meta.js';
 import { fmt, money, dur, esc } from './fmt.js';
-import * as Empire from './empire.js';
+import * as Hideout from './hideout.js';
+import * as BS from '../core/base.js';
+import { BUILDINGS, OBSTACLES } from '../core/buildings.js';
 import * as Crew from './crew.js';
 import * as City from './city.js';
 import * as Jobs from './jobs.js';
@@ -17,14 +19,14 @@ const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
 if (params.has('reset')) storage.clear();
 
-const SCREENS = { empire: Empire, crew: Crew, city: City, jobs: Jobs, shop: Shop, battle: Battle };
+const SCREENS = { base: Hideout, crew: Crew, city: City, jobs: Jobs, shop: Shop, battle: Battle };
 const NAV = [
-  ['empire', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
+  ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
 ];
 
 export const ctx = {
   state: null,
-  tab: 'empire',
+  tab: 'base',
   sub: {},              // per-screen UI-only state (not saved)
   fast: params.has('fast'),
   timeOffset: 0,        // debug: shift the clock to test offline earnings
@@ -32,6 +34,7 @@ export const ctx = {
   save() { if (this.state) storage.save(this.state); },
   go(tab) { this.tab = tab; this.render(); document.getElementById('screen').scrollTop = 0; },
   render, toast, modal, closeModal, floaty, live,
+  app: { handleBaseEvents },
   fmt, money, dur, esc,
 };
 window.__game = ctx; // exposed for automated tests and debugging
@@ -41,9 +44,10 @@ const $ = (sel, root = document) => root.querySelector(sel);
 function topbar() {
   const s = ctx.state, now = ctx.now();
   const vip = E.isVip(s, now) ? '<span class="vipbadge">MADE</span>' : '';
+  const cap = BS.caps(s);
   return `
-    <div class="res cash"><span class="ico">👑</span><b data-live="cash">${money(s.cash)}</b>${vip}</div>
-    <div class="res inf"><span class="ico">🐾</span><b data-live="influence">${fmt(Math.floor(s.influence))}</b></div>
+    <div class="res cash"><span class="ico">$</span><div class="col grow"><b data-live="cash">${money(s.cash)}</b><div class="capbar"><i data-live-bar="cash" style="width:${Math.min(100, (s.cash / cap.cash) * 100)}%"></i></div></div><span class="cap tiny" data-live="capcash">/${fmt(cap.cash)}</span>${vip}</div>
+    <div class="res inf"><span class="ico">🐾</span><div class="col grow"><b data-live="influence">${fmt(Math.floor(s.influence))}</b><div class="capbar"><i data-live-bar="influence" style="width:${Math.min(100, (s.influence / cap.influence) * 100)}%"></i></div></div><span class="cap tiny" data-live="capinf">/${fmt(cap.influence)}</span></div>
     <div class="res teeth" data-act="nav" data-tab="shop"><span class="ico">🦷</span><b data-live="teeth">${fmt(s.teeth)}</b><span class="plus">+</span></div>`;
 }
 
@@ -52,7 +56,7 @@ function nav() {
   const dot = {
     jobs: !M.dailyStatus(s, now).claimedToday || s.jobs.list.some((j) => !j.claimed && M.jobProgress(s, j).done),
     crew: s.training.some((t) => t.endsAt <= now),
-    empire: !!(M.currentObjective(s)?.done),
+    base: !!(M.currentObjective(s)?.done),
   };
   return NAV.map(([id, ico, label]) => `<button data-act="nav" data-tab="${id}" class="${ctx.tab === id ? 'on' : ''}"><span class="i">${ico}</span>${label}${dot[id] ? '<span class="dotn"></span>' : ''}</button>`).join('');
 }
@@ -66,6 +70,8 @@ function render() {
   $('#topbar').style.display = inBattle ? 'none' : '';
   $('#nav').style.display = inBattle ? 'none' : '';
   $('#topbar').innerHTML = topbar();
+  $('#app').classList.toggle('mode-base', ctx.tab === 'base');
+  $('#app').classList.toggle('mode-battle', inBattle);
   $('#nav').innerHTML = nav();
   const el = $('#screen');
   const keep = el.scrollTop;
@@ -81,15 +87,18 @@ function live() {
   set('cash', money(s.cash));
   set('influence', fmt(Math.floor(s.influence)));
   set('teeth', fmt(s.teeth));
+  const cap = BS.caps(s);
+  set('capcash', '/' + fmt(cap.cash)); set('capinf', '/' + fmt(cap.influence));
+  for (const r of ['cash', 'influence']) { const b = document.querySelector(`[data-live-bar="${r}"]`); if (b) { b.style.width = Math.min(100, (s[r] / cap[r]) * 100) + '%'; b.classList.toggle('full', s[r] >= cap[r] - 0.5); } }
   SCREENS[ctx.tab].live?.(ctx, now);
 }
 
 // ---------------------------------------------------------------- overlays
 let modalEl = null;
-function modal(html, { center = false, onClose, closable = true, backdrop = true } = {}) {
+function modal(html, { center = false, onClose, closable = true, backdrop = true, cls = '' } = {}) {
   closeModal(true);
   modalEl = document.createElement('div');
-  modalEl.className = 'overlay' + (center ? ' center' : '');
+  modalEl.className = 'overlay' + (center ? ' center' : '') + (cls ? ' ' + cls : '');
   modalEl.innerHTML = `<div class="sheet">${closable ? '<button class="x" data-act="closeModal">✕</button>' : ''}${html}</div>`;
   modalEl.addEventListener('click', (e) => { if (e.target === modalEl && closable && backdrop) closeModal(); });
   modalEl._onClose = onClose;
@@ -120,6 +129,19 @@ function floaty(text, x, y) {
   setTimeout(() => f.remove(), 900);
 }
 
+// building / clearing timers finished: toast it and refresh the base
+function handleBaseEvents(ev) {
+  if (!ev || !ev.length) return;
+  const e = ev[ev.length - 1];
+  const name = (BUILDINGS[e.t] || OBSTACLES[e.t]).name;
+  let msg = e.type === 'built' ? `${name} is open for business` : e.type === 'upgraded' ? `${name} upgraded to level ${e.lv}` : `${name} cleared${e.teeth ? `: found 🦷 ${e.teeth} Gold Teeth!` : ''}`;
+  if (ev.length > 1) msg += ` (+${ev.length - 1} more done)`;
+  toast(msg);
+  ctx.save();
+  if (ctx.tab === 'base') { Hideout.refresh(ctx); if (ev.some((x) => x.t === 'den')) render(); }
+  $('#topbar') && ($('#topbar').innerHTML = topbar());
+}
+
 // ---------------------------------------------------------------- input
 const GLOBAL_ACTIONS = {
   nav: (c, el) => c.go(el.dataset.tab),
@@ -129,7 +151,7 @@ document.getElementById('app').addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.hasAttribute('disabled')) return;
   const act = el.dataset.act;
-  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act];
+  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act];
   if (handler) { handler(ctx, el, e); ctx.save(); }
 });
 
@@ -139,7 +161,8 @@ function welcomeBack(sum) {
   modal(`
     <div class="result win"><div class="h dim">While you were away (${dur(sum.seconds)})</div>
     <div class="big">${money(sum.banked + sum.tills)}</div>
-    <div class="dim small">${money(sum.banked)} banked by your lieutenants${sum.tills > 0 ? ` · ${money(sum.tills)} waiting in tills` : ''}${sum.influence >= 1 ? ` · 🐾 ${fmt(Math.floor(sum.influence))} from turf` : ''}</div>
+    <div class="dim small">${sum.banked >= 1 ? `${money(sum.banked)} banked by your lieutenants · ` : ''}${sum.tills > 0 ? `${money(sum.tills)} waiting to collect` : ''}${sum.influence >= 1 ? ` · 🐾 ${fmt(Math.floor(sum.influence))} influence` : ''}</div>
+    ${sum.finished || sum.cleared ? `<div class="small" style="margin-top:4px">🔨 ${sum.finished ? `${sum.finished} build job${sum.finished > 1 ? 's' : ''} finished` : ''}${sum.finished && sum.cleared ? ' · ' : ''}${sum.cleared ? `${sum.cleared} junk pile${sum.cleared > 1 ? 's' : ''} cleared` : ''}</div>` : ''}
     ${sum.cappedSeconds < sum.seconds ? `<div class="tiny faint" style="margin-top:6px">Offline earnings cap at ${dur(sum.cappedSeconds)}. Made Members get 12h.</div>` : ''}
     <div class="row" style="margin-top:14px">
       <button class="btn block" data-act="closeModal">Collect</button>
@@ -166,7 +189,7 @@ function chooseGang() {
     ctx.state = newGame(ctx.now(), pick);
     M.ensureJobs(ctx.state, ctx.now());
     closeModal(true); ctx.save(); render();
-    toast('Tap SHAKE DOWN to make your first cash');
+    toast('Welcome to the wasteland. Tap BUILD to put up your first Knock-off Stall.');
   };
 }
 
@@ -189,22 +212,35 @@ function loop() {
     const now = ctx.now();
     const dt = Math.min(5, Math.max(0, (now - s.lastTick) / 1000));
     E.tick(s, dt, now);
+    const ev = BS.finishTimers(s, now);
+    if (ev.length) handleBaseEvents(ev);
+    if (BS.maybeSpawnObstacle(s, now) && ctx.tab === 'base') Hideout.refresh(ctx);
     const done = C.finishTraining(s, now);
-    if (done.length) { toast(`${done.map((m) => m.name).join(', ')} finished training: level ${done[0].level}`); if (ctx.tab === 'crew' || ctx.tab === 'empire') render(); else $('#nav').innerHTML = nav(); }
+    if (done.length) { toast(`${done.map((m) => m.name).join(', ')} finished training: level ${done[0].level}`); if (ctx.tab === 'crew') render(); else $('#nav').innerHTML = nav(); }
     live();
   }
 }
 
 function boot() {
   const now = ctx.now();
-  const saved = storage.load();
+  const saved = storage.load(now);
   if (saved) {
     ctx.state = saved;
+    if (saved.migratedFrom === 1) {
+      delete saved.migratedFrom;
+      M.ensureJobs(saved, now);
+      render();
+      modal(`<div class="h" style="font-size:22px">The Hideout moved</div><p class="dim">Fang City now has a free-build base. Your crew, gear, turf, Gold Teeth and purchases came with you.</p>
+        <p class="small">Your old rackets were sold off: you start the new base with ${money(saved.cash)} and +100 🦷 to make up for it. Build stalls, clear junk, and grow The Den.</p>
+        <button class="btn red block" data-act="closeModal">Let's build</button>`, { center: true });
+      ctx.save();
+    } else {
     const sum = E.applyOffline(saved, now);
     C.finishTraining(saved, now);
     M.ensureJobs(saved, now);
     render();
     welcomeBack(sum);
+    }
   } else {
     render.call(null);
     chooseGang();
@@ -216,6 +252,7 @@ function boot() {
     else if (ctx.state) { const sum = E.applyOffline(ctx.state, ctx.now()); render(); welcomeBack(sum); }
   });
   window.addEventListener('pagehide', () => ctx.save());
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (ctx.tab === 'battle' && !ctx.sub.battle?.busy) render(); }, 150); });
 }
 
 splash(boot);

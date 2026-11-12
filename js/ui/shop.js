@@ -2,6 +2,7 @@
 import { SHOP } from '../core/data.js';
 import * as E from '../core/economy.js';
 import * as M from '../core/meta.js';
+import * as BS from '../core/base.js';
 import { fmt, money, dur } from './fmt.js';
 
 export function render(ctx) {
@@ -32,10 +33,10 @@ export function render(ctx) {
     <div class="btn sm block" style="margin-top:4px">${p.price}</div></button>`).join('')}</div>
 
   <div class="sect">Memberships & upgrades</div>
-  ${SHOP.offers.slice(1).map(offer).join('')}
+  <div class="grid2">${SHOP.offers.slice(1).map(offer).join('')}</div>
 
   <div class="sect">Free rewards</div>
-  <div class="card"><div class="row"><div class="grow"><div class="h">Watch an ad: x2 income for 30 min</div><div class="tiny dim">Optional, stacks to 4h, ${6 - (s.boosts.adsDay === new Date(now).toISOString().slice(0, 10) ? s.boosts.adsToday : 0)} left today.</div></div>
+  <div class="card"><div class="row"><div class="grow"><div class="h">Watch an ad: x2 cash production for 30 min</div><div class="tiny dim">Optional, stacks to 4h, ${6 - (s.boosts.adsDay === new Date(now).toISOString().slice(0, 10) ? s.boosts.adsToday : 0)} left today.</div></div>
     <button class="btn sm" data-act="adBoostShop">▶ Watch</button></div></div>
 
   <div class="sect">Cosmetics (no stats)</div>
@@ -49,7 +50,7 @@ export function render(ctx) {
   <div class="card"><div class="row" style="flex-wrap:wrap;gap:6px">
     <button class="btn sm" data-act="dbgTime" data-h="1">Skip 1h (test offline)</button>
     <button class="btn sm" data-act="dbgTime" data-h="8">Skip 8h</button>
-    <button class="btn sm" data-act="dbgCash">+$1M test cash</button>
+    <button class="btn sm" data-act="dbgCash">Fill storage + 500 🦷</button>
     <button class="btn sm" data-act="dbgReset">Reset save</button>
   </div><div class="tiny faint" style="margin-top:6px">For play-testing only. Not in the real game.</div></div>`;
 }
@@ -71,13 +72,17 @@ export const actions = {
     const h = +el.dataset.h;
     // Simulate being away: rewind lastTick, then run the same offline routine a real return uses.
     s.lastTick -= h * 3600 * 1000;
-    for (const t of s.training) t.endsAt -= h * 3600 * 1000;
+    const ms = h * 3600 * 1000;
+    for (const t of s.training) t.endsAt -= ms;
+    for (const b of s.base.buildings) if (b.job) b.job.endsAt -= ms;
+    for (const o of s.base.obstacles) if (o.clr) o.clr.endsAt -= ms;
+    if (s.base.spawnAt) s.base.spawnAt -= ms;
     const sum = E.applyOffline(s, ctx.now());
     ctx.render();
     if (sum) ctx.modal(`<div class="result win"><div class="h dim">While you were away (${dur(sum.seconds)})</div><div class="big">${money(sum.banked + sum.tills)}</div>
-      <div class="dim small">${money(sum.banked)} banked by lieutenants · ${money(sum.tills)} waiting in tills${sum.influence >= 1 ? ` · 🐾 ${Math.floor(sum.influence)}` : ''}</div>
+      <div class="dim small">${money(sum.banked)} banked by lieutenants · ${money(sum.tills)} waiting to collect${sum.influence >= 1 ? ` · 🐾 ${Math.floor(sum.influence)}` : ''}${sum.finished ? ` · ${sum.finished} builds finished` : ''}${sum.cleared ? ` · ${sum.cleared} cleared` : ''}</div>
       <button class="btn block" style="margin-top:12px" data-act="closeModal">Collect</button></div>`, { center: true });
   },
-  dbgCash(ctx) { ctx.state.cash += 1e6; ctx.state.influence += 200; ctx.toast('+$1M and +200 influence (test)'); ctx.render(); },
+  dbgCash(ctx) { BS.gain(ctx.state, 'cash', 1e6); BS.gain(ctx.state, 'influence', 5000); ctx.state.teeth += 500; ctx.toast('Filled storage + 500 🦷 (test)'); ctx.render(); },
   dbgReset(ctx) { localStorage.clear(); location.href = location.pathname; },
 };

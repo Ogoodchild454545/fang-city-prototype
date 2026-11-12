@@ -5,56 +5,63 @@ import { SPECIES, ROLES } from './data.js';
 import { memberStats } from './crew.js';
 import { rngNext, rngInt } from './rng.js';
 
-export const W = 7, H = 9;
+// Default street-fight board (landscape: your crew deploys on the left, rivals on the right).
+export const W = 10, H = 7;
 export const T = { FLOOR: 0, COVER: 1, WALL: 2 };
 export const MAX_TURNS = 20;
 export const COST = { shot: 2, aimed: 3, suppress: 2, patch: 2, gadget: 1, strike: 2 };
 
-const idx = (x, y) => y * W + x;
-const inB = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+const idx = (b, x, y) => y * b.w + x;
+const inB = (b, x, y) => x >= 0 && y >= 0 && x < b.w && y < b.h;
 export const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-export const tileAt = (b, x, y) => (inB(x, y) ? b.tiles[idx(x, y)] : T.WALL);
+export const tileAt = (b, x, y) => (inB(b, x, y) ? b.tiles[idx(b, x, y)] : T.WALL);
 export const unitAt = (b, x, y) => b.units.find((u) => u.alive && u.x === x && u.y === y);
 export const living = (b, side) => b.units.filter((u) => u.alive && (!side || u.side === side));
 export const unitById = (b, uid) => b.units.find((u) => u.uid === uid);
+// units that still fight (crew and turrets); storages and the Den don't count towards "everyone down"
+export const combatants = (b, side) => living(b, side).filter((u) => !u.structure || u.weapon);
 
 // ---------------------------------------------------------------- map
-function genMap(h) {
+export function connected(b, fromCols, toCols) {
+  // flood fill over floor from any floor tile in fromCols; true if it reaches every row band of toCols
+  const seen = new Set(), q = [];
+  for (const x of fromCols) for (let y = 0; y < b.h; y++) if (tileAt(b, x, y) === T.FLOOR) { seen.add(idx(b, x, y)); q.push([x, y]); }
+  while (q.length) {
+    const [x, y] = q.shift();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (inB(b, nx, ny) && tileAt(b, nx, ny) === T.FLOOR && !seen.has(idx(b, nx, ny))) { seen.add(idx(b, nx, ny)); q.push([nx, ny]); }
+    }
+  }
+  return { seen, ok: toCols.every((x) => [...Array(b.h).keys()].some((y) => seen.has(idx(b, x, y)))) };
+}
+
+function genStreet(b, h) {
   for (let attempt = 0; attempt < 50; attempt++) {
-    const tiles = new Array(W * H).fill(T.FLOOR);
-    const deco = new Array(W * H).fill(0);
-    // short wall segments (dumpsters / brick stubs) in the middle rows
+    b.tiles = new Array(b.w * b.h).fill(T.FLOOR);
+    b.deco = new Array(b.w * b.h).fill(0);
     const walls = rngInt(h, 1, 3);
     for (let i = 0; i < walls; i++) {
-      const x = rngInt(h, 0, W - 2), y = rngInt(h, 3, H - 4);
-      const horiz = rngNext(h) < 0.6;
+      const x = rngInt(h, 3, b.w - 4), y = rngInt(h, 0, b.h - 2);
+      const vert = rngNext(h) < 0.6;
       for (let k = 0; k < 2; k++) {
-        const xx = horiz ? x + k : x, yy = horiz ? y : y + k;
-        if (inB(xx, yy)) tiles[idx(xx, yy)] = T.WALL;
+        const xx = vert ? x : x + k, yy = vert ? y + k : y;
+        if (inB(b, xx, yy)) b.tiles[idx(b, xx, yy)] = T.WALL;
       }
     }
-    // low cover: crates, cars, bins
-    const covers = rngInt(h, 7, 10);
+    const covers = rngInt(h, 8, 11);
     for (let i = 0; i < covers; i++) {
-      const x = rngInt(h, 0, W - 1), y = rngInt(h, 2, H - 3);
-      if (tiles[idx(x, y)] === T.FLOOR) { tiles[idx(x, y)] = T.COVER; deco[idx(x, y)] = rngInt(h, 0, 2); }
+      const x = rngInt(h, 2, b.w - 3), y = rngInt(h, 0, b.h - 1);
+      if (b.tiles[idx(b, x, y)] === T.FLOOR) { b.tiles[idx(b, x, y)] = T.COVER; b.deco[idx(b, x, y)] = rngInt(h, 0, 2); }
     }
-    for (let i = 0; i < W * H; i++) if (tiles[i] === T.FLOOR && rngNext(h) < 0.06) deco[i] = 3; // puddles / manholes
-    // connectivity check from bottom row to top row
-    const seen = new Set([idx(3, H - 1)]);
-    const q = [[3, H - 1]];
-    while (q.length) {
-      const [x, y] = q.shift();
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (inB(nx, ny) && tiles[idx(nx, ny)] === T.FLOOR && !seen.has(idx(nx, ny))) { seen.add(idx(nx, ny)); q.push([nx, ny]); }
-      }
-    }
-    let ok = true;
-    for (let x = 0; x < W; x++) if (!seen.has(idx(x, 0)) || !seen.has(idx(x, 1))) ok = false;
-    if (ok) return { tiles, deco };
+    for (let i = 0; i < b.w * b.h; i++) if (b.tiles[i] === T.FLOOR && rngNext(h) < 0.06) b.deco[i] = 3;
+    const c = connected(b, [0], [b.w - 1]);
+    let ok = c.ok;
+    for (let y = 0; y < b.h; y++) for (const x of [0, 1, b.w - 2, b.w - 1]) if (b.tiles[idx(b, x, y)] === T.FLOOR && !c.seen.has(idx(b, x, y))) ok = false;
+    if (ok) return;
   }
-  return { tiles: new Array(W * H).fill(T.FLOOR), deco: new Array(W * H).fill(0) };
+  b.tiles = new Array(b.w * b.h).fill(T.FLOOR);
+  b.deco = new Array(b.w * b.h).fill(0);
 }
 
 // ---------------------------------------------------------------- units
@@ -71,24 +78,44 @@ export function unitFromMember(m, side, uid) {
   };
 }
 
-export function createBattle({ seed, playerMembers, enemyMembers, kind, label, enemyGang, weather, reward, meta }) {
-  const b = { v: 1, seed, rng: seed >>> 0, w: W, h: H, kind, label, enemyGang, turn: 1, side: 'player', status: 'active', result: null, log: [], reward, meta: meta || {} };
+// Structures (raid targets) and turrets come from a base layout; see raid.js.
+export function unitFromStructure(st, uid) {
+  const tur = st.turret;
+  return {
+    uid, side: 'enemy', memberId: null, structure: true, static: true, kind: st.t, size: st.size, fx: st.fx, fy: st.fy,
+    name: st.name, boss: false, species: null, role: tur ? 'turret' : 'structure', rarity: 'common', level: st.lv,
+    x: st.x, y: st.y, hp: st.hp, maxHp: st.hp, ap: tur ? 2 : 0, maxAp: tur ? 2 : 0,
+    muscle: 50, aim: tur ? tur.aim : 0, nerve: 50, def: st.def || 1, crit: tur ? 5 : 0, trait: null,
+    weapon: tur ? { slot: 'weapon', name: st.name, kind: 'ranged', dmg: tur.dmg, range: tur.range, acc: 0 } : null,
+    gadget: null, gadgetUsed: true, loot: st.loot || null,
+    status: { poison: 0, smoke: false, suppressed: false }, patched: false, alive: true,
+  };
+}
+
+export function createBattle({ seed, playerMembers, enemyMembers, kind, label, enemyGang, weather, reward, meta, layout }) {
+  const w = layout ? layout.w : W, h = layout ? layout.h : H;
+  const b = { v: 2, seed, rng: seed >>> 0, w, h, kind, label, enemyGang, turn: 1, side: 'player', status: 'active', result: null, log: [], reward, meta: meta || {}, looted: { cash: 0, influence: 0 }, props: [] };
   b.weather = weather || (rngNext(b) < 0.5 ? 'rain' : rngNext(b) < 0.5 ? 'fog' : 'clear');
-  const map = genMap(b);
-  b.tiles = map.tiles; b.deco = map.deco;
   b.units = [];
-  const placeRow = (members, side, rows) => {
+  if (layout) {
+    b.tiles = [...layout.tiles]; b.deco = [...layout.deco]; b.props = layout.props || [];
+    layout.structures.forEach((st, i) => b.units.push(unitFromStructure(st, `s${i}`)));
+  } else genStreet(b, b);
+  const place = (members, side, cols) => {
+    const mid = Math.floor(h / 2);
+    const order = [...Array(h).keys()].sort((a, c) => Math.abs(a - mid) - Math.abs(c - mid));
     const slots = [];
-    for (const y of rows) for (const x of [3, 2, 4, 1, 5, 0, 6]) if (b.tiles[idx(x, y)] === T.FLOOR) slots.push([x, y]);
+    for (const x of cols) for (const y of order) if (b.tiles[idx(b, x, y)] === T.FLOOR && !unitAt(b, x, y)) slots.push([x, y]);
     members.forEach((m, i) => {
       const u = unitFromMember(m, side, `${side[0]}${i}`);
-      const [x, y] = slots[i] || [i % W, rows[0]];
+      const [x, y] = slots[i] || [cols[0], i % h];
       u.x = x; u.y = y;
       b.units.push(u);
     });
   };
-  placeRow(playerMembers, 'player', [H - 1, H - 2]);
-  placeRow(enemyMembers, 'enemy', [0, 1]);
+  place(playerMembers, 'player', [0, 1]);
+  if (layout) place(enemyMembers, 'enemy', layout.guardCols);
+  else place(enemyMembers, 'enemy', [w - 1, w - 2]);
   b.log.push(`Turn 1. ${b.weather === 'rain' ? 'Rain: -10% to hit.' : b.weather === 'fog' ? 'Fog: ranged shots past 4 tiles -15%.' : 'Clear night.'}`);
   return b;
 }
@@ -97,7 +124,7 @@ export function createBattle({ seed, playerMembers, enemyMembers, kind, label, e
 export function reachable(b, u) {
   // BFS over floor tiles, 1 AP per orthogonal step; returns Map key "x,y" -> {cost, path}
   const out = new Map();
-  if (!u.alive || u.ap <= 0) return out;
+  if (!u.alive || u.ap <= 0 || u.static) return out;
   const start = { x: u.x, y: u.y, cost: 0, path: [] };
   const q = [start];
   const seen = new Set([`${u.x},${u.y}`]);
@@ -106,7 +133,7 @@ export function reachable(b, u) {
     if (c.cost >= u.ap) continue;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = c.x + dx, ny = c.y + dy, k = `${nx},${ny}`;
-      if (seen.has(k) || !inB(nx, ny) || tileAt(b, nx, ny) !== T.FLOOR || unitAt(b, nx, ny)) continue;
+      if (seen.has(k) || !inB(b, nx, ny) || tileAt(b, nx, ny) !== T.FLOOR || unitAt(b, nx, ny)) continue;
       seen.add(k);
       const n = { x: nx, y: ny, cost: c.cost + 1, path: [...c.path, [nx, ny]] };
       out.set(k, n);
@@ -136,14 +163,15 @@ export function inCover(b, from, t) {
   const checks = [];
   if (ddx !== 0) checks.push([t.x + ddx, t.y]);
   if (ddy !== 0) checks.push([t.x, t.y + ddy]);
-  return checks.some(([x, y]) => inB(x, y) && tileAt(b, x, y) !== T.FLOOR);
+  if (t.structure) return false; // buildings are big targets
+  return checks.some(([x, y]) => inB(b, x, y) && tileAt(b, x, y) !== T.FLOOR);
 }
 
 const adjacentAlly = (b, u) => living(b, u.side).some((o) => o.uid !== u.uid && dist(o, u) === 1);
 
 export function attackPreview(b, u, t, mode = 'shot', fromPos) {
   const pos = fromPos || u;
-  if (!t.alive || t.side === u.side) return null;
+  if (!t.alive || t.side === u.side || !u.weapon) return null;
   const d = dist(pos, t);
   const melee = u.weapon.kind === 'melee';
   if (mode === 'throw') {
@@ -165,6 +193,7 @@ export function attackPreview(b, u, t, mode = 'shot', fromPos) {
   if (covered) chance -= 30;
   if (b.weather === 'rain') chance -= 10;
   if (b.weather === 'fog' && d > 4) chance -= 15;
+  if (t.structure && !t.weapon) chance += 15;
   if (u.status.suppressed) chance -= 15;
   if (mode === 'aimed') chance += 20;
   chance = Math.max(5, Math.min(95, Math.round(chance)));
@@ -222,9 +251,12 @@ export function applyAction(b, a) {
     t.hp = Math.max(0, t.hp - dmg);
     if (u.trait === 'venom' && mode !== 'throw') t.status.poison = 2;
     const kill = t.hp <= 0;
-    if (kill) t.alive = false;
+    if (kill) {
+      t.alive = false;
+      if (t.loot) { b.looted.cash += t.loot.cash || 0; b.looted.influence += t.loot.influence || 0; t.lootTaken = true; }
+    }
     ev.push({ type: 'attack', uid: u.uid, target: t.uid, hit: true, dmg, crit, kill, melee: p.melee, chance: p.chance });
-    b.log.push(`${u.name} ${p.melee ? 'hits' : 'shoots'} ${t.name} for ${dmg}${crit ? ' (CRIT)' : ''}${kill ? ' and drops them' : ''}.`);
+    b.log.push(`${u.name} ${p.melee ? 'hits' : 'shoots'} ${t.name} for ${dmg}${crit ? ' (CRIT)' : ''}${kill ? (t.structure ? (t.loot ? ' and loots it' : ' and wrecks it') : ' and drops them') : ''}.`);
     checkEnd(b, ev);
     return { ok: true, ev };
   }
@@ -291,10 +323,25 @@ function endTurn(b, ev) {
   checkEnd(b, ev);
 }
 
+function winRaid(b, ev, reason) {
+  // the base is yours: everything left in its storages is taken
+  for (const u of b.units) if (u.side === 'enemy' && u.loot && !u.lootTaken) { b.looted.cash += u.loot.cash || 0; b.looted.influence += u.loot.influence || 0; u.lootTaken = true; }
+  b.status = 'done'; b.result = 'win'; b.endReason = reason; ev.push({ type: 'end', result: 'win' });
+}
 function checkEnd(b, ev) {
   if (b.status !== 'active') return;
-  if (!living(b, 'enemy').length) { b.status = 'done'; b.result = 'win'; ev.push({ type: 'end', result: 'win' }); }
+  if (b.kind === 'raid' && b.units.some((u) => u.kind === 'den' && !u.alive)) return winRaid(b, ev, 'den');
+  if (!combatants(b, 'enemy').length) { if (b.kind === 'raid') winRaid(b, ev, 'wiped'); else { b.status = 'done'; b.result = 'win'; ev.push({ type: 'end', result: 'win' }); } }
   else if (!living(b, 'player').length) { b.status = 'done'; b.result = 'loss'; ev.push({ type: 'end', result: 'loss' }); }
+}
+
+// Raid scoring: one star each for wrecking the Den, half the buildings, and every defender.
+export function raidStars(b) {
+  const st = b.units.filter((u) => u.side === 'enemy' && u.structure);
+  const destroyed = st.filter((u) => !u.alive).length;
+  const pct = st.length ? Math.round((destroyed / st.length) * 100) : 0;
+  const stars = (b.units.some((u) => u.kind === 'den' && !u.alive) ? 1 : 0) + (pct >= 50 ? 1 : 0) + (combatants(b, 'enemy').length === 0 ? 1 : 0);
+  return { stars, pct };
 }
 
 export function retreat(b) {

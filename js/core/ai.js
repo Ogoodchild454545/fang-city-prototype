@@ -19,7 +19,8 @@ function bestAttack(b, u, pos) {
       const p = attackPreview(b, u, t, mode, pos);
       if (!p || p.cost > u.ap) continue;
       if (!p.melee && mode !== 'throw' && p.chance < 22) continue;
-      const s = expected(p, t) * (mode === 'aimed' ? 0.97 : 1);
+      let s = expected(p, t) * (mode === 'aimed' ? 0.97 : 1);
+      if (t.structure && !t.weapon) s *= t.kind === 'den' ? 0.9 : 0.6;
       if (!best || s > best.score) best = { target: t, mode, score: s, p };
     }
   }
@@ -44,7 +45,7 @@ function tileScore(b, u, tile, foes) {
   else score -= Math.abs(nearest - Math.min(u.weapon.range - 1, 4)) * 1.4;
   if (u.weapon.kind !== 'melee') {
     for (const f of foes) {
-      if (f.weapon.kind === 'melee') continue;
+      if (!f.weapon || f.weapon.kind === 'melee') continue;
       const d = dist(pos, f);
       if (d > f.weapon.range || !hasLOS(b, f, pos)) continue;
       score += inCover(b, f, pos) ? 2.5 : -3;
@@ -66,7 +67,7 @@ export function aiNextAction(b) {
   if (!foes.length) return { type: 'end' };
 
   for (const u of living(b, 'enemy')) {
-    if (b.meta.aiDone.includes(u.uid) || u.ap <= 0) continue;
+    if (b.meta.aiDone.includes(u.uid) || u.ap <= 0 || !u.weapon) continue;
 
     // 1) heal
     if (u.role === 'doc' && !u.patched && u.ap >= COST.patch) {

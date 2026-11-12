@@ -19,10 +19,10 @@ export function render(ctx) {
   <button class="btn ${ds.claimedToday ? '' : 'red'} block" style="margin-top:8px" data-act="claimDaily" ${ds.claimedToday ? 'disabled' : ''}>${ds.claimedToday ? 'Come back tomorrow' : 'Claim today\'s pay-out'}</button>
 
   <div class="sect">Today's jobs</div>
-  ${s.jobs.list.map((j) => { const p = M.jobProgress(s, j); return `<div class="card">
+  <div class="grid2">${s.jobs.list.map((j) => { const p = M.jobProgress(s, j); return `<div class="card">
     <div class="row"><div class="grow"><div>${p.t.text}</div><div class="tiny dim">Reward: ${rewardText(p.t.reward)} · +40 pass XP</div>
       <div class="bar" style="margin-top:6px"><i style="width:${(p.progress / p.t.goal) * 100}%"></i></div><div class="tiny faint">${p.progress}/${p.t.goal}</div></div>
-    ${j.claimed ? '<span class="pill green">Done</span>' : `<button class="btn sm ${p.done ? 'red' : ''}" data-act="claimJob" data-id="${j.id}" ${p.done ? '' : 'disabled'}>Claim</button>`}</div></div>`; }).join('')}
+    ${j.claimed ? '<span class="pill green">Done</span>' : `<button class="btn sm ${p.done ? 'red' : ''}" data-act="claimJob" data-id="${j.id}" ${p.done ? '' : 'disabled'}>Claim</button>`}</div></div>`; }).join('')}</div>
 
   <div class="sect">Street Pass · Season 1: Neon Rain</div>
   <div class="card">

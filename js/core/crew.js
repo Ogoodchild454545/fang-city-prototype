@@ -1,6 +1,7 @@
 // Crew rules: recruiting, stats, gear, training (timers + speed-ups).
 import { SPECIES, ROLES, RARITY, GEAR, RECRUIT, NAMES, GANGS, ROSTER_BASE, SQUAD_SIZE } from './data.js';
 import { rngNext, rngPick, rngWeighted } from './rng.js';
+import { housing, trainingYards, armouryLevel, gain } from './base.js';
 
 function startWeapon(role, rarity) {
   if (role === 'enforcer') return rarity === 'common' ? 'knife' : 'bat';
@@ -59,7 +60,7 @@ export function memberPower(m) {
 
 export const squadMembers = (state) => state.squad.map((id) => state.crew.find((m) => m.id === id)).filter(Boolean);
 export const squadPower = (state) => squadMembers(state).reduce((s, m) => s + memberPower(m), 0);
-export const rosterCap = (state) => ROSTER_BASE + (state.rosterBonus || 0);
+export const rosterCap = (state) => housing(state) + (state.rosterBonus || 0);
 
 export function toggleSquad(state, id) {
   const i = state.squad.indexOf(id);
@@ -110,16 +111,18 @@ export function dismiss(state, id) {
   state.training = state.training.filter((t) => t.memberId !== id);
   if (!state.squad.length && state.crew.length) state.squad.push(state.crew[0].id);
   const refund = 5 + m.level * 3;
-  state.influence += refund;
+  gain(state, 'influence', refund);
   return { ok: true, refund };
 }
 
 // --- gear ---------------------------------------------------------------
 const isFree = (gid) => GEAR[gid] && GEAR[gid].price === 0;
 
+export const ARMOURY_FOR = { common: 1, rare: 3, epic: 5, legendary: 7 };
 export function buyGear(state, gid) {
   const g = GEAR[gid];
   if (!g || g.price <= 0) return { ok: false };
+  if (armouryLevel(state) < ARMOURY_FOR[g.rarity]) return { ok: false, reason: 'armoury', need: ARMOURY_FOR[g.rarity] };
   if (state.cash < g.price) return { ok: false, reason: 'cash' };
   state.cash -= g.price;
   state.inventory[gid] = (state.inventory[gid] || 0) + 1;
@@ -152,22 +155,30 @@ export function equip(state, memberId, gid) {
 
 // --- training (timed level-ups; the classic "builder" bottleneck) ---------
 export const levelUpCost = (m) => ({ cash: Math.round(150 * Math.pow(1.34, m.level - 1)), influence: 5 + 4 * (m.level - 1) });
-export const trainingSeconds = (m) => Math.round(6 * m.level * m.level);
+export function trainingSeconds(m, state) {
+  const best = state ? trainingYards(state).reduce((x, b) => Math.max(x, b.lv), 1) : 1;
+  return Math.max(5, Math.round(6 * m.level * m.level * (1 - 0.06 * (best - 1))));
+}
 export const isTraining = (state, id) => state.training.some((t) => t.memberId === id);
-export const benches = (state, now) => 1 + (state.extraBench || 0) + (state.vipUntil > now ? 1 : 0);
+export function benches(state, now) {
+  const yards = trainingYards(state).length;
+  if (!yards) return 0;
+  return yards + (state.extraBench || 0) + (state.vipUntil > now ? 1 : 0);
+}
 
 export function startTraining(state, id, now) {
   const m = state.crew.find((x) => x.id === id);
   if (!m) return { ok: false };
   if (m.level >= RARITY[m.rarity].maxLevel) return { ok: false, reason: 'max' };
   if (isTraining(state, id)) return { ok: false, reason: 'busy' };
+  if (!trainingYards(state).length) return { ok: false, reason: 'yard' };
   if (state.training.length >= benches(state, now)) return { ok: false, reason: 'bench' };
   const c = levelUpCost(m);
   if (state.cash < c.cash) return { ok: false, reason: 'cash' };
   if (state.influence < c.influence) return { ok: false, reason: 'influence' };
   state.cash -= c.cash;
   state.influence -= c.influence;
-  state.training.push({ memberId: id, endsAt: now + trainingSeconds(m) * 1000 });
+  state.training.push({ memberId: id, endsAt: now + trainingSeconds(m, state) * 1000 });
   state.squad = state.squad.filter((x) => x !== id);
   if (!state.squad.length) { const alt = state.crew.find((x) => x.id !== id && !isTraining(state, x.id)); if (alt) state.squad.push(alt.id); }
   state.stats.trains++;
@@ -195,7 +206,7 @@ export function finishTraining(state, now) {
   state.training = state.training.filter((t) => {
     if (t.endsAt > now) return true;
     const m = state.crew.find((x) => x.id === t.memberId);
-    if (m) { m.level++; done.push(m); }
+    if (m) { m.level++; done.push(m); if (!state.squad.includes(m.id) && state.squad.length < SQUAD_SIZE) state.squad.push(m.id); } // back on the squad if there's room
     return false;
   });
   return done;
