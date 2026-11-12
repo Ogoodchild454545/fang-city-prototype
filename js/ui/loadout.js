@@ -22,6 +22,7 @@ export function render(ctx) {
   const usedM = d.squad.reduce((n, id) => n + (d.medkits[id] || 0), 0);
   return `
   <div class="loadscr">
+    <div class="loadbody">
     <div class="armyhead">
       <div>
         <div class="h">${d.highStakes ? 'High Stakes loadout' : 'Street fight loadout'}</div>
@@ -46,6 +47,7 @@ export function render(ctx) {
           return `<button class="btn sm" data-act="craftKit" data-id="${id}" title="${esc(k.blurb)}">${esc(k.name)} · ${n} in stock · ${ico('parts')} ${k.cost}</button>`;
         }).join('')}
       </div>
+    </div>
     </div>
     <div class="loadfoot">
       <label class="hstakes ${d.highStakes ? 'on' : ''}">
