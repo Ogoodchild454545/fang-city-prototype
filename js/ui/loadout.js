@@ -35,7 +35,7 @@ export function render(ctx) {
       · ${ico('parts')} Parts <b>${fmt(s.parts)}</b>
     </div>
     <div class="loadgrid">
-      ${[0,1,2,3].map((i) => slot(ctx, d, i)).join('')}
+      ${[0,1,2,3].filter((i) => d.squad[i] || Object.keys(s.heroes.owned).some((h) => !d.squad.includes(h))).map((i) => slot(ctx, d, i)).join('')}
     </div>
     <div class="loadgear">
       <div class="tiny dim">Workshop gear (spend parts, then assign to a squad member)</div>
@@ -74,12 +74,12 @@ function slot(ctx, d, i) {
     <div class="grow">
       <div class="hn">${esc(h.name)} <span class="tiny dim">Lv ${rec.lv || 1} ${esc(rankName(rec.lv || 1))}${rec.gear ? ' · ' + esc(KIT[rec.gear].name) : ''}</span>
         <button class="x sm" data-act="dropLoadHero" data-id="${id}">✕</button></div>
-      <div class="loadrow">${ico('ammo')} Ammo
+      <div class="loadrow">
+        <span>${ico('ammo')}</span>
         <button class="btn sm" data-act="nudgeAmmo" data-id="${id}" data-d="-1">−</button>
         <b>${a}</b>/${capA}
         <button class="btn sm" data-act="nudgeAmmo" data-id="${id}" data-d="1">+</button>
-      </div>
-      <div class="loadrow">${ico('medkits')} Medkits
+        <span class="gap">${ico('medkits')}</span>
         <button class="btn sm" data-act="nudgeMed" data-id="${id}" data-d="-1">−</button>
         <b>${m}</b>/${capM}
         <button class="btn sm" data-act="nudgeMed" data-id="${id}" data-d="1">+</button>

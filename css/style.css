@@ -512,17 +512,17 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .hud-tr{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 
 /* v0.5 loadout, XP bars, High Stakes */
-.loadscr{padding:8px 12px 16px;overflow:auto;height:100%}
-.loadstock{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px;font-size:13px}
-.loadgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.loadslot{display:flex;gap:8px;background:#161210;border:1px solid var(--line);border-radius:10px;padding:8px;min-height:110px}
-.loadslot.empty{align-items:center;flex-wrap:wrap;gap:6px}
-.loadslot img{width:72px;height:72px;object-fit:cover;border-radius:8px;background:#2a241e;flex:none}
+.loadscr{padding:6px 10px 0;overflow:hidden;height:100%;display:flex;flex-direction:column;box-sizing:border-box}
+.loadstock{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 6px;font-size:12px;flex:none}
+.loadgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;flex:none;overflow:auto;grid-auto-rows:min-content}
+.loadslot{display:flex;gap:6px;background:#161210;border:1px solid var(--line);border-radius:10px;padding:5px;min-height:0;height:auto}
+.loadslot.empty{align-items:center;flex-wrap:wrap;gap:6px;min-height:72px}
+.loadslot img{width:56px;height:56px;object-fit:cover;border-radius:8px;background:#2a241e;flex:none}
 .loadslot .hn{display:flex;align-items:center;gap:6px;font-weight:600}
-.loadrow{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px}
-.loadrow select{flex:1;min-width:0;background:#1c1814;color:var(--ink,#f3e7c9);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
-.loadgear{margin:10px 0}
-.loadfoot{display:flex;gap:10px;align-items:flex-start;margin-top:10px;padding-bottom:8px}
+.loadrow{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12px}
+.loadrow select{flex:1;min-width:0;background:#1c1814;color:var(--ink,#f3e7c9);border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+.loadgear{margin:4px 0;flex:none;max-height:40px;overflow:auto}
+.loadfoot{display:flex;gap:10px;align-items:flex-start;margin-top:6px;padding:6px 0 8px;flex:none;background:#120e0c;z-index:2}
 .loadfoot .hstakes{flex:1;display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.35;background:#1a1210;border:1px solid #5a2a22;border-radius:8px;padding:8px}
 .loadfoot .hstakes.on{border-color:#c45a4a;box-shadow:0 0 0 1px #c45a4a}
 .hsflag{color:#e07a6a;letter-spacing:.04em}
@@ -535,6 +535,14 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .perkpick{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;align-items:center}
 .result.hstakes .h{color:#e07a6a}
 @media (max-width:900px){
-  .loadgrid{grid-template-columns:1fr}
   .loadfoot{flex-direction:column}
 }
+
+.result.hstakes .big{font-size:28px;margin:2px 0}
+.result.hstakes .rewards{margin:4px 0}
+.xpbox{max-height:210px;overflow:auto}
+.loadrow .gap{margin-left:8px}
+.loadscr .armyhead .tiny{display:none}
+
+.loadscr .armyhead{display:flex;align-items:center;gap:8px}
+.loadscr .armyhead .btn{margin-left:auto;flex:none}

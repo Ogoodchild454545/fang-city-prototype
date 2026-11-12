@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.4)
+# Fang City: Animal Gangs (playable prototype v0.5)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -22,6 +22,15 @@ factions you fight in Missions.
 - Unique operators fight 4v4 street battles (action points, half/full cover, hit chance, flanking, overwatch). Home-base troops stay on missions and raids.
 - New players start with Rook the wolf and a guided street lesson. Seven more mixed-species operators unlock with 30 shards (bush clears, mission rewards, Ice crates). Pin a target, a weekly feature, a 10-crate pity, and duplicate shards raise star level (or convert to universal shards at 5★).
 - Mock shop only — no real payments.
+
+## v0.5
+
+- Operators earn XP from kills, survival and winning, then level up (Rookie through Kingpin) with small stat gains. Every few ranks they pick a new perk.
+- Street fights open a loadout screen: pick up to four operators, then load ammo and medkits from base stock and assign Workshop gear.
+- Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
+- High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
+- Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
 ## The base (Hideout)
 - 40x40 tile isometric map, bigger than the screen: drag to pan, pinch or mouse-wheel to zoom.
 - Starts as an unstructured wasteland: dead grass, cracked concrete lots, broken streets, ruins, trees,
@@ -31,7 +40,8 @@ factions you fight in Missions.
 - **Builders** limit concurrent builds, upgrades and clear-ups (start with 1; 2nd costs 250 Ice or the £3.99 mock pack).
 - Clearing junk costs cash and time and sometimes drops Ice. The wasteland slowly grows back.
 - **Training Yard** trains troop types over time (a queue, sped up by yard level, a Drill Sergeant or VIP);
-  **Bunkhouses** + the Den give housing (space cap); **Armoury** upgrades a whole troop type at once;
+  **Bunkhouses** + the Den give housing (space cap); **Armoury** upgrades a whole troop type at once and now also produces and stores ammo;
+  **Clinic** makes medkits; **Workshop** makes parts for operator gear;
   **Family Club** is a placeholder for the clan system.
 - **Sniper Nests**, **Scrap Cannons** and **Barricades** unlock with Den level 2-3 and are placed freely.
 - Every building can be moved; upgrades show a timer bar and a visible level change (sprite tier, glow, plate).
@@ -59,7 +69,7 @@ Wreck The Den to win and take everything left; storages pay out as they fall (ke
 Stars: Den wrecked, 50% of structures wrecked, every defender down. `playerBaseLayout()` already converts the
 player's own base, ready for a "rivals raid you" defence mode.
 
-Saves are version 3. Older v1 and v2 saves migrate automatically: a v2 base is kept, individual crew members
+Saves are version 5. Older v1–v4 saves migrate automatically: a v2 base is kept, individual crew members
 become troops of their species, and the old gang choice is dropped.
 
 ## Architecture (ready for an online backend)
@@ -70,12 +80,14 @@ js/core/   pure game rules, no DOM. Runs in the browser and in Node (tests), and
   base.js       map generation, placement, builders, timers, clearing, production, storage caps
   raid.js       rival base generator, base layout -> battle grid conversion, loot split
   rng.js        seeded deterministic RNG stored inside the JSON state
-  state.js      newGame(), versioned JSON save (v3) with v1 and v2 migration, storage adapter
+  state.js      newGame(), versioned JSON save (v5) with v1–v4 migration, storage adapter
   economy.js    ticking, offline catch-up (finishes jobs at their own end time), boosts
   crew.js       troop training queue, housing, type upgrades, bosses, battle line-up
   battle.js     grid combat (variable size): AP, LOS, cover, crits, structures/turrets, boss skills, raid scoring
   ai.js         rival AI, one action at a time
   meta.js       daily rewards, jobs, objectives, missions, turf/raid setup, rewards, mock purchases
+  progress.js   operator XP, ranks and perk picks
+  loadout.js    ammo/medkit carry, Workshop gear, High Stakes commit/return
 js/ui/     rendering only
   iso.js        canvas renderer for the base: pre-rendered ground, depth-sorted sprites, culling, pan/zoom, ghost
   hideout.js    base HUD, selection panel, build menu, placement, move

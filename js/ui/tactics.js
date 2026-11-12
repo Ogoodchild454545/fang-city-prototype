@@ -456,6 +456,9 @@ async function enemyTurn(ctx) {
 }
 
 function finish(ctx) {
+  const u = ui(ctx);
+  if (u.closed) return;
+  u.closed = 1;
   const res = T.resolveTactics(ctx.state, ctx.state.tactics);
   ctx.save();
   ctx.sub.tactics = null;
@@ -502,7 +505,7 @@ function xpBlock(res) {
     ? `<div class="tiny dim">Unused loadout returned: ${res.returned.ammo || 0} ammo, ${res.returned.medkits || 0} medkits. Spent rounds and kits are gone.</div>`
     : '';
   if (!hs && !rows && !lost) return '';
-  return `<div class="xpbox">${hs}${rows}${lost}${ret}</div>`;
+  return `<div class="xpbox">${hs}${lost}${ret}${rows}</div>`;
 }
 
 function coach(b, u) {
@@ -524,6 +527,7 @@ function coach(b, u) {
 export function render(ctx) {
   const b = ctx.state.tactics, u = ui(ctx);
   if (!b) return `<div class="pad">No fight.</div>`;
+  if (b.status !== 'active' && !u.closed) queueMicrotask(() => finish(ctx));
   if (!u.sel) {
     const first = b.units.find((x) => x.side === 'player' && x.hp > 0);
     if (first) u.sel = first.uid;
