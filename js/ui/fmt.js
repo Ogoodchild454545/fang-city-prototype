@@ -26,7 +26,7 @@ export function rewardText(r) {
   if (r.cash) p.push(money(r.cash));
   if (r.teeth) p.push(`🦷 ${fmt(r.teeth)}`);
   if (r.influence) p.push(`🐾 ${fmt(r.influence)}`);
-  if (r.ticket) p.push(`🎟️ ${r.ticket} recruit ticket`);
+  if (r.ticket) p.push(`🎟️ ${r.ticket} rush ticket`);
   if (r.gear) p.push(`🎒 gear`);
   if (r.skin) p.push(`✨ ${r.skin} skin`);
   return p.join(' · ');

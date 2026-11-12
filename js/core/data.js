@@ -137,13 +137,13 @@ export const BOSS_REST_MIN = 10; // minutes a knocked-out boss needs before the 
 
 // PvE missions: the four gang districts as enemy maps, three missions each.
 export const MISSIONS = [
-  { gang: 'grey',   name: "Grey Pack Turf",      img: 'concept/turf/grey-pack-turf.jpg',      den: 1, blurb: 'Tower blocks and a scrapyard held by wolves and rats.',
+  { gang: 'grey',   name: "Grey Pack Turf",      img: 'assets/turf/grey-pack.jpg',      den: 1, blurb: 'Tower blocks and a scrapyard held by wolves and rats.',
     stages: [{ name: 'Corner Shakedown', count: 3, level: 1, tier: 0 }, { name: 'Scrapyard Ambush', count: 4, level: 3, tier: 1 }, { name: 'The Pack Leader', count: 4, level: 5, tier: 1 }] },
-  { gang: 'iron',   name: 'Iron Claw Yards',     img: 'concept/turf/iron-claw-turf.jpg',      den: 2, blurb: 'Warehouses, trucks and a boxing gym run by badgers and bears.',
+  { gang: 'iron',   name: 'Iron Claw Yards',     img: 'assets/turf/iron-claw.jpg',      den: 2, blurb: 'Warehouses, trucks and a boxing gym run by badgers and bears.',
     stages: [{ name: 'Loading Bay', count: 4, level: 5, tier: 1 }, { name: 'Gym Brawl', count: 4, level: 7, tier: 2 }, { name: 'Iron Foreman', count: 5, level: 9, tier: 2 }] },
-  { gang: 'velvet', name: 'Velvet Den Strip',    img: 'concept/turf/velvet-den-turf.jpg',     den: 3, blurb: 'Neon clubs and a casino where the foxes count the money.',
+  { gang: 'velvet', name: 'Velvet Den Strip',    img: 'assets/turf/velvet-den.jpg',     den: 3, blurb: 'Neon clubs and a casino where the foxes count the money.',
     stages: [{ name: 'Velvet Rope', count: 4, level: 9, tier: 2 }, { name: 'Casino Floor', count: 5, level: 11, tier: 3 }, { name: 'The Gryphon Penthouse', count: 5, level: 13, tier: 3 }] },
-  { gang: 'swamp',  name: 'Swamp Syndicate Docks', img: 'concept/turf/swamp-syndicate-turf.jpg', den: 4, blurb: 'Fog, containers and a pawn shop. Crocs and snakes own the harbour.',
+  { gang: 'swamp',  name: 'Swamp Syndicate Docks', img: 'assets/turf/swamp-syndicate.jpg', den: 4, blurb: 'Fog, containers and a pawn shop. Crocs and snakes own the harbour.',
     stages: [{ name: 'Fog on the Quay', count: 5, level: 13, tier: 3 }, { name: 'Container Maze', count: 5, level: 16, tier: 4 }, { name: 'Deacon Mire', count: 5, level: 19, tier: 4, boss: true }] },
 ];
 

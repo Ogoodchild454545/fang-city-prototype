@@ -3,6 +3,8 @@ import { BUILDINGS, OBSTACLES, CATS, costOf, timeOf, rateOf, tillOf, storeOf, ho
 import * as BS from '../core/base.js';
 import * as E from '../core/economy.js';
 import * as M from '../core/meta.js';
+import * as C from '../core/crew.js';
+import { TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER } from '../core/data.js';
 import { BaseView, preload, tileToWorld } from './iso.js';
 import { fmt, money, dur, esc, rewardText } from './fmt.js';
 
@@ -155,12 +157,12 @@ function statLine(ctx, b) {
     const per = d.produce.res === 'cash' ? `${money(r)}/s` : `🐾 ${fmt(r * 3600)}/h`;
     return `${per} · holds ${d.produce.res === 'cash' ? money(BS.tillCap(s, b, now)) : '🐾 ' + fmt(BS.tillCap(s, b, now))}${BS.isAutoCollect(s, b, now) ? ' · <span class="green">auto-collect</span>' : ''}`;
   }
-  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + 🐾 ${fmt(storeOf('den', lv, 'influence'))} · houses ${housingOf('den', lv)} crew · max building level ${lvCap('stall', lv)}`;
+  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + 🐾 ${fmt(storeOf('den', lv, 'influence'))} · houses ${housingOf('den', lv)} troop space · max building level ${lvCap('stall', lv)}`;
   if (d.store) return `Stores ${d.store.cash ? money(storeOf(b.t, lv, 'cash')) : '🐾 ' + fmt(storeOf(b.t, lv, 'influence'))}`;
-  if (d.housing) return `Houses ${housingOf(b.t, lv)} crew · roster ${s.crew.length}/${BS.housing(s)}`;
+  if (d.housing) return `Houses ${housingOf(b.t, lv)} troop space · army ${C.armyUsed(s)}/${C.armyCap(s)}`;
   if (d.turret) { const t = turretOf(b.t, lv); return `Turret in raids: ${t.dmg} dmg · range ${t.range} · ${t.hp} HP`; }
-  if (b.t === 'gym') return `Trains 1 crew member at a time · ${Math.round(6 * (lv - 1))}% faster`;
-  if (b.t === 'armoury') return `Stocks ${lv >= 5 ? 'epic' : lv >= 3 ? 'rare' : 'common'} gear`;
+  if (b.t === 'gym') { const nx = TROOP_ORDER.find((t) => TROOPS[t].yard > lv); return `Trains ${TROOP_ORDER.filter((t) => TROOPS[t].yard <= lv).length} troop types · ${Math.round(5 * (lv - 1))}% faster${nx ? ` · lv ${TROOPS[nx].yard} unlocks ${TROOPS[nx].name}` : ''}`; }
+  if (b.t === 'armoury') return `Upgrades troops up to level ${Math.min(10, lv + 1)}`;
   if (b.t === 'wall') return 'Blocks movement, gives cover in raids';
   return d.desc;
 }
@@ -178,8 +180,8 @@ function buildingPanel(ctx, b, now) {
   }
   if (d.produce && b.lv > 0 && b.till >= 1) btns.push(`<button class="act2" data-act="collectB" data-id="${b.id}"><span class="i">${d.produce.res === 'cash' ? '💰' : '🐾'}</span>Collect<span class="c" data-live="till">${d.produce.res === 'cash' ? money(b.till) : fmt(b.till)}</span></button>`);
   if (d.produce && b.lv > 0 && !b.lt) btns.push(`<button class="act2" data-act="hireLt" data-id="${b.id}"><span class="i">🕴</span>Lieutenant<span class="c">${money(BS.lieutenantCost(b))}</span></button>`);
-  if (b.t === 'gym' || b.t === 'bunk') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="roster"><span class="i">🐾</span>Crew<span class="c">train</span></button>`);
-  if (b.t === 'armoury') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="armoury"><span class="i">🔫</span>Gear<span class="c">shop</span></button>`);
+  if (b.t === 'gym' || b.t === 'bunk') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="army"><span class="i">🐾</span>Crew<span class="c">train</span></button>`);
+  if (b.t === 'armoury') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="upgrades"><span class="i">🔫</span>Troops<span class="c">upgrade</span></button>`);
   if (b.t === 'family') btns.push(`<button class="act2" data-act="family"><span class="i">🤝</span>Family<span class="c">soon</span></button>`);
   if (d.turret || b.t === 'den') btns.push(`<button class="act2" data-act="gotoCity"><span class="i">⚔</span>Raid<span class="c">rivals</span></button>`);
   btns.push(`<button class="act2" data-act="moveB" data-id="${b.id}"><span class="i">✥</span>Move<span class="c">&nbsp;</span></button>`);
@@ -255,7 +257,7 @@ function infoModal(ctx, b) {
   if (d.produce) row(d.produce.res === 'cash' ? 'Cash per hour' : 'Influence per hour', fmt(rateOf(b.t, lv) * 3600), can ? fmt(rateOf(b.t, nx) * 3600) : null);
   if (d.produce) row('Holds', fmt(tillOf(b.t, lv)), can ? fmt(tillOf(b.t, nx)) : null);
   if (d.store) for (const r of ['cash', 'influence']) if (storeOf(b.t, lv, r)) row(`Stores ${r}`, fmt(storeOf(b.t, lv, r)), can ? fmt(storeOf(b.t, nx, r)) : null);
-  if (d.housing) row('Houses crew', housingOf(b.t, lv), can ? housingOf(b.t, nx) : null);
+  if (d.housing) row('Troop space', housingOf(b.t, lv), can ? housingOf(b.t, nx) : null);
   if (d.turret) { const a = turretOf(b.t, lv), c = can ? turretOf(b.t, nx) : null; row('Damage', a.dmg, c?.dmg); row('Range', a.range, c?.range); row('Health', a.hp, c?.hp); }
   if (can) row('Next upgrade', `${price(d.res, costOf(b.t, nx))} · ${dur(timeOf(b.t, nx))}`);
   let unlocks = '';

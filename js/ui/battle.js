@@ -1,6 +1,6 @@
 // Battle screen renderer. All rules come from core/battle.js; this file draws the board,
 // turns taps into actions, and animates the events those actions return.
-import { GANGS, SPECIES, ROLES, GEAR } from '../core/data.js';
+import { GANGS, SPECIES, ROLES, GEAR, TROOPS, BOSSES } from '../core/data.js';
 import * as B from '../core/battle.js';
 import { aiNextAction } from '../core/ai.js';
 import * as M from '../core/meta.js';
@@ -32,6 +32,9 @@ function targetsFor(ctx, b, s) {
       const p = B.attackPreview(b, s, t, mode === 'throw' ? 'throw' : mode);
       if (p && p.cost <= s.ap) out.set(`${t.x},${t.y}`, { kind: 'target', p, t });
     }
+  }
+  if (mode === 'roll') {
+    for (const t of B.living(b, 'enemy')) if (B.dist(t, s) === 1) out.set(`${t.x},${t.y}`, { kind: 'target', p: { chance: 100, covered: false }, t });
   }
   if (mode === 'patch' || mode === 'heal') {
     for (const a of B.living(b, 'player')) if (B.dist(a, s) <= 1 && a.hp < a.maxHp) out.set(`${a.x},${a.y}`, { kind: 'heal', t: a });
@@ -78,13 +81,15 @@ function unitHtml(b, u, sel, tgt) {
       <span class="sic">${icon}</span><div class="hp"><i style="width:${(u.hp / u.maxHp) * 100}%"></i></div>${hit}</div>`;
   }
   return `<div class="unit ${u.side} ${u.boss ? 'boss' : ''} ${sel ? 'sel' : ''} ${u.side === 'player' && b.side === 'player' && u.ap <= 0 ? 'done' : ''} ${u.alive ? '' : 'dead'}" data-uid="${u.uid}" style="left:${p.x}px;top:${p.y}px;z-index:${z}">
-    <div class="tok" style="background-image:url(${u.boss ? 'assets/croc.jpg' : SPECIES[u.species].img})"></div>
+    <div class="tok" style="background-image:url(${unitImg(u)})"></div>
     <div class="hp"><i style="width:${(u.hp / u.maxHp) * 100}%"></i></div>
     ${u.side === 'player' && b.side === 'player' ? `<div class="ap">${'<b></b>'.repeat(Math.max(0, u.ap))}</div>` : ''}
     ${hit}${st ? `<span class="st">${st}</span>` : ''}
   </div>`;
 }
 
+const unitImg = (u) => u.img || (u.boss ? 'assets/croc.jpg' : SPECIES[u.species].img);
+const PLAYER_SIDE = { name: 'Your Crew', colour: '#c9302c' };
 const starRow = (n) => `<span class="stars">${[0, 1, 2].map((i) => (i < n ? '★' : '<span class="off">★</span>')).join('')}</span>`;
 
 export function render(ctx) {
@@ -116,7 +121,7 @@ export function render(ctx) {
     const su = b.units.find((x) => x.structure && x.fx === pr.fx && x.fy === pr.fy);
     decor.push(propHtml(pr.t, pr.lv, pr.fx, pr.fy, pr.size, su ? `data-suid="${su.uid}" ${su.alive ? '' : 'data-w="1"'}` : ''));
   }
-  const pg = GANGS[s.gang], eg = GANGS[b.enemyGang];
+  const pg = PLAYER_SIDE, eg = GANGS[b.enemyGang];
   const alive = (side) => B.combatants(b, side).filter((x) => !x.structure).length;
   const w = sel?.weapon;
   const melee = w?.kind === 'melee';
@@ -130,7 +135,7 @@ export function render(ctx) {
   <div class="battle">
     <div class="bhead"><span class="h small">${esc(b.label)}</span><span class="tiny ${b.side === 'player' ? 'red' : 'green'} h">T${b.turn}/${B.MAX_TURNS} · ${b.side === 'player' ? 'your move' : 'enemy move'}</span>
       <span class="tiny dim">${b.weather === 'rain' ? '🌧 rain −10% hit' : b.weather === 'fog' ? '🌫 fog' : '🌙 clear'}</span><div class="blog" id="blog">${esc(b.log[b.log.length - 1] || '')}</div></div>
-    <div class="bstage"><div class="iboard ${b.weather}" id="boardwrap" style="width:${bw}px;height:${bh}px;--cw:${G.cw}px;--ch:${G.ch}px">
+    <div class="bstage" ${b.meta && b.meta.bg ? `style="background-image:linear-gradient(rgba(10,8,8,.72),rgba(10,8,8,.88)),url(${b.meta.bg})"` : ''}><div class="iboard ${b.weather}" id="boardwrap" style="width:${bw}px;height:${bh}px;--cw:${G.cw}px;--ch:${G.ch}px">
       ${cells.join('')}${decor.join('')}
       ${b.units.filter((x) => x.alive).map((x) => unitHtml(b, x, sel && x.uid === sel.uid && myTurn, tg.get(`${x.x},${x.y}`))).join('')}
     </div></div>
@@ -143,8 +148,8 @@ export function render(ctx) {
       ${raid ? `<div class="lootbar"><span>Loot <b class="gold" id="lootc">${money(b.looted.cash)}</b>${b.looted.influence ? ` · 🐾 ${fmt(b.looted.influence)}` : ''}</span><span id="starsnow">${starRow(rs.stars)}</span></div>
         <div class="tiny faint">Wreck The Den to win and take everything left. Strongboxes and Ledgers pay out when destroyed. Turrets 🎯 shoot back.</div>` : ''}
       ${sel ? `<div class="bpanel">
-        <div class="portrait rar-${sel.rarity}" data-act="nextUnit" style="background-image:url(${SPECIES[sel.species].img})"></div>
-        <div class="col"><div class="row"><b class="h small">${esc(sel.name)}</b><span class="tiny" style="margin-left:auto;color:#6fa4ef">AP ${sel.ap}/${sel.maxAp}</span></div>
+        <div class="portrait rar-${sel.rarity}" data-act="nextUnit" style="background-image:url(${unitImg(sel)})"></div>
+        <div class="col"><div class="row"><b class="h small">${esc(sel.troop ? TROOPS[sel.troop].name : sel.name)}${sel.troop ? ` <span class="tiny dim">lv ${sel.troopLv}</span>` : ''}</b><span class="tiny" style="margin-left:auto;color:#6fa4ef">AP ${sel.ap}/${sel.maxAp}</span></div>
           <div class="bar"><i style="width:${(sel.hp / sel.maxHp) * 100}%"></i></div>
           <div class="tiny dim">HP ${sel.hp}/${sel.maxHp} · ${w.name} (${w.dmg} dmg, rng ${w.range})${g ? ` · ${g.name}${sel.gadgetUsed ? ' (used)' : ''}` : ''}</div></div>
       </div>
@@ -153,7 +158,7 @@ export function render(ctx) {
         ${act('shot', melee ? '✊' : '🔫', melee ? 'Strike' : 'Snap shot', B.COST.shot, true)}
         ${act('aimed', '🎯', 'Aimed', B.COST.aimed, !melee)}
         ${act(role3[0], role3[1], role3[2], role3[3], role3[4])}
-        ${g ? act(gadgetMode === 'instant' ? 'instant' : gadgetMode, '🧪', g.name.split(' ')[0], B.COST.gadget, !sel.gadgetUsed) : act('nogadget', '🧪', 'No gadget', 0, false)}
+        ${sel?.skill ? act(sel.skill === 'howl' ? 'howl' : 'roll', '⭐', BOSSES[sel.bossId].skillName, B.COST.skill, !sel.skillUsed) : g ? act(gadgetMode === 'instant' ? 'instant' : gadgetMode, '🧪', g.name.split(' ')[0], B.COST.gadget, !sel.gadgetUsed) : act('nogadget', '🧪', 'No gadget', 0, false)}
         <button class="act end" style="grid-column:span 2" data-act="endTurn" ${myTurn ? '' : 'disabled'}><span class="i">⟳</span>End turn</button>
       </div>
       <button class="btn sm ghost" data-act="retreat">🏳 Retreat</button>
@@ -289,16 +294,19 @@ function finish(ctx) {
   }
   if (res.teeth) parts.push(`<span>🦷 ${res.teeth}</span>`);
   if (res.rep) parts.push(`<span>${res.rep > 0 ? '+' : ''}${res.rep} rep</span>`);
-  if (res.gear) parts.push(`<span>🎒 ${gearName(res.gear)}</span>`);
+  const fallen = Object.entries(res.fallen || {});
   ctx.modal(`<div class="result ${res.win ? 'win' : 'loss'}">
     <div class="h dim">${esc(res.label)}</div>
     <div class="big">${res.win ? 'Victory' : res.reason === 'retreat' ? 'Retreated' : res.reason === 'timeout' ? 'Out of time' : 'Defeat'}</div>
     ${res.kind === 'raid' ? `<div>${starRow(res.stars || 0)}</div><div class="tiny dim">${res.pct}% of the base wrecked</div>` : ''}
     ${res.district ? `<div class="h gold">District taken! Income bonus applied.</div>` : ''}
+    ${res.missionFirst ? `<div class="h gold">Mission cleared! The next one is open.</div>` : ''}
     ${res.lost && (res.lost.cash || res.lost.influence) ? `<div class="small red">Storage full: ${res.lost.cash ? money(res.lost.cash) : ''}${res.lost.cash && res.lost.influence ? ' and ' : ''}${res.lost.influence ? '🐾 ' + fmt(res.lost.influence) : ''} left behind. Build more Strongboxes/Ledgers.</div>` : ''}
     <div class="rewards">${parts.join('')}</div>
-    ${res.win ? '' : '<div class="small dim">Train your crew and buy better gear in the Armoury, then try again.</div>'}
-    <button class="btn red block" style="margin-top:10px" data-act="closeModal">Back to the city</button></div>`, { center: true, backdrop: false, onClose: () => ctx.go('city') });
+    <div class="tiny ${fallen.length ? 'red' : 'green'}" style="margin-top:6px">${fallen.length ? `Lost in the fight: ${fallen.map(([t, n]) => `${n}× ${TROOPS[t].name}`).join(', ')}. Retrain them in My Crew.` : 'No troops lost.'}${res.bossesDown && res.bossesDown.length ? ` ${res.bossesDown.join(' & ')} needs 10 minutes' rest.` : ''}</div>
+    ${res.win ? '' : '<div class="small dim">Train more troops and upgrade them in the Armoury, then try again.</div>'}
+    <div class="row" style="margin-top:10px"><button class="btn block" data-act="closeModal" data-then="crew">My Crew</button><button class="btn red block" data-act="closeModal">${res.kind === 'mission' ? 'Back to missions' : 'Back to the city'}</button></div></div>`, { center: true, backdrop: false, onClose: () => ctx.go(ctx.sub.afterBattle || (res.kind === 'mission' ? 'missions' : 'city')) });
+  ctx.sub.afterBattle = null;
 }
 const gearName = (id) => GEAR[id]?.name || id;
 
@@ -317,6 +325,7 @@ export const actions = {
     if (occ && occ.side === 'enemy') {
       if (tg) {
         if (u.mode === 'suppress') return doAction(ctx, { type: 'suppress', uid: sel.uid, target: occ.uid });
+        if (u.mode === 'roll') return doAction(ctx, { type: 'skill', uid: sel.uid, target: occ.uid });
         return doAction(ctx, { type: 'attack', uid: sel.uid, target: occ.uid, mode: u.mode === 'throw' ? 'throw' : u.mode });
       }
       const p = sel && B.attackPreview(b, sel, occ, u.mode === 'aimed' ? 'aimed' : 'shot');
@@ -331,6 +340,7 @@ export const actions = {
     const mode = el.dataset.mode;
     const sel = selected(ctx);
     if (mode === 'instant') return doAction(ctx, { type: 'gadget', uid: sel.uid });
+    if (mode === 'howl') return doAction(ctx, { type: 'skill', uid: sel.uid });
     u.mode = u.mode === mode && mode !== 'shot' ? 'shot' : mode;
     ctx.render();
     if (u.mode !== 'shot' && !targetsFor(ctx, b, sel).size) ctx.toast('No valid targets from here');

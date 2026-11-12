@@ -1,6 +1,6 @@
 // UI controller: owns the state object, the clock, persistence and screen routing.
 // Rules live in js/core/*; this layer only renders and forwards player intents.
-import { GAME, GANGS, SPECIES } from '../core/data.js';
+import { GAME, TROOPS } from '../core/data.js';
 import { newGame, makeLocalStorage } from '../core/state.js';
 import * as E from '../core/economy.js';
 import * as C from '../core/crew.js';
@@ -14,14 +14,15 @@ import * as City from './city.js';
 import * as Jobs from './jobs.js';
 import * as Shop from './shop.js';
 import * as Battle from './battle.js';
+import * as Missions from './missions.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
 if (params.has('reset')) storage.clear();
 
-const SCREENS = { base: Hideout, crew: Crew, city: City, jobs: Jobs, shop: Shop, battle: Battle };
+const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle };
 const NAV = [
-  ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
+  ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['missions', '🎯', 'Missions'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
 ];
 
 export const ctx = {
@@ -55,7 +56,7 @@ function nav() {
   const s = ctx.state, now = ctx.now();
   const dot = {
     jobs: !M.dailyStatus(s, now).claimedToday || s.jobs.list.some((j) => !j.claimed && M.jobProgress(s, j).done),
-    crew: s.training.some((t) => t.endsAt <= now),
+    crew: C.armyCount(s) === 0 && !s.queue.length,
     base: !!(M.currentObjective(s)?.done),
   };
   return NAV.map(([id, ico, label]) => `<button data-act="nav" data-tab="${id}" class="${ctx.tab === id ? 'on' : ''}"><span class="i">${ico}</span>${label}${dot[id] ? '<span class="dotn"></span>' : ''}</button>`).join('');
@@ -145,7 +146,7 @@ function handleBaseEvents(ev) {
 // ---------------------------------------------------------------- input
 const GLOBAL_ACTIONS = {
   nav: (c, el) => c.go(el.dataset.tab),
-  closeModal: () => closeModal(),
+  closeModal: (c, el) => { if (el && el.dataset && el.dataset.then) c.sub.afterBattle = el.dataset.then; closeModal(); },
 };
 document.getElementById('app').addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
@@ -171,26 +172,11 @@ function welcomeBack(sum) {
   GLOBAL_ACTIONS.doubleOffline = (c) => { const v = E.doubleOffline(c.state, sum); closeModal(); toast(`Ad watched (mock): +${money(v)}`); render(); };
 }
 
-function chooseGang() {
-  let pick = 'grey';
-  $('#screen').innerHTML = '<div class="hero" style="height:46vh"></div>';
-  const draw = () => `
-    <div class="h" style="font-size:22px">Pick your gang</div>
-    <div class="dim small" style="margin:4px 0 10px">Your gang sets your starting crew. You can recruit any animal later.</div>
-    <div class="gangpick">${Object.entries(GANGS).map(([id, g]) => `
-      <button class="gangcard ${pick === id ? 'on' : ''}" data-act="pickGang" data-id="${id}">
-        <div class="im" style="background-image:url(${SPECIES[g.species[0]].img})"></div>
-        <div class="tx"><div class="h" style="color:${g.colour}">${g.name}</div><div class="tiny dim">${g.blurb}</div></div>
-      </button>`).join('')}</div>
-    <button class="btn red block" style="margin-top:12px" data-act="startGame">Take the streets</button>`;
-  const m = modal(draw(), { closable: false });
-  GLOBAL_ACTIONS.pickGang = (c, el) => { pick = el.dataset.id; m.querySelector('.sheet').innerHTML = draw(); };
-  GLOBAL_ACTIONS.startGame = () => {
-    ctx.state = newGame(ctx.now(), pick);
-    M.ensureJobs(ctx.state, ctx.now());
-    closeModal(true); ctx.save(); render();
-    toast('Welcome to the wasteland. Tap BUILD to put up your first Knock-off Stall.');
-  };
+function startNewGame() {
+  ctx.state = newGame(ctx.now());
+  M.ensureJobs(ctx.state, ctx.now());
+  ctx.save(); render();
+  toast('Welcome to the wasteland. Tap BUILD to put up your first Knock-off Stall.');
 }
 
 function splash(next) {
@@ -215,8 +201,11 @@ function loop() {
     const ev = BS.finishTimers(s, now);
     if (ev.length) handleBaseEvents(ev);
     if (BS.maybeSpawnObstacle(s, now) && ctx.tab === 'base') Hideout.refresh(ctx);
-    const done = C.finishTraining(s, now);
-    if (done.length) { toast(`${done.map((m) => m.name).join(', ')} finished training: level ${done[0].level}`); if (ctx.tab === 'crew') render(); else $('#nav').innerHTML = nav(); }
+    const done = C.finishQueue(s, now);
+    const res = C.finishResearch(s, now);
+    if (done.length) toast(done.length === 1 ? `${TROOPS[done[0]].name} is ready` : `${done.length} troops are ready`);
+    if (res) toast(`${TROOPS[res.t].name} upgraded to level ${res.lv}`);
+    if (done.length || res) { ctx.save(); if (ctx.tab === 'crew') render(); else $('#nav').innerHTML = nav(); }
     live();
   }
 }
@@ -226,24 +215,28 @@ function boot() {
   const saved = storage.load(now);
   if (saved) {
     ctx.state = saved;
-    if (saved.migratedFrom === 1) {
+    if (saved.migratedFrom) {
+      const from = saved.migratedFrom;
       delete saved.migratedFrom;
       M.ensureJobs(saved, now);
       render();
-      modal(`<div class="h" style="font-size:22px">The Hideout moved</div><p class="dim">Fang City now has a free-build base. Your crew, gear, turf, Gold Teeth and purchases came with you.</p>
-        <p class="small">Your old rackets were sold off: you start the new base with ${money(saved.cash)} and +100 🦷 to make up for it. Build stalls, clear junk, and grow The Den.</p>
-        <button class="btn red block" data-act="closeModal">Let's build</button>`, { center: true });
+      const army = Object.entries(saved.army).map(([t, n]) => `${n}× ${TROOPS[t].name}`).join(', ');
+      modal(`<div class="h" style="font-size:22px">${from === 1 ? 'The Hideout moved' : 'Fang City 0.3: one crew, many animals'}</div>
+        <p class="dim">${from === 1 ? 'Fang City now has a free-build base. Your turf, Gold Teeth and purchases came with you; your old rackets were sold off.' : 'Gangs are gone: every boss now runs one mixed crew. Your base is untouched.'}</p>
+        <p class="small">Your old crew became troops: <b>${army}</b>. Spare gear was sold${saved.gearRefund ? ` for ${money(saved.gearRefund)}` : ''}, and you get +${from === 1 ? 100 : 50} 🦷.</p>
+        <p class="small">New: train troops in <b>My Crew</b>, unlock bosses with The Den, and fight the four gangs in <b>Missions</b>.</p>
+        <button class="btn red block" data-act="closeModal">Let's go</button>`, { center: true });
+      delete saved.gearRefund;
       ctx.save();
     } else {
     const sum = E.applyOffline(saved, now);
-    C.finishTraining(saved, now);
+    C.finishQueue(saved, now); C.finishResearch(saved, now);
     M.ensureJobs(saved, now);
     render();
     welcomeBack(sum);
     }
   } else {
-    render.call(null);
-    chooseGang();
+    startNewGame();
   }
   setInterval(loop, 200);
   setInterval(() => ctx.save(), 5000);
