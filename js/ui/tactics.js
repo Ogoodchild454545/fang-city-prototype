@@ -1,13 +1,15 @@
-// Canvas tactics view: bigger street maps, pan/zoom, hitchance, cover, and simple unit animations.
+// Canvas tactics view: docklands yard, pan/zoom, hitchance, cover, speed queue and PvP timer.
 import * as T from '../core/tactics.js';
-import { defOf, HEROES } from '../core/heroes.js';
+import { defOf, classOf, speciesPerk } from '../core/heroes.js';
 import { tile, inB } from '../core/tmaps.js';
 import { money, fmt, ico, esc } from './fmt.js';
 import { formatDrop } from '../core/shards.js';
 import { PERKS, rankName, xpToNext } from '../core/progress.js';
 import * as Audio from './audio.js';
+import * as Dock from './dockart.js';
+import { chooseAction, opponentLabel } from '../core/pvp.js';
 
-const TW = 58, TH = 29;
+const TW = Dock.TW, TH = Dock.TH;
 const portraits = {};
 function preload(src) {
   if (!src || portraits[src]) return portraits[src];
@@ -18,12 +20,11 @@ function ui(ctx) {
   return ctx.sub.tactics || (ctx.sub.tactics = {
     sel: null, mode: 'shot', cam: null, dirty: 1, hover: null, busy: 0,
     floats: [], shake: 0, flash: null, pathAnim: null,
+    bubbles: [], deadline: 0, timerUid: null, booms: [],
   });
 }
 
-function toWorld(x, y) {
-  return { x: (x - y) * (TW / 2), y: (x + y) * (TH / 2) };
-}
+function toWorld(x, y) { return Dock.toWorld(x, y); }
 function fromScreen(u, sx, sy) {
   const cam = u.cam;
   const mx = (sx - cam.x) / cam.z, my = (sy - cam.y) / cam.z;
@@ -33,12 +34,50 @@ function fromScreen(u, sx, sy) {
 }
 
 function fitCam(b, cv) {
-  const us = (b.units || []).filter((u) => u.hp > 0);
-  const mx = us.length ? us.reduce((s, u) => s + u.x, 0) / us.length : b.map.w / 2;
-  const my = us.length ? us.reduce((s, u) => s + u.y, 0) / us.length : b.map.h / 2;
-  const mid = toWorld(mx, my);
-  const z = Math.max(0.9, Math.min(1.55, cv.width / (15 * TW / 2)));
-  return { x: cv.width / 2 - mid.x * z, y: cv.height * 0.40 - mid.y * z, z };
+  const us = (b.units || []).filter((un) => un.hp > 0);
+  const pts = us.length ? us : [{ x: Math.floor((b.map.w || 12) / 2), y: Math.floor((b.map.h || 10) / 2) }];
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const pad = 3;
+  for (const un of pts) {
+    for (const [dx, dy] of [[-pad, -pad], [pad, pad], [-pad, pad], [pad, -pad], [0, 0]]) {
+      const p = toWorld(un.x + dx, un.y + dy);
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }
+  }
+  const bw = Math.max(TW * 4, maxX - minX);
+  const bh = Math.max(TH * 6, maxY - minY);
+  const z = Math.max(0.7, Math.min(1.4, Math.min(cv.width / (bw + TW), cv.height / (bh + TH * 3))));
+  const midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
+  return { x: cv.width / 2 - midX * z, y: cv.height * 0.52 - midY * z, z };
+}
+
+function pvpTimerOn(b) {
+  return !!(b && b.pvp && !b.tutorial && b.status === 'active');
+}
+function syncTimer(u, b) {
+  if (!pvpTimerOn(b) || b.side !== 'player') { u.deadline = 0; u.timerUid = null; return; }
+  const act = T.actingUnit(b);
+  if (!act || act.side !== 'player') { u.deadline = 0; u.timerUid = null; return; }
+  if (u.timerUid !== act.uid) {
+    u.timerUid = act.uid;
+    u.deadline = performance.now() + (b.turnSec || 30) * 1000;
+  }
+}
+function remainMs(u) { return u.deadline ? Math.max(0, u.deadline - performance.now()) : 0; }
+
+function say(u, b, uid, kind) {
+  const un = b.units.find((x) => x.uid === uid);
+  if (!un) return;
+  const list = defOf(un.hero).quips && defOf(un.hero).quips[kind];
+  if (!list || !list.length) return;
+  const text = list[Math.floor(Math.random() * list.length)];
+  u.bubbles = (u.bubbles || []).filter((bb) => bb.uid !== uid || kind === 'ko');
+  u.bubbles.push({ uid, text, t: performance.now(), until: performance.now() + 1700, kind });
+}
+
+function koAt(b, x, y) {
+  return (b.units || []).find((un) => un.x === x && un.y === y && un.hp <= 0) || null;
 }
 
 function hexPoly(g, x, y, z, fill, stroke) {
@@ -132,14 +171,15 @@ function draw(ctx) {
   }
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, cv.width, cv.height);
-  const sky = g.createLinearGradient(0, 0, 0, cv.height);
-  sky.addColorStop(0, '#5a6f88'); sky.addColorStop(0.45, '#8a8b86'); sky.addColorStop(1, '#3a3a38');
-  g.fillStyle = sky; g.fillRect(0, 0, cv.width, cv.height);
+  Dock.drawSky(g, cv.width, cv.height);
 
   g.save();
   g.translate(cam.x + shakeX, cam.y + shakeY);
 
-  const sel = b.units.find((x) => x.uid === u.sel && x.hp > 0);
+  const actor = T.actingUnit(b);
+  const sel = (actor && actor.side === 'player' && actor.hp > 0)
+    ? actor
+    : b.units.find((x) => x.uid === u.sel && x.hp > 0);
   const reach = (sel && b.side === 'player' && !u.busy) ? T.reachable(b, sel).dist : null;
 
   const order = [];
@@ -150,39 +190,47 @@ function draw(ctx) {
     const t = tile(b.map, c.x, c.y);
     const p = toWorld(c.x, c.y);
     const sx = p.x * z, sy = p.y * z;
-    let fill = t.t === 'road' ? '#2a2d33' : t.t === 'side' ? '#8a8376' : t.t === 'alley' ? '#4a5248' : '#6a675c';
-    if ((c.x + c.y) % 2) fill = t.t === 'road' ? '#23262c' : t.t === 'side' ? '#7e786c' : '#5e5b52';
-    hexPoly(g, sx, sy, z, fill, 'rgba(0,0,0,0.25)');
-    if (t.t === 'road' && c.y === (b.map.roadY || 0) && c.x % 2 === 0) {
-      g.fillStyle = 'rgba(230,200,80,0.55)';
-      g.fillRect(sx - 6 * z, sy - 1.5 * z, 12 * z, 3 * z);
-    }
+    Dock.drawGround(g, t, sx, sy, z, (c.x + c.y) % 2);
     if (reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel && sel.x === c.x && sel.y === c.y)) {
-      hexPoly(g, sx, sy, z, 'rgba(80,150,255,0.38)', 'rgba(140,190,255,0.85)');
+      hexPoly(g, sx, sy, z, 'rgba(80,150,255,0.34)', 'rgba(140,190,255,0.8)');
     }
-    // target highlights
     if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y) {
-      hexPoly(g, sx, sy, z, 'rgba(255,220,120,0.2)', '#f0d060');
+      hexPoly(g, sx, sy, z, 'rgba(255,220,120,0.16)', '#f0d060');
     }
-    drawDecor(g, t, sx, sy, z);
+    if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y && T.isExplosiveAt(b, c.x, c.y)) {
+      const prev = T.previewProp(b, sel, c.x, c.y);
+      if (prev && prev.ok) Dock.drawBlastPreview(g, sx, sy, z, prev.radius || 1);
+    }
   }
 
-  // units, sorted by depth
-  const units = b.units.slice().sort((a, c) => (a.x + a.y) - (c.x + c.y) || a.uid.localeCompare(c.uid));
-  for (const un of units) {
+  const sprites = [];
+  for (const c of order) {
+    const t = tile(b.map, c.x, c.y);
+    if (!t || !t.decor || Dock.skipPairedEast(t)) continue;
+    const depth = c.x + c.y + (Dock.isPairedWest(t) ? 0.5 : 0);
+    sprites.push({ depth, typ: 'prop', x: c.x, y: c.y, t });
+  }
+  for (const un of b.units) {
     let x = un.x, y = un.y;
-    if (u.pathAnim && u.pathAnim.uid === un.uid) {
-      const a = u.pathAnim;
-      x = a.x; y = a.y;
+    if (u.pathAnim && u.pathAnim.uid === un.uid) { x = u.pathAnim.x; y = u.pathAnim.y; }
+    sprites.push({ depth: x + y, typ: 'unit', un, x, y });
+  }
+  sprites.sort((a, c) => a.depth - c.depth || (a.typ === 'prop' ? -1 : 1) || 0);
+
+  for (const sp of sprites) {
+    if (sp.typ === 'prop') {
+      const p = toWorld(sp.x, sp.y);
+      Dock.drawProp(g, sp.t, p.x * z, p.y * z, z);
+      continue;
     }
-    const p = toWorld(x, y);
+    const un = sp.un;
+    const p = toWorld(sp.x, sp.y);
     const sx = p.x * z, sy = p.y * z;
     const bob = un.hp > 0 ? Math.sin(now / 380 + un.uid.charCodeAt(1)) * 1.6 * z : 0;
     const r = 16 * z;
     const dead = un.hp <= 0;
     g.save();
     if (dead) { g.globalAlpha = 0.45; g.translate(sx, sy + 6 * z); g.rotate(-0.4); g.translate(-sx, -sy); }
-    // shadow
     g.fillStyle = 'rgba(0,0,0,0.4)';
     g.beginPath(); g.ellipse(sx, sy + 10 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.fill();
     const def = defOf(un.hero);
@@ -200,16 +248,16 @@ function draw(ctx) {
       g.fillRect(cx - r, cy - r, r * 2, r * 2);
     }
     g.restore();
-    g.lineWidth = (sel && sel.uid === un.uid ? 3 : 2) * z;
-    g.strokeStyle = un.overwatch ? '#e0c15a' : un.side === 'player' ? '#8fd18f' : '#e07a6a';
+    const acting = actor && actor.uid === un.uid;
+    g.lineWidth = ((sel && sel.uid === un.uid) || acting ? 3 : 2) * z;
+    g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? '#8fd18f' : '#e07a6a';
     g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
-    // hp bar
     const bw = 22 * z, bh = 3.5 * z;
     g.fillStyle = 'rgba(0,0,0,0.65)';
     g.fillRect(cx - bw / 2, cy + r + 2 * z, bw, bh);
     g.fillStyle = un.hp / un.maxHp > 0.5 ? '#5dba6a' : un.hp / un.maxHp > 0.25 ? '#e0c15a' : '#d4544a';
     g.fillRect(cx - bw / 2, cy + r + 2 * z, bw * Math.max(0, un.hp / un.maxHp), bh);
-    if (!dead && un.side === 'player' && b.side === 'player') {
+    if (!dead && un.side === 'player' && b.side === 'player' && acting) {
       g.fillStyle = '#d8e8ff';
       g.font = `${Math.round(8 * z)}px sans-serif`;
       g.textAlign = 'center';
@@ -232,7 +280,6 @@ function draw(ctx) {
       g.textAlign = 'center';
       g.fillText('OW', cx, cy - r - 4 * z);
     }
-    // hitchance label on hovered / targeted enemy
     if (sel && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
       const prev = T.previewShot(b, sel, un, u.mode === 'aimed' ? 'aimed' : u.mode === 'melee' || u.mode === 'knife' || u.mode === 'roll' ? u.mode : u.mode === 'venom' ? 'venom' : u.mode === 'suppress' ? 'suppress' : 'shot');
       if (prev && prev.ok) {
@@ -250,10 +297,24 @@ function draw(ctx) {
         g.fillText(cov, cx, cy - r - 22 * z);
       }
     }
+    // speech bubble
+    const bub = (u.bubbles || []).find((bb) => bb.uid === un.uid && now < bb.until);
+    if (bub) {
+      const k = Math.min(1, (bub.until - now) / 400);
+      g.globalAlpha = k;
+      g.font = `${Math.round(8.5 * z)}px Inter, sans-serif`;
+      g.textAlign = 'center';
+      const tw = Math.min(120 * z, g.measureText(bub.text).width + 10 * z);
+      const bx = cx, by = cy - r - 28 * z;
+      g.fillStyle = 'rgba(14,12,10,0.9)';
+      g.beginPath(); g.roundRect(bx - tw / 2, by - 12 * z, tw, 14 * z, 4 * z); g.fill();
+      g.fillStyle = '#f3e7c9';
+      g.fillText(bub.text, bx, by - 2 * z);
+      g.globalAlpha = 1;
+    }
     g.restore();
   }
 
-  // muzzle flash
   if (u.flash && u.flash.muzzle && now < u.flash.until) {
     const a = u.flash;
     g.fillStyle = 'rgba(255,230,140,0.9)';
@@ -262,7 +323,23 @@ function draw(ctx) {
     g.beginPath(); g.moveTo(a.ax, a.ay); g.lineTo(a.tx, a.ty); g.stroke();
   }
 
-  // damage numbers
+  // boom flashes
+  u.booms = (u.booms || []).filter((bm) => now < bm.until);
+  for (const bm of u.booms) {
+    const k = (bm.until - now) / 420;
+    const p = toWorld(bm.x, bm.y);
+    g.save();
+    g.globalAlpha = Math.max(0, k);
+    const rad = (18 + (1 - k) * 22) * z;
+    const grd = g.createRadialGradient(p.x * z, p.y * z, 2, p.x * z, p.y * z, rad);
+    grd.addColorStop(0, 'rgba(255,230,140,0.9)');
+    grd.addColorStop(0.4, 'rgba(230,90,30,0.55)');
+    grd.addColorStop(1, 'rgba(80,20,10,0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(p.x * z, p.y * z, rad, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
   u.floats = u.floats.filter((f) => now - f.t < 800);
   for (const f of u.floats) {
     const k = (now - f.t) / 800;
@@ -274,12 +351,22 @@ function draw(ctx) {
     g.globalAlpha = 1;
   }
   g.restore();
+
+  // live PvP countdown in the HUD chip
+  const tel = document.getElementById('ttimer');
+  if (tel) {
+    const show = pvpTimerOn(b) && b.side === 'player' && u.deadline && !u.busy;
+    const sec = show ? Math.ceil(remainMs(u) / 1000) : 0;
+    tel.textContent = show ? String(sec) : '';
+    tel.classList.toggle('low', show && sec <= 10);
+  }
 }
 
 let raf = 0;
 function loop(ctx) {
   raf = 0;
   const u = ui(ctx);
+  const b = ctx.state.tactics;
   if (u.pathAnim) {
     const a = u.pathAnim, now = performance.now();
     const t = Math.min(1, (now - a.t0) / a.dur);
@@ -292,12 +379,13 @@ function loop(ctx) {
     a.y = A.y + (B.y - A.y) * frac;
     if (t >= 1) u.pathAnim = null;
   }
+  if (b && !u.busy) syncTimer(u, b);
   draw(ctx);
-  if (u.pathAnim || u.shake || (u.flash && performance.now() < u.flash.until) || u.floats.length || !u.busy) {
-    raf = requestAnimationFrame(() => loop(ctx));
-  } else {
-    raf = requestAnimationFrame(() => loop(ctx)); // idle bob always
+  if (b && !u.busy && pvpTimerOn(b) && b.side === 'player' && u.deadline && remainMs(u) <= 0) {
+    u.deadline = 0;
+    doAct(ctx, { type: 'timeout' });
   }
+  raf = requestAnimationFrame(() => loop(ctx));
 }
 
 function bindCanvas(ctx) {
@@ -356,16 +444,25 @@ function bindCanvas(ctx) {
 function clickTile(ctx, x, y) {
   const b = ctx.state.tactics, u = ui(ctx);
   if (!b || u.busy || b.status !== 'active' || b.side !== 'player') return;
+  const sel = T.actingUnit(b);
+  if (!sel || sel.side !== 'player' || sel.hp <= 0) return;
+  u.sel = sel.uid;
   const occ = T.unitAt(b, x, y);
-  const sel = b.units.find((p) => p.uid === u.sel && p.hp > 0);
-  if (occ && occ.side === 'player') { u.sel = occ.uid; u.mode = 'shot'; Audio.play('tap'); return ctx.render(); }
-  if (occ && occ.side === 'player' && sel && (u.mode === 'patch' || u.mode === 'medkit' || u.mode === 'heal')) {
-    const typ = u.mode === 'medkit' ? 'medkit' : 'heal';
-    return doAct(ctx, { type: typ, uid: sel.uid, target: occ.uid });
+  const down = koAt(b, x, y);
+  if ((u.mode === 'patch' || u.mode === 'medkit' || u.mode === 'heal' || u.mode === 'revive') && (occ || down)) {
+    const t = occ || down;
+    if (t.side === 'player') {
+      const typ = (u.mode === 'heal' || u.mode === 'patch') ? 'heal' : 'medkit';
+      return doAct(ctx, { type: typ, uid: sel.uid, target: t.uid });
+    }
   }
-  if (occ && occ.side === 'enemy' && sel) {
+  if (occ && occ.side === 'player' && occ.uid !== sel.uid) return;
+  if (occ && occ.side === 'enemy') {
     const mode = u.mode || 'shot';
     return doAct(ctx, { type: mode, uid: sel.uid, target: occ.uid, mode });
+  }
+  if (T.isExplosiveAt(b, x, y)) {
+    return doAct(ctx, { type: 'shootProp', uid: sel.uid, x, y, mode: 'shot' });
   }
   if (sel && u.mode === 'breach') {
     return doAct(ctx, { type: 'breach', uid: sel.uid, x, y });
@@ -385,6 +482,7 @@ async function playEvents(ctx, events) {
     if (ev.typ === 'move' && ev.path && ev.path.length) {
       const start = ev.from || ev.path[0];
       Audio.play('move');
+      say(u, b, ev.uid, 'move');
       u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * 140), x: start.x, y: start.y };
       await wait(u.pathAnim.dur);
       u.pathAnim = null;
@@ -394,20 +492,23 @@ async function playEvents(ctx, events) {
       const def = b.units.find((x) => x.uid === ev.target);
       if (att && def && cv) {
         const a = toWorld(att.x, att.y), t = toWorld(def.x, def.y);
+        const zz = u.cam.z;
         u.flash = {
           uid: def.uid, until: performance.now() + 220, muzzle: true,
-          ax: a.x * u.cam.z + u.cam.x, ay: (a.y - 10) * u.cam.z + u.cam.y,
-          tx: t.x * u.cam.z + u.cam.x, ty: (t.y - 10) * u.cam.z + u.cam.y,
-          mx: (a.x + (t.x - a.x) * 0.15) * u.cam.z + u.cam.x,
-          my: (a.y + (t.y - a.y) * 0.15 - 10) * u.cam.z + u.cam.y,
+          ax: a.x * zz, ay: (a.y - 10) * zz,
+          tx: t.x * zz, ty: (t.y - 10) * zz,
+          mx: (a.x + (t.x - a.x) * 0.15) * zz,
+          my: (a.y + (t.y - a.y) * 0.15 - 10) * zz,
         };
         Audio.play('shoot');
+        say(u, b, ev.uid, 'shoot');
         await wait(120);
         if (ev.hit) {
           u.shake = 7; Audio.play('hit');
-          u.floats.push({ t: performance.now(), x: t.x * u.cam.z + u.cam.x, y: (t.y - 18) * u.cam.z + u.cam.y, text: ev.crit ? `${ev.dmg}!` : `${ev.dmg}`, heal: 0 });
+          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 18) * zz, text: ev.crit ? `${ev.dmg}!` : `${ev.dmg}`, heal: 0 });
+          if (ev.ko) say(u, b, ev.target, 'ko');
         } else {
-          u.floats.push({ t: performance.now(), x: t.x * u.cam.z + u.cam.x, y: (t.y - 18) * u.cam.z + u.cam.y, text: 'Miss', miss: 1 });
+          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 18) * zz, text: 'Miss', miss: 1 });
         }
         await wait(280);
       }
@@ -416,9 +517,35 @@ async function playEvents(ctx, events) {
       const def = b.units.find((x) => x.uid === ev.target);
       if (def) {
         const t = toWorld(def.x, def.y);
-        u.floats.push({ t: performance.now(), x: t.x * u.cam.z + u.cam.x, y: (t.y - 18) * u.cam.z + u.cam.y, text: `+${ev.heal}`, heal: 1 });
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1 });
         Audio.play('collect');
         await wait(280);
+      }
+    }
+    if (ev.typ === 'revive') {
+      const def = b.units.find((x) => x.uid === ev.target);
+      if (def) {
+        const t = toWorld(def.x, def.y);
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1 });
+        say(u, b, ev.uid, 'revive');
+        Audio.play('collect');
+        await wait(280);
+      }
+    }
+    if (ev.typ === 'boom') {
+      u.shake = 12;
+      u.booms = u.booms || [];
+      const spots = ev.spots || [{ x: ev.x, y: ev.y }];
+      for (const s of spots) u.booms.push({ x: s.x, y: s.y, until: performance.now() + 420 });
+      Audio.play('hit');
+      await wait(200);
+    }
+    if (ev.typ === 'boomhit') {
+      const un = b.units.find((x) => x.uid === ev.uid);
+      if (un) {
+        const t = toWorld(un.x, un.y);
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `${ev.dmg}`, heal: 0 });
+        if (un.hp <= 0) say(u, b, ev.uid, 'ko');
       }
     }
     if (ev.typ === 'overwatch' && !ev.target) Audio.play('overwatch');
@@ -435,7 +562,7 @@ async function doAct(ctx, action) {
   await playEvents(ctx, r.events);
   u.busy = 0;
   if (b.status !== 'active') return finish(ctx);
-  if (action.type === 'endTurn' && b.side === 'enemy') return enemyTurn(ctx);
+  if (b.side === 'enemy') return enemyTurn(ctx);
   ctx.render();
 }
 
@@ -444,11 +571,10 @@ async function enemyTurn(ctx) {
   u.busy = 1;
   let guard = 0;
   while (b.status === 'active' && b.side === 'enemy' && guard++ < 40) {
-    const act = T.think(b);
+    const act = chooseAction(b, T.think);
     const r = T.apply(b, act);
-    if (!r.ok) { T.apply(b, { type: 'endTurn' }); break; }
+    if (!r.ok) { T.apply(b, { type: 'endTurn' }); continue; }
     await playEvents(ctx, r.events);
-    if (act.type === 'endTurn') break;
   }
   u.busy = 0;
   if (b.status !== 'active') return finish(ctx);
@@ -470,7 +596,8 @@ function finish(ctx) {
   ctx.modal(`<div class="result ${res.win ? 'win' : 'loss'} ${res.highStakes ? 'hstakes' : ''}">
     <div class="h dim">${esc(res.label)}</div>
     <div class="big">${res.win ? 'Victory' : 'Defeat'}</div>
-    ${res.win ? `<div class="rewards"><span>${money(res.cash)}</span>${res.influence ? `<span>${ico('influence')} ${fmt(res.influence)} Rep</span>` : ''}</div>` : '<p class="small dim">Think about cover and flanks, then try again.</p>'}
+    ${res.win ? `<div class="rewards"><span>${money(res.cash)}</span>${res.influence ? `<span>${ico('influence')} ${fmt(res.influence)} Rep</span>` : ''}${res.trophies ? `<span class="gold">+${res.trophies} trophies</span>` : ''}</div>` : `<p class="small dim">Think about cover and flanks, then try again.${res.trophies ? ` ${res.trophies} trophies.` : ''}</p>`}
+    ${res.trophiesNow != null ? `<p class="small dim">${res.league ? esc(res.league.name) + ' · ' : ''}${res.trophiesNow} trophies${res.opponent ? ' · vs ' + esc(res.opponent.name) : ''}</p>` : ''}
     ${extra}
     ${xpBlock(res)}
     <div class="row" style="margin-top:10px">
@@ -512,8 +639,9 @@ function coach(b, u) {
   if (!b.tutorial || b.status !== 'active') return '';
   const rook = b.units.find((x) => x.hero === 'rook' && x.side === 'player');
   const hook = b.units.find((x) => x.hero === 'hook');
-  if (!u.sel) return 'Tap <b>Rook</b> to select him. Blue tiles will show where he can walk.';
-  if (rook && !rook.moved) return 'Blue tiles are his walk range (1 AP per tile). Move him <b>south around the crate</b>, then toward Hook’s side — a front-on shot is weak because of cover.';
+  const actor = T.actingUnit(b);
+  if (actor && actor.hero !== 'rook') return 'Turns go one operator at a time, fastest first. Hook is up now — wait for Rook’s next go, or finish him if you can.';
+  if (rook && !rook.moved) return 'Turns go one operator at a time, fastest first — Rook is up. Blue tiles are his walk range (1 AP per tile). Move him <b>south around the crate</b>, then toward Hook’s side — a front-on shot is weak because of cover.';
   if (rook && hook) {
     const prev = T.previewShot(b, rook, hook, 'shot');
     if (prev && prev.ok) {
@@ -521,41 +649,62 @@ function coach(b, u) {
     }
   }
   if (rook && rook.ap >= 2) return 'You can <b>Overwatch</b> to shoot when Hook moves, or take another action, then <b>End turn</b>.';
-  return 'End the turn when you are out of AP. Hook will take his go — Overwatch can catch him mid-stride.';
+  return 'End the turn when you are out of AP. The next fastest operator goes next — Overwatch can catch Hook mid-stride.';
+}
+
+function queueHtml(b) {
+  const q = T.queueUnits(b);
+  if (!q.length) return '';
+  return `<div class="tqueue">${q.map((un) => {
+    const d = defOf(un.hero);
+    const on = un.uid === b.acting ? 'on' : '';
+    const foe = un.side === 'enemy' ? 'foe' : '';
+    const dead = un.hp <= 0 ? 'dead' : '';
+    return `<div class="tq ${on} ${foe} ${dead}" title="${esc(d.name)}"><img src="${d.thumb || d.portrait}" alt=""></div>`;
+  }).join('')}</div>`;
 }
 
 export function render(ctx) {
   const b = ctx.state.tactics, u = ui(ctx);
   if (!b) return `<div class="pad">No fight.</div>`;
   if (b.status !== 'active' && !u.closed) queueMicrotask(() => finish(ctx));
-  if (!u.sel) {
-    const first = b.units.find((x) => x.side === 'player' && x.hp > 0);
+  const actor = T.actingUnit(b);
+  if (actor && actor.side === 'player' && actor.hp > 0) u.sel = actor.uid;
+  else if (!u.sel) {
+    const first = b.units.find((x) => x.side === 'player');
     if (first) u.sel = first.uid;
   }
-  const sel = b.units.find((x) => x.uid === u.sel) || b.units.find((x) => x.side === 'player');
+  const sel = b.units.find((x) => x.uid === u.sel) || actor || b.units.find((x) => x.side === 'player');
   const def = sel ? defOf(sel.hero) : null;
   const abs = def ? def.abilities : [];
+  const cls = def ? classOf(def) : null;
+  const perk = def ? speciesPerk(def.species) : null;
   const coachHtml = coach(b, u);
   const log = (b.log || []).slice(-3).map((l) => esc(l)).join('<br>');
+  const actName = actor ? defOf(actor.hero).name : '';
+  const turnLbl = actor ? `${actName} is up` : (b.side === 'player' ? 'Your turn' : 'Enemy turn');
+  const canAct = b.side === 'player' && actor && actor.side === 'player' && !u.busy;
   return `
   <div class="twrap">
     <canvas id="tacv"></canvas>
     <div class="tbar">
-      <div class="tturn">${b.side === 'player' ? 'Your turn' : 'Enemy turn'} · ${esc(b.label)} · T${b.turn}${b.highStakes ? ' · <b class="hsflag">HIGH STAKES</b>' : ''}</div>
+      <div class="tturn">${esc(turnLbl)} · ${esc(b.label)} · T${b.turn}${b.highStakes ? ' · <b class="hsflag">HIGH STAKES</b>' : ''}</div>
+      <div class="ttimer" id="ttimer"></div>
       <button class="btn dim tiny" data-act="retreatFight">Retreat</button>
-      <button class="btn red" data-act="endTacticsTurn" ${b.side !== 'player' || u.busy ? 'disabled' : ''}>End turn</button>
+      <button class="btn red" data-act="endTacticsTurn" ${canAct ? '' : 'disabled'}>End turn</button>
     </div>
+    ${queueHtml(b)}
     ${coachHtml ? `<div class="tcoach">${coachHtml}</div>` : ''}
     <div class="tunit">
       ${sel ? `
         <img class="tport" src="${def.portrait}" alt="">
         <div class="tinfo">
-          <div class="tn">${esc(def.name)} <span class="tiny dim">${esc(def.role)} · ${esc(def.species)}</span></div>
-          <div class="tiny">HP ${sel.hp}/${sel.maxHp} · AP ${sel.ap}/${sel.maxAp} · Move ${sel.move}${sel.overwatch ? ' · Overwatch' : ''} · ${ico('ammo')} ${sel.ammo || 0}${sel.medkits ? ` · ${ico('medkits')} ${sel.medkits}` : ''}</div>
-          <div class="tiny dim">${esc(def.passive.name)}${def.passive.name ? ': ' + esc(def.passive.text) : ''}${(sel.ammo || 0) <= 0 ? ' · Out of ammo — adjacent melee only' : ''}</div>
+          <div class="tn">${esc(def.name)} <span class="tiny dim">${esc((cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
+          <div class="tiny">HP ${sel.hp}/${sel.maxHp} · AP ${sel.ap}/${sel.maxAp} · Move ${sel.move} · Spd ${sel.speed || def.speed}${sel.overwatch ? ' · Overwatch' : ''} · ${ico('ammo')} ${sel.ammo || 0}${sel.medkits ? ` · ${ico('medkits')} ${sel.medkits}` : ''}</div>
+          <div class="tiny dim">${perk ? `${esc(perk.name)}: ${esc(perk.text)}` : (def.passive && def.passive.name ? `${esc(def.passive.name)}: ${esc(def.passive.text)}` : '')}${(sel.ammo || 0) <= 0 ? ' · Out of ammo — adjacent melee only' : ''}</div>
         </div>
         <div class="tabs">
-          ${abs.map((a) => `<button class="tab ${u.mode === a.id || u.mode === a.kind ? 'on' : ''}" data-act="tmode" data-mode="${a.id}" ${sel.ap < (a.ap || 2) && a.kind !== 'shot' ? '' : ''}>${esc(a.name)} <span class="tiny">${a.ap} AP</span></button>`).join('')}
+          ${abs.map((a) => `<button class="tab ${u.mode === a.id || u.mode === a.kind ? 'on' : ''}" data-act="tmode" data-mode="${a.id}">${esc(a.name)} <span class="tiny">${a.ap} AP</span></button>`).join('')}
           ${sel.medkits ? `<button class="tab ${u.mode === 'medkit' ? 'on' : ''}" data-act="tmode" data-mode="medkit">Medkit 2 AP · ${sel.medkits}</button>` : ''}
           <button class="tab ${u.mode === 'hunker' ? 'on' : ''}" data-act="doHunker">Hunker 1 AP</button>
         </div>` : ''}
@@ -567,12 +716,19 @@ export function render(ctx) {
 export function mount(ctx, el) {
   const cv = document.getElementById('tacv');
   if (!cv) return;
-  // preload portraits
   const b = ctx.state.tactics;
-  if (b) b.units.forEach((u) => preload(defOf(u.hero).portrait));
+  const u = ui(ctx);
+  if (b) {
+    b.units.forEach((un) => preload(defOf(un.hero).portrait));
+    const act = T.actingUnit(b);
+    if (act && act.side === 'player') u.sel = act.uid;
+  }
   bindCanvas(ctx);
   if (raf) cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => loop(ctx));
+  if (b && b.status === 'active' && b.side === 'enemy' && !u.busy && !u.closed) {
+    queueMicrotask(() => enemyTurn(ctx));
+  }
 }
 
 export const actions = {

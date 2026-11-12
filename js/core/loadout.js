@@ -4,17 +4,33 @@ import { perkMods } from './progress.js';
 import { caps, gain } from './base.js';
 
 export const KIT = {
-  vest:   { id: 'vest',   name: 'Padded Vest',   cost: 8,  hp: 2,           blurb: '+2 HP' },
-  grip:   { id: 'grip',   name: 'Taped Grip',    cost: 8,  aim: 6,          blurb: '+6 aim' },
-  pouch:  { id: 'pouch',  name: 'Loose Pouch',   cost: 6,  carry: 2,        blurb: '+2 ammo carry' },
-  plates: { id: 'plates', name: 'Steel Plates',  cost: 12, armor: 1,        blurb: 'Ignore 1 damage' },
-  lens:   { id: 'lens',   name: 'Spotting Lens', cost: 12, aim: 8, range: 1, blurb: '+8 aim, +1 range' },
-  wraps:  { id: 'wraps',  name: 'Hand Wraps',    cost: 6,  mdmg: 1,         blurb: '+1 melee damage' },
+  vest:     { id: 'vest',     name: 'Padded Vest',    cost: 8,  hp: 2,              blurb: '+2 HP' },
+  grip:     { id: 'grip',     name: 'Taped Grip',     cost: 8,  aim: 6,             blurb: '+6 aim' },
+  pouch:    { id: 'pouch',    name: 'Loose Pouch',    cost: 6,  carry: 2,           blurb: '+2 ammo carry' },
+  plates:   { id: 'plates',   name: 'Steel Plates',   cost: 12, armor: 1,           blurb: 'Ignore 1 damage' },
+  lens:     { id: 'lens',     name: 'Spotting Lens',  cost: 12, aim: 8, range: 1,   blurb: '+8 aim, +1 range' },
+  wraps:    { id: 'wraps',    name: 'Hand Wraps',     cost: 6,  mdmg: 1,            blurb: '+1 melee damage' },
+  // Class kits tweak a fixed class's style. Anyone can craft them; only that class can wear them.
+  brace:    { id: 'brace',    name: 'Brace Plate',    cost: 10, hp: 2,    class: 'tank',     blurb: '+2 HP. Extra lining for a tank.' },
+  silencer: { id: 'silencer', name: 'Silencer',       cost: 10, aim: 6,   class: 'sniper',   blurb: '+6 aim. A quieter rifle.' },
+  heavy:    { id: 'heavy',    name: 'Heavier Rifle',  cost: 12, range: 1, rdmg: 1, move: -1, class: 'sniper', blurb: '+1 range and damage, −1 Move.' },
+  slug:     { id: 'slug',     name: 'Heavy Slug',     cost: 10, rdmg: 1,  class: 'assault',  blurb: 'A heavier round. +1 damage.' },
+  stim:     { id: 'stim',     name: 'Stimulant',      cost: 10,           class: 'medic',    blurb: 'Revives at 50% HP instead of 40%.' },
+  charges:  { id: 'charges',  name: 'Hot Charges',    cost: 10,           class: 'demo',     blurb: '+1 blast damage when you shoot a barrel or van.' },
+  slippers: { id: 'slippers', name: 'Soft Soles',     cost: 8,  move: 1,  class: 'scout',    blurb: '+1 Move.' },
 };
 export const KIT_ORDER = Object.keys(KIT);
 
 export function kitMods(id) {
-  return KIT[id] || { hp: 0, aim: 0, carry: 0, armor: 0, range: 0, mdmg: 0 };
+  return KIT[id] || { hp: 0, aim: 0, carry: 0, armor: 0, range: 0, mdmg: 0, rdmg: 0, move: 0 };
+}
+
+export function kitFits(heroId, kitId) {
+  const k = KIT[kitId];
+  if (!k) return false;
+  if (!k.class) return true;
+  const d = defOf(heroId);
+  return !!(d && d.classId === k.class);
 }
 
 export function baseCarry(heroId) {
@@ -38,7 +54,7 @@ export function carryOf(s, heroId) {
 
 export function medCarry(s, heroId) {
   const d = defOf(heroId);
-  return d && d.role === 'Support' ? 2 : 1;
+  return d && (d.classId === 'medic' || d.role === 'Medic' || d.role === 'Support') ? 2 : 1;
 }
 
 export function inventoryCount(s, kitId) {
@@ -59,6 +75,7 @@ export function equipGear(s, heroId, kitId) {
   const rec = s.heroes.owned[heroId];
   if (!rec) return { ok: false, reason: 'Not in the crew' };
   if (kitId && !KIT[kitId]) return { ok: false, reason: 'Unknown gear' };
+  if (kitId && !kitFits(heroId, kitId)) return { ok: false, reason: 'That gear is for a different class' };
   if (kitId && inventoryCount(s, kitId) < 1 && rec.gear !== kitId) return { ok: false, reason: 'You do not have that gear' };
   // return previous
   if (rec.gear && rec.gear !== kitId) {

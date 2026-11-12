@@ -473,7 +473,7 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .tport{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid var(--line2);flex:none}
 .tinfo{flex:1;min-width:0}
 .tn{font-family:var(--font);font-size:16px}
-.tlog{position:absolute;top:36px;left:10px;max-width:42%;z-index:4;text-shadow:0 1px 2px #000;pointer-events:none}
+.tlog{position:absolute;top:62px;left:10px;max-width:42%;z-index:4;text-shadow:0 1px 2px #000;pointer-events:none}
 .heroscr{padding:8px 12px 16px;overflow:auto;height:100%}
 .herogrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .hcard{position:relative;background:#161210;border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;min-height:0}
@@ -489,7 +489,7 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
   .hcard{flex-direction:row}
   .hcard img{width:72px;height:72px;aspect-ratio:auto;flex:none}
   .hmeta{padding:4px 8px}
-  .hcard .hmeta .tiny.dim:first-of-type{display:none}
+  .hcard .hmeta .hbio{-webkit-line-clamp:2}
   .tport{width:48px;height:48px}
   .tcoach{bottom:78px;font-size:12px;padding:6px 10px}
   .heroscr{padding:4px 10px 10px}
@@ -550,3 +550,14 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 
 .loadscr .armyhead{display:flex;align-items:center;gap:8px}
 .loadscr .armyhead .btn{margin-left:auto;flex:none}
+
+.tqueue{position:absolute;top:max(28px,calc(env(safe-area-inset-top) + 26px));left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:6;pointer-events:none;max-width:86%}
+.tq{width:28px;height:28px;border-radius:50%;border:2px solid #3a332e;overflow:hidden;opacity:.7;background:#1a1614;flex:none}
+.tq img{width:100%;height:100%;object-fit:cover;display:block}
+.tq.on{opacity:1;border-color:#e0c15a;box-shadow:0 0 0 1px #e0c15a;transform:scale(1.12)}
+.tq.foe{border-color:#8a3a32}
+.tq.foe.on{border-color:#e07a6a;box-shadow:0 0 0 1px #e07a6a}
+.tq.dead{filter:grayscale(1);opacity:.4}
+.ttimer{margin-left:auto;font-family:Oswald,sans-serif;font-size:16px;color:#f3e7c9;min-width:2.2em;text-align:right;text-shadow:0 1px 2px #000}
+.ttimer.low{color:#e07a6a}
+.tcup{font-weight:700;color:var(--gold)}

@@ -6,6 +6,7 @@ import { SPECIES_TO_TROOP, armyCap, spaceOf } from './crew.js';
 import { newSeed } from './rng.js';
 import { newBase, gain, setClearLoot } from './base.js';
 import { rollClearDrop } from './shards.js';
+import { ensurePvp } from './pvp.js';
 setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
@@ -29,6 +30,7 @@ export function newGame(now, seed = newSeed()) {
     rivals: [], rivalsAt: 0,
     battle: null, lastResult: null, tactics: null,
     heroes: emptyHeroes(),
+    pvp: { trophies: 0, wins: 0, losses: 0, streak: 0 },
     purchases: {}, vipUntil: 0, pass: false, noads: false, passXp: 0,
     tutorial: 0,
   };
@@ -117,6 +119,7 @@ export function migrate(s, now = Date.now()) {
   if (s.parts == null) s.parts = 0;
   s.kit ||= {};
   ensureHeroes(s);
+  ensurePvp(s);
   return s;
 }
 

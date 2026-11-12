@@ -1,5 +1,5 @@
 // Operators roster: unique collectable heroes, shard progress, pin-a-target, squad of up to 4.
-import { HERO_ORDER, HEROES, unlockHint, setSquad, synergiesFor } from '../core/heroes.js';
+import { HERO_ORDER, HEROES, unlockHint, setSquad, synergiesFor, classOf, speciesPerk, CLASSES } from '../core/heroes.js';
 import { startTutorial } from '../core/tactics.js';
 import { money, fmt, ico, esc } from './fmt.js';
 import * as Audio from './audio.js';
@@ -27,7 +27,7 @@ export function render(ctx) {
       </div>
       <div class="row">
         ${s.heroes.tutorialDone ? '' : '<button class="btn gold" data-act="startTutorial">Street lesson</button>'}
-        <button class="btn red" data-act="startStreet" ${squad.length ? '' : 'disabled'}>Street fight</button>
+        <button class="btn red" data-act="startStreet" ${squad.length ? '' : 'disabled'}>Docklands PvP</button>
       </div>
     </div>
     <div class="tiny dim" style="margin:4px 0 8px">
@@ -66,11 +66,12 @@ function card(s, id, rec, inSquad, feat, now) {
     ${featured ? '<span class="feattag">FEATURED</span>' : ''}
     ${pinned ? '<span class="pintag">PINNED</span>' : ''}
     <div class="hmeta">
-      <div class="hn">${esc(h.name)} ${have ? starsRow(prog.stars) : ''} <span class="tiny dim">${esc(h.species)} · ${esc(h.role)}</span></div>
-      <div class="tiny dim">${esc(h.blurb)}</div>
+      <div class="hn">${esc(h.name)} ${have ? starsRow(prog.stars) : ''} <span class="tiny dim">${esc(h.species)} · ${esc((classOf(h) || {}).name || h.role)}</span></div>
+      <div class="tiny gold">${(() => { const pk = speciesPerk(h.species); return pk ? `${esc(pk.name)} — ${esc(pk.text)}` : ''; })()}</div>
+      <div class="hbio tiny dim">${esc(h.bio || h.blurb)}</div>
       <div class="tiny">HP ${h.hp}${prog.stars > 1 ? `+${prog.stars - 1}` : ''} · AP ${h.ap} · Aim ${h.aim}${prog.stars > 1 ? `+${prog.stars - 1}` : ''} · ${esc(h.weapon.name)} ${h.weapon.dmg[0]}–${h.weapon.dmg[1]}</div>
       ${have ? xpbar(rec) : ''}
-      <div class="tiny gold">${esc(h.passive.name)} — ${esc(h.passive.text)}</div>
+      ${h.passive && h.passive.name ? `<div class="tiny dim">${esc(h.passive.name)} — ${esc(h.passive.text)}</div>` : ''}
       ${id === 'rook' ? '<div class="tiny dim">Story operator — given in the street lesson.</div>' : bar(prog.have, prog.need)}
       ${have && rec.pendingPerk ? perkRow(id, rec) : ''}
       <div class="row" style="gap:4px;margin-top:4px;flex-wrap:wrap">

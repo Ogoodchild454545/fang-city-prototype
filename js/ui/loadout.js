@@ -1,7 +1,8 @@
 // Pre-battle loadout: pick up to four operators, load ammo and medkits, assign gear, opt into High Stakes.
 import { HEROES, setSquad } from '../core/heroes.js';
 import { startStreet } from '../core/tactics.js';
-import { defaultLoadout, commitLoadout, carryOf, medCarry, KIT, KIT_ORDER, craftKit, equipGear, inventoryCount } from '../core/loadout.js';
+import { defaultLoadout, commitLoadout, carryOf, medCarry, KIT, KIT_ORDER, craftKit, equipGear, inventoryCount, kitFits } from '../core/loadout.js';
+import { ensurePvp, leagueOf, opponentLabel } from '../core/pvp.js';
 import { rankName } from '../core/progress.js';
 import { fmt, ico, esc } from './fmt.js';
 import * as BS from '../core/base.js';
@@ -26,10 +27,11 @@ export function render(ctx) {
     <div class="armyhead">
       <div>
         <div class="h">${d.highStakes ? 'High Stakes loadout' : 'Street fight loadout'}</div>
-        <div class="tiny dim">Pick up to four operators, then load ammo and medkits from base stock. Shots use ammo; unused rounds come back, spent ones are gone.</div>
+        <div class="tiny dim">Pick up to four operators — any mix of classes is allowed, including two of the same. You are matched with a crew near your trophy count. Unused ammo comes back; spent rounds are gone.</div>
       </div>
       <button class="btn dim" data-act="nav" data-tab="heroes">Back</button>
     </div>
+    ${(() => { const pv = ensurePvp(s); const lg = leagueOf(pv.trophies); return `<div class="tiny dim" style="margin:4px 0 2px">PvP · ${esc(lg.name)} · ${pv.trophies} trophies${lg.next ? ` · ${lg.next.min - pv.trophies} to ${lg.next.name}` : ''}</div>`; })()}
     <div class="loadstock">
       ${ico('ammo')} Ammo <b>${fmt(s.ammo)}</b>/${fmt(cap.ammo)} · loading ${usedA}
       · ${ico('medkits')} Medkits <b>${fmt(s.medkits)}</b>/${fmt(cap.medkits)} · loading ${usedM}
@@ -44,7 +46,8 @@ export function render(ctx) {
         ${KIT_ORDER.map((id) => {
           const k = KIT[id];
           const n = inventoryCount(s, id);
-          return `<button class="btn sm" data-act="craftKit" data-id="${id}" title="${esc(k.blurb)}">${esc(k.name)} · ${n} in stock · ${ico('parts')} ${k.cost}</button>`;
+          const tag = k.class ? ` · ${k.class}` : '';
+          return `<button class="btn sm" data-act="craftKit" data-id="${id}" title="${esc(k.blurb)}">${esc(k.name)}${tag} · ${n} in stock · ${ico('parts')} ${k.cost}</button>`;
         }).join('')}
       </div>
     </div>
@@ -89,7 +92,7 @@ function slot(ctx, d, i) {
       <div class="loadrow">Gear
         <select data-act="setLoadGear" data-id="${id}">
           <option value="">None</option>
-          ${KIT_ORDER.map((k) => `<option value="${k}" ${rec.gear === k ? 'selected' : ''} ${inventoryCount(s, k) < 1 && rec.gear !== k ? 'disabled' : ''}>${esc(KIT[k].name)} (${esc(KIT[k].blurb)})</option>`).join('')}
+          ${KIT_ORDER.filter((k) => kitFits(id, k)).map((k) => `<option value="${k}" ${rec.gear === k ? 'selected' : ''} ${inventoryCount(s, k) < 1 && rec.gear !== k ? 'disabled' : ''}>${esc(KIT[k].name)} (${esc(KIT[k].blurb)})</option>`).join('')}
         </select>
       </div>
     </div>

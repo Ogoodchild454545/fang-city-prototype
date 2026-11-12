@@ -6,6 +6,7 @@ import { starBonus, tutorialShardGift } from './shards.js';
 import { levelBonus, perkMods, addXp, xpFromBattle, resetAfterKo, perkChoices, xpToNext } from './progress.js';
 import { kitMods, returnUnused, commitLoadout, defaultLoadout, carryOf } from './loadout.js';
 import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, DIRS4, docklandsMap } from './tmaps.js';
+import { findMatch, pvpStake, settlePvp, opponentLabel } from './pvp.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
 
@@ -112,7 +113,10 @@ export function previewShot(b, att, def, mode = 'shot') {
   }
   if (!att.moved && (att.perks || []).includes('cool')) chance += 10;
   if (att.moved && defn.passive?.id === 'cold' && mode === 'aimed') chance -= 0; // crit later, not aim
-  if (defn.passive?.id === 'pack' && (allyNear(b, att, att.x, att.y) || allyNear(b, att, def.x, def.y))) chance += 15;
+  const aSp = defn.species, dSp = (tdef && tdef.species) || defOf(def.hero).species;
+  if (aSp === 'Wolf' && (allyNear(b, att, att.x, att.y) || allyNear(b, att, def.x, def.y))) chance += 15;
+  if (aSp === 'Rat' && flanked) chance += 10;
+  if (dSp === 'Rat' && def.moved) chance -= 15;
   const syn = synergiesFor(squadIds(b, att.side));
   if (syn.some((g) => g.name === 'Pack Bond')) chance += 8;
   if (syn.some((g) => g.name === 'Spotter') && att.hero === 'lumen') {
@@ -137,6 +141,7 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (mode === 'suppress') { d0 = Math.max(1, Math.floor(d0 / 2)); d1 = Math.max(1, Math.floor(d1 / 2)); }
   d0 += mu.dmg; d1 += mu.dmg;
   if (melee && att.mdmg) { d0 += att.mdmg; d1 += att.mdmg; }
+  if (!melee && att.rdmg) { d0 += att.rdmg; d1 += att.rdmg; }
   if (flanked && (att.perks || []).includes('bully')) { d0 += 1; d1 += 1; }
   const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : mode === 'overwatch' ? 0 : (defn.abilities.find((a) => a.id === mode)?.ap || 2);
   return {
@@ -198,6 +203,8 @@ export function pathTo(b, u, x, y) {
 function freshUnit(hero, side, x, y, uid, opts = {}) {
   const d = defOf(hero);
   const extraAp = d.passive?.id === 'scurry' ? 1 : 0;
+  const fox = d.species === 'Fox';
+  const bear = d.species === 'Bear';
   const stars = opts.stars || 1;
   const lv = opts.lv || 1;
   const perks = opts.perks || [];
@@ -206,14 +213,14 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
   const lb = levelBonus(lv);
   const pm = perkMods(perks);
   const km = kitMods(gear);
-  const hp = d.hp + sb.hp + lb.hp + pm.hp + (km.hp || 0);
-  const move = d.move + (pm.move || 0);
+  const hp = d.hp + sb.hp + lb.hp + pm.hp + (km.hp || 0) + (bear ? 3 : 0) + (km.hpClass || 0);
+  const move = d.move + (pm.move || 0) + (fox ? 1 : 0) + (km.move || 0);
   return {
     uid, hero, side, x, y, hp, maxHp: hp, stars, lv, perks, gear,
     aimMod: sb.aim + lb.aim + pm.aim + (km.aim || 0),
-    armor: km.armor || 0, rangeBonus: km.range || 0, mdmg: km.mdmg || 0,
+    armor: km.armor || 0, rangeBonus: km.range || 0, mdmg: km.mdmg || 0, rdmg: km.rdmg || 0,
     ap: d.ap + extraAp, maxAp: d.ap + extraAp, move, baseMove: move,
-    speed: d.speed || 8, init: 0,
+    speed: (d.speed || 8) + (fox ? 2 : 0), init: 0, classId: d.classId || '',
     ammo: opts.ammo == null ? (side === 'enemy' ? 8 : 0) : opts.ammo,
     medkits: opts.medkits || 0, kills: 0,
     overwatch: false, moved: 0, acted: 0, fired: 0, lastFired: 0,
@@ -227,7 +234,7 @@ function packFromState(s, id) {
   return { stars: rec.stars || 1, lv: rec.lv || 1, perks: rec.perks || [], gear: rec.gear || null };
 }
 
-export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes, pvp }) {
+export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes, pvp, opponent }) {
   const b = {
     kind: kind || (tutorial ? 'tutorial' : 'street'),
     label: label || (tutorial ? 'Street lesson' : 'Street fight'),
@@ -237,6 +244,7 @@ export function startBattle({ map, player, enemy, seed, label, tutorial, reward,
     units: [], log: [], highStakes: !!highStakes,
     pvp: !!(pvp || (!tutorial && (kind || 'street') === 'street')),
     queue: [], qIndex: 0, acting: null, turnSec: 30,
+    opponent: opponent || null,
   };
   const pSpots = pickDeploys(map, 'player', player.length, b.seed);
   const eSpots = pickDeploys(map, 'enemy', enemy.length, b.seed + 17);
@@ -276,30 +284,19 @@ export function startTutorial(s, seed) {
 export function startStreet(s, seed, committed) {
   const squad = (committed?.squad || s.heroes.squad || ['rook']).filter((id) => s.heroes.owned[id]).slice(0, 4);
   const n = Math.max(1, squad.length);
-  const pools = {
-    1: ['hook', 'knack'],
-    2: ['hook', 'knack', 'ash'],
-    3: ['slab', 'mica', 'knack', 'ash'],
-    4: ['slab', 'mica', 'rill', 'pact', 'bruno', 'ash', 'knack'],
-  };
-  const pool = pools[Math.min(4, n)];
-  const holder = { rng: (seed >>> 0) || s.rng };
-  const enemy = [];
-  const left = pool.slice();
-  while (enemy.length < n && left.length) {
-    const i = rngInt(holder, 0, left.length - 1);
-    enemy.push(left.splice(i, 1)[0]);
-  }
+  // Any mix of classes is allowed (duplicates included). Matchmaking is by trophies.
+  const opponent = (committed && committed.opponent) || findMatch(s, seed, n);
+  const enemy = (opponent.squad || []).slice(0, n);
   const map = docklandsMap();
   const recs = {};
   for (const id of squad) recs[id] = packFromState(s, id);
   const high = !!(committed && committed.highStakes);
-  const reward = { cash: 200 + n * 80, influence: 15 + n * 8 };
-  if (high) { reward.cash *= 3; reward.influence *= 3; }
+  const reward = pvpStake(n, high);
+  const vs = opponent.name ? ` vs ${opponent.name}` : '';
   return startBattle({
-    map, player: squad, enemy, seed: holder.rng,
-    label: high ? 'High Stakes · Docklands PvP' : 'Docklands · PvP', kind: 'street',
-    reward, highStakes: high, pvp: true,
+    map, player: squad, enemy, seed: (seed >>> 0) || s.rng,
+    label: (high ? 'High Stakes · Docklands PvP' : 'Docklands · PvP') + vs, kind: 'street',
+    reward, highStakes: high, pvp: true, opponent,
     loadout: { recs, ammo: committed?.ammo || {}, medkits: committed?.medkits || {} },
   });
 }
@@ -354,7 +351,7 @@ function resolveHit(b, att, def, mode, prev) {
   const cc = critChance(att, mode);
   if (Math.floor(rngNext(b) * 100) < cc) { ev.crit = 1; dmg += 2; }
   const tdef = defOf(def.hero);
-  if (tdef.passive?.id === 'hide') dmg = Math.max(1, dmg - 1);
+  if (tdef.passive?.id === 'hide' || tdef.species === 'Croc') dmg = Math.max(1, dmg - 1);
   if (def.armor) dmg = Math.max(1, dmg - def.armor);
   const syn = synergiesFor(squadIds(b, def.side));
   if (syn.some((g) => g.name === 'Field Guard') && def.hero === 'vesper') {
@@ -362,10 +359,18 @@ function resolveHit(b, att, def, mode, prev) {
     if (brick) dmg = Math.max(1, dmg - 1);
   }
   dmg = Math.max(1, dmg);
-  def.hp = Math.max(0, def.hp - dmg);
+  if (tdef.species === 'Badger' && !def.stubbornUsed && def.hp - dmg <= 0) {
+    ev.stubborn = 1;
+    dmg = Math.max(0, def.hp - 1);
+    def.hp = 1;
+    def.stubbornUsed = 1;
+    log(b, `${nameOf(def)} stays on their feet (Stubborn).`);
+  } else {
+    def.hp = Math.max(0, def.hp - dmg);
+  }
   ev.dmg = dmg;
-  if (mode === 'suppress') def.suppressed = 1;
-  if (mode === 'venom') def.venom = 2;
+  if (mode === 'suppress' && tdef.species !== 'Bear') def.suppressed = 1;
+  if (mode === 'venom' || defOf(att.hero).species === 'Snake') def.venom = Math.max(def.venom || 0, 2);
   log(b, `${nameOf(att)} hit ${nameOf(def)} for ${dmg}${ev.crit ? ' (crit)' : ''}.`);
   if (def.hp <= 0) {
     def.ko = 1; def.overwatch = false; ev.ko = 1;
@@ -629,7 +634,8 @@ function reviveAlly(b, u, t, events) {
   if (!spend(u, 2)) return { ok: false, reason: 'Not enough AP' };
   if ((u.medkits || 0) < 1) return { ok: false, reason: 'No medkit loaded' };
   u.medkits -= 1; u.acted = 1;
-  const hp = Math.max(1, Math.ceil(t.maxHp * 0.4));
+  const share = u.gear === 'stim' ? 0.5 : 0.4;
+  const hp = Math.max(1, Math.ceil(t.maxHp * share));
   t.hp = hp; t.ko = 0;
   log(b, `${nameOf(u)} revives ${nameOf(t)} (${hp} HP).`);
   events.push({ typ: 'revive', uid: u.uid, target: t.uid, heal: hp });
@@ -670,7 +676,7 @@ function explodeTile(b, x, y, events, seen) {
   if (seen.has(key)) return;
   seen.add(key);
   const radius = blastRadiusOf(t);
-  const dmg = t.decor === 'barrel' ? 4 : 5;
+  const dmg = (t.decor === 'barrel' ? 4 : 5) + (b._chargeBonus || 0);
   // partner van tile goes at the same time
   const spots = [{ x, y }];
   if (t.partner) spots.push({ x: t.partner.x, y: t.partner.y });
@@ -693,9 +699,15 @@ function explodeTile(b, x, y, events, seen) {
     const dist = Math.min(...centers.map((s) => MANH(u.x, u.y, s.x, s.y)));
     if (dist > radius) continue;
     let take = dmg;
-    if (defOf(u.hero).passive?.id === 'hide') take = Math.max(1, take - 1);
+    const sp = defOf(u.hero).species;
+    if (defOf(u.hero).passive?.id === 'hide' || sp === 'Croc') take = Math.max(1, take - 1);
     if (u.armor) take = Math.max(1, take - u.armor);
-    u.hp = Math.max(0, u.hp - take);
+    if (sp === 'Badger' && !u.stubbornUsed && u.hp - take <= 0) {
+      take = Math.max(0, u.hp - 1); u.hp = 1; u.stubbornUsed = 1;
+      log(b, `${nameOf(u)} stays on their feet (Stubborn).`);
+    } else {
+      u.hp = Math.max(0, u.hp - take);
+    }
     events.push({ typ: 'boomhit', uid: u.uid, dmg: take, x: u.x, y: u.y });
     log(b, `${nameOf(u)} is caught in the blast (${take}).`);
     if (u.hp <= 0) { u.ko = 1; }
@@ -721,7 +733,9 @@ function shootProp(b, u, x, y, mode) {
   u.acted = 1;
   const events = [{ typ: 'shot', uid: u.uid, x, y, hit: 1, mode: mode || 'shot', prop: 1 }];
   log(b, `${nameOf(u)} shoots the ${tile(b.map, x, y)?.decor || 'object'}.`);
+  b._chargeBonus = (u.gear === 'charges') ? 1 : 0;
   explodeTile(b, x, y, events, new Set());
+  b._chargeBonus = 0;
   return { ok: true, events, status: b.status };
 }
 
@@ -846,6 +860,14 @@ export function resolveTactics(s, b) {
       res.tutorial = true;
       res.shardDrop = tutorialShardGift(s);
     }
+  }
+  if (b.pvp && b.kind === 'street') {
+    const pv = settlePvp(s, b);
+    res.trophies = pv.trophies;
+    res.trophiesNow = pv.trophiesNow;
+    res.league = pv.league;
+    res.opponent = pv.opponent;
+    if (b.status === 'win' && pv.shardDrop) res.shardDrop = pv.shardDrop;
   }
   for (const u of b.units.filter((x) => x.side === 'player')) {
     const rec = s.heroes.owned[u.hero];

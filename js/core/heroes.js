@@ -2,6 +2,30 @@
 // for missions, raids and later modes). A new player owns only Rook.
 import { den } from './base.js';
 
+
+export const CLASSES = {
+  tank:    { id: 'tank',    name: 'Tank',          blurb: 'Soaks hits and holds the line.' },
+  sniper:  { id: 'sniper',  name: 'Sniper',        blurb: 'Long range, high aim. Gear can quiet or weight the rifle.' },
+  medic:   { id: 'medic',   name: 'Medic',         blurb: 'Keeps the crew standing and can revive a KO mid-fight.' },
+  assault: { id: 'assault', name: 'Assault',       blurb: 'Mid-range rifles and shotguns. Gear tweaks the punch.' },
+  demo:    { id: 'demo',    name: 'Demolitions',   blurb: 'Explosives and heavy shots. Best around barrels and vans.' },
+  scout:   { id: 'scout',   name: 'Scout',         blurb: 'First around the corner. Fast, quiet, hard to pin down.' },
+};
+
+// Species perk is always on. Heroes of the same species share it; there are no rarity tiers.
+export const SPECIES_PERKS = {
+  Wolf:   { id: 'pack',     name: 'Pack Sense',  text: '+15% hit when an ally is next to you or the target.' },
+  Rat:    { id: 'sneaky',   name: 'Sneaky',      text: 'Harder to hit after you have moved, and deadlier on a flank.' },
+  Fox:    { id: 'quick',    name: 'Quick',       text: '+2 Speed in the initiative queue and +1 Move.' },
+  Badger: { id: 'stubborn', name: 'Stubborn',    text: 'The first time you would be KO\'d in a fight, you stay at 1 HP.' },
+  Snake:  { id: 'poison',   name: 'Venom',       text: 'A hitting shot leaves the target poisoned for two turns.' },
+  Croc:   { id: 'tough',    name: 'Thick Hide',  text: 'Ignore 1 damage from every hit.' },
+  Bear:   { id: 'stout',    name: 'Immovable',   text: '+3 max HP, and you cannot be suppressed.' },
+};
+
+export const classOf = (h) => (h && CLASSES[h.classId]) || CLASSES[(h && h.classId)] || null;
+export const speciesPerk = (species) => SPECIES_PERKS[species] || null;
+
 export const HERO_ORDER = ['rook', 'pip', 'lumen', 'brick', 'vesper', 'ivory', 'nile', 'marlow'];
 
 export const HEROES = {
@@ -17,6 +41,15 @@ export const HEROES = {
       { id: 'overwatch', name: 'Overwatch', ap: 2, kind: 'overwatch', text: 'Shoot the first foe who moves in range.' },
     ],
     passive: { id: 'pack', name: 'Pack Sense', text: '+15% hit when an ally is next to Rook or the target.' },
+    classId: 'assault',
+    bio: "A dock-road rifleman who walked out of a Grey Pack setup with a carbine and a younger cousin to look after. He talks little, covers well, and does not leave crew on the ground.",
+    quips: {
+      move: ["Round the crates.", "On me.", "Keep it tight."],
+      shoot: ["I have him.", "Steady.", "Down you go."],
+      ko: ["Not… done.", "I'm still here."],
+      revive: ["On your feet.", "Up. We are not finished."]
+    },
+
     tags: ['rifle', 'wolf'],
     unlock: { kind: 'start' },
   },
@@ -32,11 +65,20 @@ export const HEROES = {
       { id: 'knife', name: 'Flick Knife', ap: 2, kind: 'melee', range: 1, dmg: [3, 5], text: 'Close cut. +20% hit if the target is flanked.' },
     ],
     passive: { id: 'scurry', name: 'Scurry', text: '+1 Action Point each turn.' },
+    classId: 'scout',
+    bio: "A dock rat who learned every drain and crate-gap in the yard before she could count. She scouts because standing still feels like being bait.",
+    quips: {
+      move: ["Already gone.", "This way.", "Too slow."],
+      shoot: ["Surprise.", "From the side.", "Gotcha."],
+      ko: ["Ow— not fair.", "Still twitchin’."],
+      revive: ["I’m up, I’m up!", "Didn’t see that coming."]
+    },
+
     tags: ['scout', 'rat'],
     unlock: { kind: 'tutorial' },
   },
   lumen: {
-    id: 'lumen', name: 'Lumen', species: 'Fox', role: 'Marksman',
+    id: 'lumen', name: 'Lumen', species: 'Fox', role: 'Sniper',
     blurb: 'A rooftop shot. She prefers to stand still and pick her moment.',
     portrait: 'assets/heroes/lumen.jpg', thumb: 'assets/heroes/lumen-64.jpg',
     mood: 'heroic',
@@ -47,11 +89,20 @@ export const HEROES = {
       { id: 'overwatch', name: 'Overwatch', ap: 2, kind: 'overwatch', text: 'Shoot the first foe who moves in range.' },
     ],
     passive: { id: 'cold', name: 'Cold Eye', text: '+15% crit if Lumen has not moved this turn.' },
+    classId: 'sniper',
+    bio: "A rooftop fox who used to call marks for a velvet-room crew, then walked when the jobs got sloppy. She still prefers a long lane and a quiet shot.",
+    quips: {
+      move: ["Better angle.", "Hold still out there.", "I see a line."],
+      shoot: ["One breath.", "Called it.", "Stay down."],
+      ko: ["Missed one.", "…tch."],
+      revive: ["I’m fine. Range is fine.", "Give me the rifle."]
+    },
+
     tags: ['marksman', 'fox'],
     unlock: { kind: 'buy', cash: 2000 },
   },
   brick: {
-    id: 'brick', name: 'Brick', species: 'Badger', role: 'Anchor',
+    id: 'brick', name: 'Brick', species: 'Badger', role: 'Tank',
     blurb: 'Walks into the street first and dares anyone to move him.',
     portrait: 'assets/heroes/brick.jpg', thumb: 'assets/heroes/brick-64.jpg',
     mood: 'heroic',
@@ -62,11 +113,20 @@ export const HEROES = {
       { id: 'fortify', name: 'Fortify', ap: 1, kind: 'fortify', text: 'Treat cover as one step better until your next turn.' },
     ],
     passive: { id: 'hide', name: 'Thick Hide', text: 'Ignore 1 damage from every hit.' },
+    classId: 'tank',
+    bio: "A night-door badger who took knocks so smaller cousins didn’t have to. He walks in first, plants his feet, and waits for the crew to finish the work.",
+    quips: {
+      move: ["I’m the door.", "Make me move.", "On the line."],
+      shoot: ["Stay down there.", "That’s far enough.", "Hold."],
+      ko: ["Still standing… almost.", "Took worse."],
+      revive: ["Told you. Stubborn.", "Back in."]
+    },
+
     tags: ['tank', 'badger'],
     unlock: { kind: 'buy', influence: 80, den: 2 },
   },
   vesper: {
-    id: 'vesper', name: 'Vesper', species: 'Snake', role: 'Support',
+    id: 'vesper', name: 'Vesper', species: 'Snake', role: 'Medic',
     blurb: 'Keeps the crew standing and makes sharpshooters miss.',
     portrait: 'assets/heroes/vesper.jpg', thumb: 'assets/heroes/vesper-64.jpg',
     mood: 'heroic',
@@ -77,11 +137,20 @@ export const HEROES = {
       { id: 'venom', name: 'Venom Round', ap: 2, kind: 'venom', text: 'A shot that cuts their aim and bleeds them for two turns.' },
     ],
     passive: { id: 'kit', name: 'Field Kit', text: 'If she did not fire last turn, she heals 1 HP at the start of her turn.' },
+    classId: 'medic',
+    bio: "A back-room snake who stitched more knife work than she ever started. She joined the crew with a bag of kits and a rule: nobody stays down if she can reach them.",
+    quips: {
+      move: ["Stay with me.", "I can reach them.", "Hold on."],
+      shoot: ["A little sting.", "That’ll slow you.", "Don’t wriggle."],
+      ko: ["Need a minute…", "Bag’s still here."],
+      revive: ["Breathe. You’re back.", "Easy. Partial, but you’re up.", "Not losing you tonight."]
+    },
+
     tags: ['support', 'snake'],
     unlock: { kind: 'buy', cash: 5000, den: 2 },
   },
   ivory: {
-    id: 'ivory', name: 'Ivory', species: 'Wolf', role: 'Breacher',
+    id: 'ivory', name: 'Ivory', species: 'Wolf', role: 'Assault',
     blurb: 'Closes the gap and finishes the job with a short-barrel shotgun.',
     portrait: 'assets/heroes/ivory.jpg', thumb: 'assets/heroes/ivory-64.jpg',
     mood: 'heroic',
@@ -92,11 +161,20 @@ export const HEROES = {
       { id: 'sprint', name: 'Sprint', ap: 1, kind: 'sprint', text: '+2 move this turn.' },
     ],
     passive: { id: 'hot', name: 'Hot Blood', text: 'After a knock-out, regain 2 AP.' },
+    classId: 'assault',
+    bio: "A close-in wolf who likes a heavy shotgun and a short hallway. She used to clear warehouse doors for cash; now she clears them for the pack.",
+    quips: {
+      move: ["In close.", "Kick it in.", "With you."],
+      shoot: ["Eat this.", "Too close to miss.", "Move."],
+      ko: ["Gnh— keep going.", "I’m not the one who folds."],
+      revive: ["I’m up. Who’s next.", "Shotgun’s still here."]
+    },
+
     tags: ['shotgun', 'wolf'],
     unlock: { kind: 'buy', teeth: 25, den: 3 },
   },
   nile: {
-    id: 'nile', name: 'Nile', species: 'Croc', role: 'Closer',
+    id: 'nile', name: 'Nile', species: 'Croc', role: 'Tank',
     blurb: 'Crosses the street in two strides and ends the argument up close.',
     portrait: 'assets/heroes/nile.jpg', thumb: 'assets/heroes/nile-64.jpg',
     mood: 'heroic',
@@ -107,11 +185,20 @@ export const HEROES = {
       { id: 'roll', name: 'Death Roll', ap: 3, kind: 'melee', range: 1, dmg: [6, 9], text: 'A heavy melee hit. Once per turn.' },
     ],
     passive: { id: 'jaw', name: 'Iron Jaw', text: 'Melee ignores half cover.' },
+    classId: 'tank',
+    bio: "A canal croc who used to pull hulls and debts along the quay. He doesn’t chase if he can wait, and once he has you, he does not let go.",
+    quips: {
+      move: ["Slow is fine.", "Coming.", "The water’s this way."],
+      shoot: ["Got you.", "Closer.", "Stay in the jaw."],
+      ko: ["Harder than that…", "Still heavy."],
+      revive: ["I bite back.", "Up. Let’s finish it."]
+    },
+
     tags: ['melee', 'croc'],
     unlock: { kind: 'buy', cash: 8000, den: 3 },
   },
   marlow: {
-    id: 'marlow', name: 'Marlow', species: 'Bear', role: 'Heavy',
+    id: 'marlow', name: 'Marlow', species: 'Bear', role: 'Demolitions',
     blurb: 'Opens a route through parked cars and anything else in the way.',
     portrait: 'assets/heroes/marlow.jpg', thumb: 'assets/heroes/marlow-64.jpg',
     mood: 'heroic',
@@ -122,6 +209,15 @@ export const HEROES = {
       { id: 'blast', name: 'Point Blank', ap: 3, kind: 'shot', text: 'A heavy close shot.' },
     ],
     passive: { id: 'bulk', name: 'Bulk', text: '+4 max HP (already in his sheet).' },
+    classId: 'demo',
+    bio: "A yard bear who learned explosives because locks bored him. He treats a barrel like a tool, a van like a warning, and a wall like a suggestion.",
+    quips: {
+      move: ["Mind the barrel.", "Give me room.", "This’ll do."],
+      shoot: ["Loud and clear.", "Light it.", "Back up."],
+      ko: ["That… stung.", "Leave the charges."],
+      revive: ["Still got a fuse.", "I’m not scrap yet."]
+    },
+
     tags: ['heavy', 'bear'],
     unlock: { kind: 'buy', teeth: 40, den: 4 },
   },
@@ -130,7 +226,7 @@ export const HEROES = {
 // Rival operators used as computer opponents (same rules, darker stock portraits).
 export const RIVALS = {
   hook: {
-    id: 'hook', name: 'Hook', species: 'Fox', role: 'Thug',
+    id: 'hook', name: 'Hook', species: 'Fox', role: 'Assault',
     portrait: 'assets/fox.jpg', thumb: 'assets/fox.jpg',
     hp: 8, ap: 4, move: 5, aim: 58, armor: 0, speed: 7,
     weapon: { name: 'Pistol', dmg: [2, 3], range: 6, typ: 'pistol' },
@@ -138,11 +234,12 @@ export const RIVALS = {
       { id: 'shot', name: 'Shot', ap: 2, kind: 'shot', text: '' },
       { id: 'overwatch', name: 'Overwatch', ap: 2, kind: 'overwatch', text: '' },
     ],
+    classId: 'assault',
     passive: { id: 'none', name: '', text: '' },
     tags: ['pistol', 'fox'],
   },
   knack: {
-    id: 'knack', name: 'Knack', species: 'Rat', role: 'Runner',
+    id: 'knack', name: 'Knack', species: 'Rat', role: 'Scout',
     portrait: 'assets/rat.jpg', thumb: 'assets/rat.jpg',
     hp: 7, ap: 5, move: 7, aim: 64, armor: 0, speed: 12,
     weapon: { name: 'Holdout', dmg: [2, 3], range: 6, typ: 'pistol' },
@@ -150,11 +247,12 @@ export const RIVALS = {
       { id: 'shot', name: 'Shot', ap: 2, kind: 'shot', text: '' },
       { id: 'dash', name: 'Dash', ap: 1, kind: 'dash', text: '' },
     ],
+    classId: 'scout',
     passive: { id: 'scurry', name: 'Scurry', text: '+1 AP.' },
     tags: ['scout', 'rat'],
   },
   slab: {
-    id: 'slab', name: 'Slab', species: 'Badger', role: 'Anchor',
+    id: 'slab', name: 'Slab', species: 'Badger', role: 'Tank',
     portrait: 'assets/badger.jpg', thumb: 'assets/badger.jpg',
     hp: 14, ap: 4, move: 4, aim: 58, armor: 1, speed: 5,
     weapon: { name: 'SMG', dmg: [3, 4], range: 6, typ: 'smg' },
@@ -162,11 +260,12 @@ export const RIVALS = {
       { id: 'shot', name: 'Shot', ap: 2, kind: 'shot', text: '' },
       { id: 'fortify', name: 'Fortify', ap: 1, kind: 'fortify', text: '' },
     ],
+    classId: 'tank',
     passive: { id: 'hide', name: 'Thick Hide', text: '-1 damage.' },
     tags: ['tank', 'badger'],
   },
   rill: {
-    id: 'rill', name: 'Rill', species: 'Croc', role: 'Closer',
+    id: 'rill', name: 'Rill', species: 'Croc', role: 'Tank',
     portrait: 'assets/croc.jpg', thumb: 'assets/croc.jpg',
     hp: 13, ap: 4, move: 5, aim: 60, armor: 0, speed: 10,
     weapon: { name: 'Hook', dmg: [4, 6], range: 1, typ: 'melee' },
@@ -174,11 +273,12 @@ export const RIVALS = {
       { id: 'lunge', name: 'Close In', ap: 2, kind: 'lunge', range: 3, text: '' },
       { id: 'roll', name: 'Death Roll', ap: 3, kind: 'melee', range: 1, dmg: [5, 8], text: '' },
     ],
+    classId: 'tank',
     passive: { id: 'jaw', name: 'Iron Jaw', text: 'Melee ignores half cover.' },
     tags: ['melee', 'croc'],
   },
   pact: {
-    id: 'pact', name: 'Pact', species: 'Snake', role: 'Support',
+    id: 'pact', name: 'Pact', species: 'Snake', role: 'Medic',
     portrait: 'assets/snake.jpg', thumb: 'assets/snake.jpg',
     hp: 9, ap: 4, move: 5, aim: 68, armor: 0, speed: 8,
     weapon: { name: 'Dart gun', dmg: [2, 3], range: 7, typ: 'pistol' },
@@ -186,11 +286,12 @@ export const RIVALS = {
       { id: 'venom', name: 'Venom Round', ap: 2, kind: 'venom', text: '' },
       { id: 'patch', name: 'Patch Up', ap: 2, kind: 'heal', range: 3, heal: 3, text: '' },
     ],
+    classId: 'medic',
     passive: { id: 'none', name: '', text: '' },
     tags: ['support', 'snake'],
   },
   bruno: {
-    id: 'bruno', name: 'Bruno', species: 'Bear', role: 'Heavy',
+    id: 'bruno', name: 'Bruno', species: 'Bear', role: 'Demolitions',
     portrait: 'assets/bear.jpg', thumb: 'assets/bear.jpg',
     hp: 16, ap: 3, move: 3, aim: 58, armor: 1, speed: 4,
     weapon: { name: 'Drum gun', dmg: [5, 7], range: 5, typ: 'shotgun' },
@@ -198,6 +299,7 @@ export const RIVALS = {
       { id: 'shot', name: 'Shot', ap: 3, kind: 'shot', text: '' },
       { id: 'breach', name: 'Breach', ap: 2, kind: 'breach', range: 1, text: '' },
     ],
+    classId: 'demo',
     passive: { id: 'bulk', name: 'Bulk', text: '' },
     tags: ['heavy', 'bear'],
   },
@@ -210,11 +312,12 @@ export const RIVALS = {
       { id: 'shot', name: 'Snap Shot', ap: 2, kind: 'shot', text: '' },
       { id: 'overwatch', name: 'Overwatch', ap: 2, kind: 'overwatch', text: '' },
     ],
+    classId: 'assault',
     passive: { id: 'pack', name: 'Pack Sense', text: '+15% hit with a nearby ally.' },
     tags: ['rifle', 'wolf'],
   },
   mica: {
-    id: 'mica', name: 'Mica', species: 'Fox', role: 'Marksman',
+    id: 'mica', name: 'Mica', species: 'Fox', role: 'Sniper',
     portrait: 'assets/fox.jpg', thumb: 'assets/fox.jpg',
     hp: 8, ap: 4, move: 4, aim: 80, armor: 0, speed: 7,
     weapon: { name: 'Long rifle', dmg: [4, 6], range: 11, typ: 'rifle' },
@@ -222,6 +325,7 @@ export const RIVALS = {
       { id: 'aimed', name: 'Aimed Shot', ap: 3, kind: 'aimed', text: '' },
       { id: 'overwatch', name: 'Overwatch', ap: 2, kind: 'overwatch', text: '' },
     ],
+    classId: 'sniper',
     passive: { id: 'cold', name: 'Cold Eye', text: '+15% crit if she has not moved.' },
     tags: ['marksman', 'fox'],
   },
