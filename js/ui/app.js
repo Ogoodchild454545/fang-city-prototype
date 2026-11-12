@@ -18,13 +18,14 @@ import * as Missions from './missions.js';
 import * as Audio from './audio.js';
 import * as Tactics from './tactics.js';
 import * as Heroes from './heroes.js';
+import * as Loadout from './loadout.js';
 import { formatDrop } from '../core/shards.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
 if (params.has('reset')) storage.clear();
 
-const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes };
+const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes, loadout: Loadout };
 const NAV = [
   ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['missions', '🎯', 'Missions'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
 ];
@@ -160,13 +161,22 @@ const GLOBAL_ACTIONS = {
 function unlockAudio() { Audio.unlock(); syncBattleMute(); }
 document.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
 
+function dispatchAct(el, e) {
+  const act = el.dataset.act;
+  if (act !== 'toggleMute' && e.type === 'click') Audio.play('tap');
+  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act] || Heroes.actions[act] || Loadout.actions[act];
+  if (handler) { handler(ctx, el, e); ctx.save(); }
+}
 document.getElementById('app').addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.hasAttribute('disabled')) return;
-  const act = el.dataset.act;
-  if (act !== 'toggleMute') Audio.play('tap');
-  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act] || Heroes.actions[act];
-  if (handler) { handler(ctx, el, e); ctx.save(); }
+  if (el.tagName === 'SELECT') return; // wait for change
+  dispatchAct(el, e);
+});
+document.getElementById('app').addEventListener('change', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.hasAttribute('disabled')) return;
+  dispatchAct(el, e);
 });
 
 function syncBattleMute() {

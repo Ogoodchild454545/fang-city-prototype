@@ -4,6 +4,7 @@ import { defOf, HEROES } from '../core/heroes.js';
 import { tile, inB } from '../core/tmaps.js';
 import { money, fmt, ico, esc } from './fmt.js';
 import { formatDrop } from '../core/shards.js';
+import { PERKS, rankName, xpToNext } from '../core/progress.js';
 import * as Audio from './audio.js';
 
 const TW = 58, TH = 29;
@@ -214,6 +215,17 @@ function draw(ctx) {
       g.textAlign = 'center';
       g.fillText('●'.repeat(un.ap) + '○'.repeat(Math.max(0, un.maxAp - un.ap)), cx, cy + r + 12 * z);
     }
+    if (!dead) {
+      g.font = `bold ${Math.round(7.5 * z)}px Inter, sans-serif`;
+      g.textAlign = 'left';
+      const ammoTxt = (un.ammo || 0) > 0 ? String(un.ammo) : '×';
+      const aw = g.measureText(ammoTxt).width + 6 * z;
+      const ax = cx + r - 2 * z, ay = cy + r - 2 * z;
+      g.fillStyle = (un.ammo || 0) > 0 ? 'rgba(20,24,16,0.85)' : 'rgba(60,18,14,0.9)';
+      g.beginPath(); g.roundRect(ax, ay - 8 * z, aw, 10 * z, 2 * z); g.fill();
+      g.fillStyle = (un.ammo || 0) > 0 ? '#f3e7c9' : '#e07a6a';
+      g.fillText(ammoTxt, ax + 3 * z, ay);
+    }
     if (un.overwatch) {
       g.fillStyle = '#e0c15a';
       g.font = `bold ${Math.round(9 * z)}px sans-serif`;
@@ -347,8 +359,9 @@ function clickTile(ctx, x, y) {
   const occ = T.unitAt(b, x, y);
   const sel = b.units.find((p) => p.uid === u.sel && p.hp > 0);
   if (occ && occ.side === 'player') { u.sel = occ.uid; u.mode = 'shot'; Audio.play('tap'); return ctx.render(); }
-  if (occ && occ.side === sel?.side && u.mode === 'patch') {
-    return doAct(ctx, { type: 'heal', uid: sel.uid, target: occ.uid });
+  if (occ && occ.side === 'player' && sel && (u.mode === 'patch' || u.mode === 'medkit' || u.mode === 'heal')) {
+    const typ = u.mode === 'medkit' ? 'medkit' : 'heal';
+    return doAct(ctx, { type: typ, uid: sel.uid, target: occ.uid });
   }
   if (occ && occ.side === 'enemy' && sel) {
     const mode = u.mode || 'shot';
@@ -451,17 +464,45 @@ function finish(ctx) {
     ? `<p class="small gold">${res.tutorial ? 'You picked up a lead after the lesson. ' : ''}${esc(formatDrop(res.shardDrop))}. Collect 30 shards to unlock an operator.</p>`
     : '';
   if (res.win) Audio.play('win'); else Audio.play('lose');
-  ctx.modal(`<div class="result ${res.win ? 'win' : 'loss'}">
+  ctx.modal(`<div class="result ${res.win ? 'win' : 'loss'} ${res.highStakes ? 'hstakes' : ''}">
     <div class="h dim">${esc(res.label)}</div>
     <div class="big">${res.win ? 'Victory' : 'Defeat'}</div>
     ${res.win ? `<div class="rewards"><span>${money(res.cash)}</span>${res.influence ? `<span>${ico('influence')} ${fmt(res.influence)} Rep</span>` : ''}</div>` : '<p class="small dim">Think about cover and flanks, then try again.</p>'}
     ${extra}
+    ${xpBlock(res)}
     <div class="row" style="margin-top:10px">
       <button class="btn block" data-act="closeModal" data-then="heroes">Operators</button>
       <button class="btn red block" data-act="closeModal">${res.kind === 'tutorial' ? 'Back to the hideout' : 'Back to the city'}</button>
     </div>
   </div>`, { center: true, backdrop: false, onClose: () => ctx.go(ctx.sub.afterBattle || (res.kind === 'tutorial' ? 'base' : 'city')) });
   ctx.sub.afterBattle = null;
+}
+
+function xpBlock(res) {
+  if (!res) return '';
+  const hs = res.highStakes ? `<div class="tiny gold">High Stakes${res.win ? ' — rewards were tripled.' : '.'}</div>` : '';
+  const rows = (res.xp || []).map((x) => {
+    const lvup = (x.gained || []).length
+      ? ` · Level up — ${x.gained.map((g) => esc(g.rank)).join(' → ')}`
+      : '';
+    const bar = x.need
+      ? `<div class="xpbar"><i style="width:${Math.min(100, (x.xp / x.need) * 100)}%"></i></div><div class="tiny dim">${x.xp}/${x.need} XP to next</div>`
+      : '<div class="tiny dim">Max rank</div>';
+    const picks = (x.pendingChoices || []).map((id) => {
+      const p = PERKS[id]; if (!p) return '';
+      return `<button class="btn sm" data-act="pickPerk" data-id="${x.id}" data-perk="${id}">${esc(p.name)} — ${esc(p.text)}</button>`;
+    }).join('');
+    return `<div class="xprow"><b>${esc(x.name)}</b> +${x.amount} XP · Lv ${x.lv}${lvup}${x.kills ? ` · ${x.kills} KO` : ''}
+      ${bar}${picks ? `<div class="perkpick">Pick a perk: ${picks}</div>` : ''}</div>`;
+  }).join('');
+  const lost = (res.lost || []).map((l) =>
+    `<div class="xprow loss"><b>${esc(l.name)}</b> was KO'd. Level reset to Rookie (was ${esc(l.rank)}); ${l.gear ? 'carried gear was taken.' : 'no gear was carried.'}</div>`
+  ).join('');
+  const ret = res.returned
+    ? `<div class="tiny dim">Unused loadout returned: ${res.returned.ammo || 0} ammo, ${res.returned.medkits || 0} medkits. Spent rounds and kits are gone.</div>`
+    : '';
+  if (!hs && !rows && !lost) return '';
+  return `<div class="xpbox">${hs}${rows}${lost}${ret}</div>`;
 }
 
 function coach(b, u) {
@@ -496,7 +537,7 @@ export function render(ctx) {
   <div class="twrap">
     <canvas id="tacv"></canvas>
     <div class="tbar">
-      <div class="tturn">${b.side === 'player' ? 'Your turn' : 'Enemy turn'} · ${esc(b.label)} · T${b.turn}</div>
+      <div class="tturn">${b.side === 'player' ? 'Your turn' : 'Enemy turn'} · ${esc(b.label)} · T${b.turn}${b.highStakes ? ' · <b class="hsflag">HIGH STAKES</b>' : ''}</div>
       <button class="btn dim tiny" data-act="retreatFight">Retreat</button>
       <button class="btn red" data-act="endTacticsTurn" ${b.side !== 'player' || u.busy ? 'disabled' : ''}>End turn</button>
     </div>
@@ -506,11 +547,12 @@ export function render(ctx) {
         <img class="tport" src="${def.portrait}" alt="">
         <div class="tinfo">
           <div class="tn">${esc(def.name)} <span class="tiny dim">${esc(def.role)} · ${esc(def.species)}</span></div>
-          <div class="tiny">HP ${sel.hp}/${sel.maxHp} · AP ${sel.ap}/${sel.maxAp} · Move ${sel.move}${sel.overwatch ? ' · Overwatch' : ''}</div>
-          <div class="tiny dim">${esc(def.passive.name)}${def.passive.name ? ': ' + esc(def.passive.text) : ''}</div>
+          <div class="tiny">HP ${sel.hp}/${sel.maxHp} · AP ${sel.ap}/${sel.maxAp} · Move ${sel.move}${sel.overwatch ? ' · Overwatch' : ''} · ${ico('ammo')} ${sel.ammo || 0}${sel.medkits ? ` · ${ico('medkits')} ${sel.medkits}` : ''}</div>
+          <div class="tiny dim">${esc(def.passive.name)}${def.passive.name ? ': ' + esc(def.passive.text) : ''}${(sel.ammo || 0) <= 0 ? ' · Out of ammo — adjacent melee only' : ''}</div>
         </div>
         <div class="tabs">
           ${abs.map((a) => `<button class="tab ${u.mode === a.id || u.mode === a.kind ? 'on' : ''}" data-act="tmode" data-mode="${a.id}" ${sel.ap < (a.ap || 2) && a.kind !== 'shot' ? '' : ''}>${esc(a.name)} <span class="tiny">${a.ap} AP</span></button>`).join('')}
+          ${sel.medkits ? `<button class="tab ${u.mode === 'medkit' ? 'on' : ''}" data-act="tmode" data-mode="medkit">Medkit 2 AP · ${sel.medkits}</button>` : ''}
           <button class="tab ${u.mode === 'hunker' ? 'on' : ''}" data-act="doHunker">Hunker 1 AP</button>
         </div>` : ''}
     </div>
@@ -536,6 +578,7 @@ export const actions = {
     const u = ui(ctx);
     if (!u.sel) return;
     if (inst.includes(mode)) return doAct(ctx, { type: mode, uid: u.sel });
+    if (mode === 'medkit' && u.mode === 'medkit') return doAct(ctx, { type: 'medkit', uid: u.sel, target: u.sel });
     u.mode = mode; ctx.render();
   },
   doHunker(ctx) {

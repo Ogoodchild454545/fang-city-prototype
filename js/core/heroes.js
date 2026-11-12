@@ -231,7 +231,7 @@ export const defOf = (id) => HEROES[id] || RIVALS[id];
 
 export function emptyHeroes() {
   return {
-    owned: { rook: { xp: 0, stars: 1, shards: 0 } },
+    owned: { rook: { xp: 0, lv: 1, stars: 1, shards: 0, perks: [], gear: null } },
     squad: ['rook'], tutorialDone: false, wins: 0,
     shards: {}, universal: 0, pin: null, cratePity: 0, vaultPity: 0, cratesOpened: 0,
   };
@@ -239,9 +239,11 @@ export function emptyHeroes() {
 
 export function ensureHeroes(s) {
   if (!s.heroes || !s.heroes.owned) s.heroes = emptyHeroes();
-  if (!s.heroes.owned.rook) s.heroes.owned.rook = { xp: 0, stars: 1, shards: 0 };
+  if (!s.heroes.owned.rook) s.heroes.owned.rook = { xp: 0, lv: 1, stars: 1, shards: 0, perks: [], gear: null };
   for (const rec of Object.values(s.heroes.owned)) {
-    rec.xp ||= 0; rec.stars = rec.stars || 1; rec.shards ||= 0;
+    rec.xp ||= 0; rec.lv = rec.lv || 1; rec.stars = rec.stars || 1; rec.shards ||= 0;
+    rec.perks = rec.perks || [];
+    if (rec.gear === undefined) rec.gear = null;
   }
   s.heroes.shards ||= {};
   s.heroes.universal ||= 0;
@@ -306,7 +308,7 @@ export function recruit(s, id) {
 
 export function grantHero(s, id) {
   if (!HEROES[id]) return false;
-  if (!s.heroes.owned[id]) s.heroes.owned[id] = { xp: 0, stars: 1, shards: 0 };
+  if (!s.heroes.owned[id]) s.heroes.owned[id] = { xp: 0, lv: 1, stars: 1, shards: 0, perks: [], gear: null };
   if (s.heroes.squad.length < 4 && !s.heroes.squad.includes(id)) s.heroes.squad.push(id);
   return true;
 }

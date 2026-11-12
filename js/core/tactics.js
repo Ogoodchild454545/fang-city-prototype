@@ -3,6 +3,8 @@
 import { rngNext, rngInt, newSeed } from './rng.js';
 import { defOf, HEROES, matchup, synergiesFor } from './heroes.js';
 import { starBonus, tutorialShardGift } from './shards.js';
+import { levelBonus, perkMods, addXp, xpFromBattle, resetAfterKo, perkChoices, xpToNext } from './progress.js';
+import { kitMods, returnUnused, commitLoadout, defaultLoadout, carryOf } from './loadout.js';
 import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, DIRS4 } from './tmaps.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
@@ -82,9 +84,10 @@ export function previewShot(b, att, def, mode = 'shot') {
   const w = defn.weapon;
   const dist = MANH(att.x, att.y, def.x, def.y);
   const melee = mode === 'melee' || mode === 'lunge' || mode === 'roll' || w.typ === 'melee';
-  const range = melee ? (mode === 'lunge' ? 1 : (defn.abilities.find((a) => a.id === mode)?.range || 1)) : w.range;
+  const range = melee ? (mode === 'lunge' ? 1 : (defn.abilities.find((a) => a.id === mode)?.range || 1)) : (w.range + (att.rangeBonus || 0));
   if (dist < 1) return null;
   if (!melee && dist > range) return { ok: false, reason: 'Out of range', chance: 0, dist, cover: 0 };
+  if (!melee && (att.ammo || 0) <= 0) return { ok: false, reason: 'Out of ammo', chance: 0, dist, cover: 0, empty: true };
   if (melee && mode !== 'lunge' && dist > (defn.abilities.find((a) => a.id === mode)?.range || 1)) {
     return { ok: false, reason: 'Too far', chance: 0, dist, cover: 0 };
   }
@@ -94,7 +97,7 @@ export function previewShot(b, att, def, mode = 'shot') {
   const flanked = cover === 0 && dist > 0;
   let chance = defn.aim + (att.aimMod || 0);
   if (mode === 'aimed') chance += 25;
-  if (mode === 'overwatch') chance -= 15;
+  if (mode === 'overwatch' && !(att.perks || []).includes('trigger')) chance -= 15;
   if (mode === 'suppress') chance += 10;
   if (mode === 'knife' && flanked) chance += 20;
   if (cover === 1) chance -= 20;
@@ -107,6 +110,7 @@ export function previewShot(b, att, def, mode = 'shot') {
     if (w.typ === 'shotgun' && dist <= 2) chance += 15;
     if (w.typ === 'shotgun' && dist >= 4) chance -= 10;
   }
+  if (!att.moved && (att.perks || []).includes('cool')) chance += 10;
   if (att.moved && defn.passive?.id === 'cold' && mode === 'aimed') chance -= 0; // crit later, not aim
   if (defn.passive?.id === 'pack' && (allyNear(b, att, att.x, att.y) || allyNear(b, att, def.x, def.y))) chance += 15;
   const syn = synergiesFor(squadIds(b, att.side));
@@ -132,6 +136,8 @@ export function previewShot(b, att, def, mode = 'shot') {
     : w.dmg;
   if (mode === 'suppress') { d0 = Math.max(1, Math.floor(d0 / 2)); d1 = Math.max(1, Math.floor(d1 / 2)); }
   d0 += mu.dmg; d1 += mu.dmg;
+  if (melee && att.mdmg) { d0 += att.mdmg; d1 += att.mdmg; }
+  if (flanked && (att.perks || []).includes('bully')) { d0 += 1; d1 += 1; }
   const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : mode === 'overwatch' ? 0 : (defn.abilities.find((a) => a.id === mode)?.ap || 2);
   return {
     ok: true, chance, cover, flanked, dist, melee, dmg: [Math.max(1, d0), Math.max(1, d1)],
@@ -189,53 +195,82 @@ export function pathTo(b, u, x, y) {
   return { path, cost: dist.get(k) };
 }
 
-function freshUnit(hero, side, x, y, uid, stars = 1) {
+function freshUnit(hero, side, x, y, uid, opts = {}) {
   const d = defOf(hero);
   const extraAp = d.passive?.id === 'scurry' ? 1 : 0;
-  const bon = starBonus(stars);
-  const hp = d.hp + bon.hp;
+  const stars = opts.stars || 1;
+  const lv = opts.lv || 1;
+  const perks = opts.perks || [];
+  const gear = opts.gear || null;
+  const sb = starBonus(stars);
+  const lb = levelBonus(lv);
+  const pm = perkMods(perks);
+  const km = kitMods(gear);
+  const hp = d.hp + sb.hp + lb.hp + pm.hp + (km.hp || 0);
+  const move = d.move + (pm.move || 0);
   return {
-    uid, hero, side, x, y, hp, maxHp: hp, stars: stars || 1, aimMod: bon.aim,
-    ap: d.ap + extraAp, maxAp: d.ap + extraAp, move: d.move,
+    uid, hero, side, x, y, hp, maxHp: hp, stars, lv, perks, gear,
+    aimMod: sb.aim + lb.aim + pm.aim + (km.aim || 0),
+    armor: km.armor || 0, rangeBonus: km.range || 0, mdmg: km.mdmg || 0,
+    ap: d.ap + extraAp, maxAp: d.ap + extraAp, move, baseMove: move,
+    ammo: opts.ammo == null ? (side === 'enemy' ? 8 : 0) : opts.ammo,
+    medkits: opts.medkits || 0, kills: 0,
     overwatch: false, moved: 0, acted: 0, fired: 0, lastFired: 0,
     suppressed: 0, fortify: 0, venom: 0, dashUsed: 0, rollUsed: 0, sprint: 0,
     ko: 0, facing: side === 'player' ? 0 : 2,
   };
 }
 
-export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars }) {
+function packFromState(s, id) {
+  const rec = s.heroes.owned[id] || {};
+  return { stars: rec.stars || 1, lv: rec.lv || 1, perks: rec.perks || [], gear: rec.gear || null };
+}
+
+export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes }) {
   const b = {
     kind: kind || (tutorial ? 'tutorial' : 'street'),
     label: label || (tutorial ? 'Street lesson' : 'Street fight'),
     map, seed: (seed >>> 0) || newSeed(), rng: (seed >>> 0) || newSeed(),
     status: 'active', side: 'player', turn: 1, tutorial: tutorial || 0,
     reward: reward || { cash: 200, influence: 20 },
-    units: [], log: [],
+    units: [], log: [], highStakes: !!highStakes,
   };
   const pSpots = pickDeploys(map, 'player', player.length, b.seed);
   const eSpots = pickDeploys(map, 'enemy', enemy.length, b.seed + 17);
-  const starMap = stars || {};
+  const lo = loadout || {};
   player.forEach((id, i) => {
-    const s = pSpots[i] || { x: 1, y: 1 + i };
-    b.units.push(freshUnit(id, 'player', s.x, s.y, 'p' + i, starMap[id] || 1));
+    const spt = pSpots[i] || { x: 1, y: 1 + i };
+    const rec = (lo.recs && lo.recs[id]) || { stars: (stars || {})[id] || 1, lv: 1, perks: [], gear: null };
+    b.units.push(freshUnit(id, 'player', spt.x, spt.y, 'p' + i, {
+      ...rec, ammo: lo.ammo ? lo.ammo[id] || 0 : (tutorial ? 6 : 0), medkits: lo.medkits ? lo.medkits[id] || 0 : 0,
+    }));
   });
   enemy.forEach((id, i) => {
-    const s = eSpots[i] || { x: map.w - 2, y: 1 + i };
-    b.units.push(freshUnit(id, 'enemy', s.x, s.y, 'e' + i));
+    const spt = eSpots[i] || { x: map.w - 2, y: 1 + i };
+    b.units.push(freshUnit(id, 'enemy', spt.x, spt.y, 'e' + i, { ammo: 8 }));
   });
   return b;
 }
 
-export function startTutorial(seed) {
+export function startTutorial(s, seed) {
+  if (typeof s === 'number' || s == null) { seed = s; s = null; }
+  const recs = { rook: packFromState(s || { heroes: { owned: { rook: { lv: 1, stars: 1 } } } }, 'rook') };
+  let ammo = 6, med = 0;
+  if (s) {
+    ammo = Math.min(6, Math.max(0, Math.floor(s.ammo || 0)));
+    if (ammo) s.ammo -= ammo;
+    if (ammo < 6) ammo = 6; // gift the rest so the lesson is never ammo-blocked
+  }
   return startBattle({
     map: tutorialMap(), player: ['rook'], enemy: ['hook'], seed,
     label: 'Street lesson', tutorial: 1, kind: 'tutorial',
     reward: { cash: 150, influence: 10 },
+    loadout: { recs, ammo: { rook: ammo || 6 }, medkits: { rook: med } },
   });
 }
 
-export function startStreet(s, seed) {
-  const squad = (s.heroes.squad || ['rook']).filter((id) => s.heroes.owned[id]).slice(0, 4);
+export function startStreet(s, seed, committed) {
+  const squad = (committed?.squad || s.heroes.squad || ['rook']).filter((id) => s.heroes.owned[id]).slice(0, 4);
   const n = Math.max(1, squad.length);
   const pools = {
     1: ['hook', 'knack'],
@@ -253,12 +288,16 @@ export function startStreet(s, seed) {
   }
   const maps = [avenueMap, alleyMap, crossingMap];
   const map = maps[rngInt(holder, 0, maps.length - 1)](holder.rng);
-  const stars = {};
-  for (const id of squad) stars[id] = s.heroes.owned[id]?.stars || 1;
+  const recs = {};
+  for (const id of squad) recs[id] = packFromState(s, id);
+  const high = !!(committed && committed.highStakes);
+  const reward = { cash: 200 + n * 80, influence: 15 + n * 8 };
+  if (high) { reward.cash *= 3; reward.influence *= 3; }
   return startBattle({
-    map, player: squad, enemy, seed: holder.rng, stars,
-    label: 'Street fight', kind: 'street',
-    reward: { cash: 200 + n * 80, influence: 15 + n * 8 },
+    map, player: squad, enemy, seed: holder.rng,
+    label: high ? 'High Stakes' : 'Street fight', kind: 'street',
+    reward, highStakes: high,
+    loadout: { recs, ammo: committed?.ammo || {}, medkits: committed?.medkits || {} },
   });
 }
 
@@ -304,6 +343,8 @@ function resolveHit(b, att, def, mode, prev) {
   const hit = roll < prev.chance;
   const ev = { typ: 'shot', uid: att.uid, target: def.uid, mode, chance: prev.chance, roll, hit, cover: prev.cover, flanked: prev.flanked, dmg: 0, crit: 0 };
   att.fired = 1; att.lastFired = b.turn; att.acted = 1; att.overwatch = false;
+  if (!prev.melee && (att.ammo || 0) > 0) att.ammo -= 1;
+  ev.ammo = att.ammo;
   if (!hit) { log(b, `${nameOf(att)} missed ${nameOf(def)} (${prev.chance}%).`); return ev; }
   const span = prev.dmg[1] - prev.dmg[0] + 1;
   let dmg = prev.dmg[0] + Math.floor(rngNext(b) * span);
@@ -311,6 +352,7 @@ function resolveHit(b, att, def, mode, prev) {
   if (Math.floor(rngNext(b) * 100) < cc) { ev.crit = 1; dmg += 2; }
   const tdef = defOf(def.hero);
   if (tdef.passive?.id === 'hide') dmg = Math.max(1, dmg - 1);
+  if (def.armor) dmg = Math.max(1, dmg - def.armor);
   const syn = synergiesFor(squadIds(b, def.side));
   if (syn.some((g) => g.name === 'Field Guard') && def.hero === 'vesper') {
     const brick = b.units.find((u) => u.hero === 'brick' && u.side === def.side && u.hp > 0 && MANH(u.x, u.y, def.x, def.y) === 1);
@@ -325,6 +367,7 @@ function resolveHit(b, att, def, mode, prev) {
   if (def.hp <= 0) {
     def.ko = 1; def.overwatch = false; ev.ko = 1;
     log(b, `${nameOf(def)} is down.`);
+    att.kills = (att.kills || 0) + 1;
     if (defOf(att.hero).passive?.id === 'hot') att.ap = Math.min(att.maxAp, att.ap + 2);
     checkEnd(b);
   }
@@ -439,11 +482,29 @@ export function apply(b, action) {
     return { ok: true, events, status: b.status };
   }
 
+  if (action.type === 'medkit') {
+    if ((u.medkits || 0) < 1) return { ok: false, reason: 'No medkit loaded' };
+    const t = action.target ? b.units.find((x) => x.uid === action.target) : u;
+    if (!t || t.side !== u.side || t.hp <= 0) return { ok: false, reason: 'No ally there' };
+    if (MANH(u.x, u.y, t.x, t.y) > 1) return { ok: false, reason: 'Must be adjacent or self' };
+    if (!spend(u, 2)) return { ok: false, reason: 'Not enough AP' };
+    const extra = (u.perks || []).includes('field') ? 2 : 0;
+    const heal = Math.min(5 + extra, t.maxHp - t.hp);
+    t.hp += heal; u.medkits -= 1; u.acted = 1;
+    log(b, `${nameOf(u)} uses a medkit on ${nameOf(t)} (+${heal}).`);
+    return { ok: true, events: [{ typ: 'heal', uid: u.uid, target: t.uid, heal, medkit: 1 }], status: b.status };
+  }
+
   // generic offensive: shot, aimed, suppress, venom, melee, knife, roll, blast
-  const mode = action.mode || action.type;
+  let mode = action.mode || action.type;
   const t = b.units.find((x) => x.uid === action.target);
   if (!t || t.side === u.side || t.hp <= 0) return { ok: false, reason: 'No foe there' };
-  const prev = previewShot(b, u, t, mode);
+  let prev = previewShot(b, u, t, mode);
+  if ((!prev || !prev.ok) && prev && prev.empty && MANH(u.x, u.y, t.x, t.y) === 1) {
+    mode = 'melee';
+    prev = previewShot(b, u, t, 'melee');
+    if (prev && prev.ok) log(b, `${nameOf(u)} is out of ammo and goes in with fists.`);
+  }
   if (!prev || !prev.ok) return { ok: false, reason: prev?.reason || 'Cannot shoot' };
   const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : 2;
   if (mode === 'roll' && u.rollUsed) return { ok: false, reason: 'Already used this turn' };
@@ -460,7 +521,7 @@ function startSide(b, side) {
     const d = defOf(u.hero);
     u.ap = u.maxAp;
     u.moved = 0; u.acted = 0; u.dashUsed = 0; u.rollUsed = 0; u.sprint = 0;
-    u.move = d.move;
+    u.move = (u.baseMove || d.move) + (u.sprint || 0);
     u.overwatch = false;
     // suppressed lasts through this turn (it was applied on the enemy's previous turn)
     u.fortify = 0;
@@ -500,7 +561,7 @@ function approachScore(b, u, x, y, foes) {
     const after = MANH(x, y, f.x, f.y);
     best = Math.max(best, (before - after) * 18);
     const ghost = { ...u, x, y };
-    const mode = defOf(u.hero).weapon.typ === 'melee' ? 'melee' : 'shot';
+    const mode = (defOf(u.hero).weapon.typ === 'melee' || (u.ammo || 0) <= 0) ? 'melee' : 'shot';
     const prev = previewShot(b, ghost, f, mode);
     if (prev && prev.ok) best = Math.max(best, 20 + prev.chance * 0.5 + (prev.flanked ? 16 : 0) - prev.cover * 6);
   }
@@ -526,7 +587,7 @@ export function think(b) {
     for (const f of foes) {
       for (const mode of modes) {
         if (!['shot', 'melee'].includes(mode) && !defn.abilities.some((a) => a.kind === mode || a.id === mode)) continue;
-        if (mode === 'melee' && defn.weapon.typ !== 'melee' && mode !== 'knife') continue;
+        if (mode === 'melee' && defn.weapon.typ !== 'melee' && (u.ammo || 0) > 0) continue;
         const prev = previewShot(b, u, f, mode);
         if (!prev || !prev.ok) continue;
         const ap = prev.ap || 2;
@@ -575,8 +636,10 @@ export function resolveTactics(s, b) {
   if (!b || (b.status !== 'win' && b.status !== 'loss')) return null;
   const res = {
     kind: b.kind, label: b.label, win: b.status === 'win', reason: b.reason,
-    cash: 0, influence: 0, teeth: 0,
+    cash: 0, influence: 0, teeth: 0, highStakes: !!b.highStakes, xp: [], lost: [], returned: null,
   };
+  // unused ammo / medkits come back; spent rounds stay gone
+  res.returned = returnUnused(s, b.units);
   if (b.status === 'win') {
     res.cash = b.reward?.cash || 0;
     res.influence = b.reward?.influence || 0;
@@ -590,6 +653,25 @@ export function resolveTactics(s, b) {
       res.tutorial = true;
       res.shardDrop = tutorialShardGift(s);
     }
+  }
+  for (const u of b.units.filter((x) => x.side === 'player')) {
+    const rec = s.heroes.owned[u.hero];
+    if (!rec) continue;
+    if (b.highStakes && u.hp <= 0) {
+      const lost = resetAfterKo(rec);
+      lost.id = u.hero; lost.name = defOf(u.hero).name;
+      res.lost.push(lost);
+      continue;
+    }
+    const amount = xpFromBattle(u, b.status === 'win', b.highStakes);
+    const gained = addXp(rec, amount);
+    if (gained.some((g) => g.perk) && rec.pendingPerk) {
+      rec.pendingChoices = perkChoices(u.hero, rec.perks || []);
+    }
+    res.xp.push({
+      id: u.hero, name: defOf(u.hero).name, amount, lv: rec.lv, xp: rec.xp, need: xpToNext(rec.lv),
+      gained, kills: u.kills || 0, survived: u.hp > 0, pendingChoices: rec.pendingChoices || null,
+    });
   }
   s.stats.battles = (s.stats.battles || 0) + 1;
   s.tactics = null;

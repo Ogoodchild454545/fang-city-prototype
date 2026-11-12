@@ -14,6 +14,8 @@ import * as T from '../js/core/tactics.js';
 import { HERO_ORDER, HEROES, grantHero, finishTutorial, matchup } from '../js/core/heroes.js';
 import * as SH from '../js/core/shards.js';
 import { tutorialMap, avenueMap } from '../js/core/tmaps.js';
+import * as P from '../js/core/progress.js';
+import * as L from '../js/core/loadout.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -534,6 +536,124 @@ test('Armoury, Clinic and Workshop produce ammo, medkits and parts into capped s
   yard.b.till = 50;
   const full = BS.collect(s, yard.b.id);
   assert.equal(full.ok, false);
+});
+
+
+test('heroes earn XP, level up, and unlock a perk choice every few ranks', () => {
+  const rec = { xp: 0, lv: 1, perks: [] };
+  const gained = P.addXp(rec, 60);
+  assert.equal(rec.lv, 2);
+  assert.equal(rec.xp, 0);
+  assert.equal(gained[0].rank, 'Street');
+  assert.ok(!gained[0].perk);
+  P.addXp(rec, 80 + 100); // 2->3 and 3->4; perk at 3
+  assert.equal(rec.lv, 4);
+  assert.equal(rec.pendingPerk, true);
+  const choices = P.perkChoices('rook', rec.perks);
+  assert.equal(choices.length, 2);
+  const r = P.pickPerk(rec, choices[0]);
+  assert.ok(r.ok);
+  assert.ok(rec.perks.includes(choices[0]));
+  assert.equal(rec.pendingPerk, false);
+  const xp = P.xpFromBattle({ kills: 2, hp: 1 }, true, false);
+  assert.equal(xp, 2 * 25 + 15 + 20);
+  const hs = P.xpFromBattle({ kills: 2, hp: 1 }, true, true);
+  assert.equal(hs, Math.round(xp * 2));
+});
+
+test('loadout spends base ammo; unused rounds return and spent shots are gone', () => {
+  const s = newGame(T0, 11);
+  grantHero(s, 'nile');
+  s.heroes.squad = ['rook', 'nile'];
+  s.ammo = 20;
+  s.medkits = 3;
+  const draft = L.defaultLoadout(s);
+  assert.ok(draft.ammo.rook > 0);
+  assert.ok(draft.ammo.rook <= L.carryOf(s, 'rook'));
+  const used = draft.ammo.rook + draft.ammo.nile;
+  const med = (draft.medkits.rook || 0) + (draft.medkits.nile || 0);
+  const c = L.commitLoadout(s, draft);
+  assert.ok(c.ok, c.reason);
+  assert.equal(s.ammo, 20 - used);
+  assert.equal(s.medkits, 3 - med);
+  // start a fight with that loadout, fire one shot (even a miss spends a round)
+  const b = T.startStreet(s, 22, c);
+  const rook = b.units.find((u) => u.hero === 'rook' && u.side === 'player');
+  const foe = b.units.find((u) => u.side === 'enemy' && u.hp > 0);
+  const before = rook.ammo;
+  assert.ok(before > 0, 'rook loaded ammo');
+  // place them in range with LOS and AP
+  rook.x = 2; rook.y = 5; foe.x = 4; foe.y = 5;
+  rook.ap = 4;
+  const shot = T.apply(b, { type: 'shot', uid: rook.uid, target: foe.uid, mode: 'shot' });
+  assert.ok(shot.ok, shot.reason);
+  assert.equal(rook.ammo, before - 1);
+  b.status = 'win';
+  const left = rook.ammo;
+  const nile = b.units.find((u) => u.hero === 'nile' && u.side === 'player');
+  const expectBack = left + (nile.ammo || 0);
+  const res = T.resolveTactics(s, b);
+  assert.ok(res);
+  assert.equal(res.returned.ammo, expectBack);
+  assert.equal(s.ammo, 20 - used + expectBack);
+  // the fired round is gone for good
+  assert.equal(s.ammo, 20 - 1);
+  assert.ok(res.xp.some((x) => x.id === 'rook' && x.amount > 0));
+});
+
+test('empty magazines fall back to melee; High Stakes KO resets level and takes gear, normal fights do not', () => {
+  const s = newGame(T0, 33);
+  grantHero(s, 'nile');
+  s.heroes.owned.rook.lv = 5;
+  s.heroes.owned.rook.xp = 40;
+  s.heroes.owned.rook.perks = ['grouping'];
+  s.heroes.owned.rook.gear = 'grip';
+  s.kit = {};
+  s.ammo = 10; s.medkits = 1;
+  const load = { squad: ['rook', 'nile'], ammo: { rook: 0, nile: 4 }, medkits: { rook: 0, nile: 0 }, highStakes: true };
+  const c = L.commitLoadout(s, load);
+  assert.ok(c.ok, c.reason);
+  const b = T.startStreet(s, 44, c);
+  assert.equal(b.highStakes, true);
+  assert.equal(b.reward.cash, (200 + 2 * 80) * 3);
+  const rook = b.units.find((u) => u.hero === 'rook' && u.side === 'player');
+  const foe = b.units.find((u) => u.side === 'enemy' && u.hp > 0);
+  rook.ammo = 0; rook.ap = 4; rook.x = 5; rook.y = 5; foe.x = 6; foe.y = 5;
+  const melee = T.apply(b, { type: 'shot', uid: rook.uid, target: foe.uid, mode: 'shot' });
+  assert.ok(melee.ok, melee.reason);
+  const ev = (melee.events || []).find((e) => e.mode === 'melee' || e.typ === 'shot' || e.typ === 'melee');
+  assert.ok(ev, melee.events);
+  assert.equal(rook.ammo, 0, 'melee does not spend ammo');
+  // KO Rook, keep Nile alive, force a win so resolve runs High Stakes reset
+  rook.hp = 0;
+  b.status = 'win';
+  const res = T.resolveTactics(s, b);
+  assert.ok(res.highStakes);
+  assert.ok(res.lost.some((l) => l.id === 'rook' && l.gear === 'grip'));
+  assert.equal(s.heroes.owned.rook.lv, 1);
+  assert.equal(s.heroes.owned.rook.xp, 0);
+  assert.deepEqual(s.heroes.owned.rook.perks, []);
+  assert.equal(s.heroes.owned.rook.gear, null);
+  assert.ok(s.heroes.owned.rook, 'hero is kept');
+  // Nile still has progress
+  assert.ok(res.xp.some((x) => x.id === 'nile'));
+  // Normal fight: level is kept after a KO
+  const s2 = newGame(T0, 34);
+  grantHero(s2, 'nile');
+  s2.heroes.owned.rook.lv = 5;
+  s2.heroes.owned.rook.xp = 40;
+  s2.heroes.owned.rook.gear = 'vest';
+  s2.ammo = 8;
+  const c2 = L.commitLoadout(s2, { squad: ['rook'], ammo: { rook: 4 }, medkits: {}, highStakes: false });
+  const b2 = T.startStreet(s2, 9, c2);
+  const r2 = b2.units.find((u) => u.hero === 'rook');
+  r2.hp = 0;
+  b2.status = 'loss';
+  const res2 = T.resolveTactics(s2, b2);
+  assert.ok(!res2.highStakes);
+  assert.equal(res2.lost.length, 0);
+  assert.equal(s2.heroes.owned.rook.lv, 5);
+  assert.equal(s2.heroes.owned.rook.gear, 'vest');
 });
 
 console.log(`\n${pass} tests passed`);

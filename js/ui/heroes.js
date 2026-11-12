@@ -1,8 +1,11 @@
 // Operators roster: unique collectable heroes, shard progress, pin-a-target, squad of up to 4.
 import { HERO_ORDER, HEROES, unlockHint, setSquad, synergiesFor } from '../core/heroes.js';
-import { startTutorial, startStreet } from '../core/tactics.js';
+import { startTutorial } from '../core/tactics.js';
 import { money, fmt, ico, esc } from './fmt.js';
 import * as Audio from './audio.js';
+import { openLoadout } from './loadout.js';
+import { rankName, xpToNext, PERKS, pickPerk } from '../core/progress.js';
+import { KIT } from '../core/loadout.js';
 import {
   SHARDS_TO_UNLOCK, MAX_STARS, STAR_COST, progressOf, shardCount, setPin,
   spendUniversal, featuredHero, featuredUntil, formatDrop,
@@ -66,14 +69,35 @@ function card(s, id, rec, inSquad, feat, now) {
       <div class="hn">${esc(h.name)} ${have ? starsRow(prog.stars) : ''} <span class="tiny dim">${esc(h.species)} · ${esc(h.role)}</span></div>
       <div class="tiny dim">${esc(h.blurb)}</div>
       <div class="tiny">HP ${h.hp}${prog.stars > 1 ? `+${prog.stars - 1}` : ''} · AP ${h.ap} · Aim ${h.aim}${prog.stars > 1 ? `+${prog.stars - 1}` : ''} · ${esc(h.weapon.name)} ${h.weapon.dmg[0]}–${h.weapon.dmg[1]}</div>
+      ${have ? xpbar(rec) : ''}
       <div class="tiny gold">${esc(h.passive.name)} — ${esc(h.passive.text)}</div>
       ${id === 'rook' ? '<div class="tiny dim">Story operator — given in the street lesson.</div>' : bar(prog.have, prog.need)}
+      ${have && rec.pendingPerk ? perkRow(id, rec) : ''}
       <div class="row" style="gap:4px;margin-top:4px;flex-wrap:wrap">
         ${canPin ? `<button class="btn sm ${pinned ? 'gold' : ''}" data-act="pinHero" data-id="${id}">${pinned ? 'Unpin' : 'Pin'}</button>` : ''}
         ${s.heroes.universal && (prog.need || !have) ? `<button class="btn sm" data-act="useUniversal" data-id="${id}">Use universal</button>` : ''}
       </div>
     </div>
   </article>`;
+}
+
+
+function xpbar(rec) {
+  const lv = rec.lv || 1;
+  const need = xpToNext(lv);
+  const pct = need ? Math.min(100, ((rec.xp || 0) / need) * 100) : 100;
+  const gear = rec.gear && KIT[rec.gear] ? ' · ' + KIT[rec.gear].name : '';
+  const perks = (rec.perks || []).map((id) => PERKS[id]?.name).filter(Boolean);
+  return `<div class="xpbar" title="Experience"><i style="width:${pct}%"></i></div>
+    <div class="tiny">Lv ${lv} ${esc(rankName(lv))} · ${need ? `${rec.xp || 0}/${need} XP` : 'Max rank'}${gear}${perks.length ? ' · ' + esc(perks.join(', ')) : ''}</div>`;
+}
+
+function perkRow(id, rec) {
+  const choices = rec.pendingChoices && rec.pendingChoices.length
+    ? rec.pendingChoices
+    : null;
+  if (!choices) return `<div class="tiny gold">Level-up perk ready after the next fight debrief.</div>`;
+  return `<div class="perkpick">Pick a perk: ${choices.map((p) => `<button class="btn sm" data-act="pickPerk" data-id="${id}" data-perk="${p}">${esc(PERKS[p].name)}</button>`).join('')}</div>`;
 }
 
 export const actions = {
@@ -118,17 +142,26 @@ export const actions = {
     ctx.toast(formatDrop(r) || 'Spent universal shards.');
     ctx.render();
   },
+  pickPerk(ctx, el) {
+    const rec = ctx.state.heroes.owned[el.dataset.id];
+    if (!rec) return;
+    const r = pickPerk(rec, el.dataset.perk);
+    if (!r.ok) return ctx.toast(r.reason);
+    rec.pendingChoices = null;
+    rec.pendingPerk = false;
+    ctx.toast(`${r.perk.name} learned.`);
+    const box = el.closest('.perkpick');
+    if (box) box.innerHTML = `<span class="tiny gold">${esc(r.perk.name)} learned.</span>`;
+    ctx.render();
+  },
   startTutorial(ctx) {
-    ctx.state.tactics = startTutorial(ctx.state.rng);
+    ctx.state.tactics = startTutorial(ctx.state, ctx.state.rng);
     ctx.sub.tactics = null;
     ctx.sub.afterBattle = 'base';
     ctx.go('tactics');
   },
   startStreet(ctx) {
     if (!ctx.state.heroes.squad.length) return ctx.toast('Pick a squad first.');
-    ctx.state.tactics = startStreet(ctx.state, ctx.state.rng);
-    ctx.sub.tactics = null;
-    ctx.sub.afterBattle = 'heroes';
-    ctx.go('tactics');
+    openLoadout(ctx);
   },
 };
