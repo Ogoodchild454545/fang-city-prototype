@@ -279,8 +279,14 @@ function finish(ctx) {
   ctx.sub.battle = null;
   const parts = [];
   if (res.kind === 'raid' && res.looted && (res.looted.cash || res.looted.influence)) parts.push(`<span>Stolen: ${money(res.looted.cash)}${res.looted.influence ? ` · 🐾 ${fmt(res.looted.influence)}` : ''}</span>`);
-  if (res.cash) parts.push(`<span>${money(res.cash)}</span>`);
-  if (res.influence) parts.push(`<span>🐾 ${res.influence}</span>`);
+  const lc = (res.lost && res.lost.cash) || 0, li = (res.lost && res.lost.influence) || 0;
+  if (res.kind === 'raid') {
+    const bc = Math.max(0, (res.cash || 0) - lc), bi = Math.max(0, (res.influence || 0) - li);
+    if (bc || bi) parts.push(`<span>Banked: ${bc ? money(bc) : ''}${bc && bi ? ' · ' : ''}${bi ? '🐾 ' + fmt(bi) : ''}</span>`);
+  } else {
+    if (res.cash) parts.push(`<span>${money(res.cash)}</span>`);
+    if (res.influence) parts.push(`<span>🐾 ${res.influence}</span>`);
+  }
   if (res.teeth) parts.push(`<span>🦷 ${res.teeth}</span>`);
   if (res.rep) parts.push(`<span>${res.rep > 0 ? '+' : ''}${res.rep} rep</span>`);
   if (res.gear) parts.push(`<span>🎒 ${gearName(res.gear)}</span>`);
