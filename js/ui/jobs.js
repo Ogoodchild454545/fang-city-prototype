@@ -1,7 +1,7 @@
 // Jobs screen: daily login streak, daily jobs, season pass track.
 import { DAILY_REWARDS, GEAR } from '../core/data.js';
 import * as M from '../core/meta.js';
-import { fmt, money, rewardText, ico } from './fmt.js';
+import { fmt, money, rewardText, rewardTextPlain, ico } from './fmt.js';
 
 export function render(ctx) {
   const s = ctx.state, now = ctx.now();
@@ -34,6 +34,6 @@ export function render(ctx) {
 }
 
 export const actions = {
-  claimDaily(ctx) { const r = M.claimDaily(ctx.state, ctx.now()); if (r.ok) ctx.toast('Collected: ' + rewardText(r.reward)); ctx.render(); },
-  claimJob(ctx, el) { const r = M.claimJob(ctx.state, el.dataset.id); if (r.ok) ctx.toast('Job done: ' + rewardText(r.reward)); ctx.render(); },
+  claimDaily(ctx) { const r = M.claimDaily(ctx.state, ctx.now()); if (r.ok) ctx.toast('Collected: ' + rewardTextPlain(r.reward)); ctx.render(); },
+  claimJob(ctx, el) { const r = M.claimJob(ctx.state, el.dataset.id); if (r.ok) ctx.toast('Job done: ' + rewardTextPlain(r.reward)); ctx.render(); },
 };

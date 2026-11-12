@@ -15,6 +15,7 @@ import * as Jobs from './jobs.js';
 import * as Shop from './shop.js';
 import * as Battle from './battle.js';
 import * as Missions from './missions.js';
+import * as Audio from './audio.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
@@ -49,7 +50,8 @@ function topbar() {
   return `
     <div class="res cash"><span class="ico">${ico('cash')}</span><div class="col grow"><b data-live="cash">${money(s.cash)}</b><div class="capbar"><i data-live-bar="cash" style="width:${Math.min(100, (s.cash / cap.cash) * 100)}%"></i></div></div><span class="cap tiny" data-live="capcash">/${fmt(cap.cash)}</span>${vip}</div>
     <div class="res inf"><span class="ico">${ico('influence')}</span><div class="col grow"><b data-live="influence">${fmt(Math.floor(s.influence))}</b><div class="capbar"><i data-live-bar="influence" style="width:${Math.min(100, (s.influence / cap.influence) * 100)}%"></i></div></div><span class="cap tiny" data-live="capinf">/${fmt(cap.influence)}</span></div>
-    <div class="res teeth" data-act="nav" data-tab="shop"><span class="ico">${ico('teeth')}</span><b data-live="teeth">${fmt(s.teeth)}</b><span class="plus">+</span></div>`;
+    <div class="res teeth" data-act="nav" data-tab="shop"><span class="ico">${ico('teeth')}</span><b data-live="teeth">${fmt(s.teeth)}</b><span class="plus">+</span></div>
+    ${Audio.muteButton()}`;
 }
 
 function nav() {
@@ -74,6 +76,7 @@ function render() {
   $('#app').classList.toggle('mode-base', ctx.tab === 'base');
   $('#app').classList.toggle('mode-battle', inBattle);
   $('#nav').innerHTML = nav();
+  syncBattleMute();
   const el = $('#screen');
   const keep = el.scrollTop;
   el.innerHTML = scr.render(ctx);
@@ -147,14 +150,32 @@ function handleBaseEvents(ev) {
 const GLOBAL_ACTIONS = {
   nav: (c, el) => c.go(el.dataset.tab),
   closeModal: (c, el) => { if (el && el.dataset && el.dataset.then) c.sub.afterBattle = el.dataset.then; closeModal(); },
+  toggleMute: () => { Audio.toggleMute(); render(); },
 };
+function unlockAudio() { Audio.unlock(); syncBattleMute(); }
+document.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
+
 document.getElementById('app').addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.hasAttribute('disabled')) return;
   const act = el.dataset.act;
+  if (act !== 'toggleMute') Audio.play('tap');
   const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act];
   if (handler) { handler(ctx, el, e); ctx.save(); }
 });
+
+function syncBattleMute() {
+  let b = document.getElementById('muter-float');
+  if (!b) {
+    b = document.createElement('button');
+    b.id = 'muter-float';
+    b.dataset.act = 'toggleMute';
+    document.getElementById('app').appendChild(b);
+  }
+  b.className = 'muter float' + (Audio.isMuted() ? ' off' : '');
+  b.title = Audio.isMuted() ? 'Unmute' : 'Mute';
+  b.textContent = Audio.isMuted() ? '🔇' : '🔊';
+}
 
 // ---------------------------------------------------------------- boot
 function welcomeBack(sum) {
@@ -187,7 +208,7 @@ function splash(next) {
     <button class="btn red block" id="play">Play</button>
     <div class="tiny faint" style="margin-top:10px;text-align:center">Concept prototype. No real payments.</div>`;
   $('#app').appendChild(sp);
-  const go = () => { sp.remove(); next(); };
+  const go = () => { Audio.unlock(); sp.remove(); next(); };
   sp.querySelector('#play').addEventListener('click', go);
   if (ctx.fast) go();
 }

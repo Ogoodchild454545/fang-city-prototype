@@ -6,7 +6,8 @@ import * as M from '../core/meta.js';
 import * as C from '../core/crew.js';
 import { TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER } from '../core/data.js';
 import { BaseView, preload, tileToWorld } from './iso.js';
-import { fmt, money, dur, esc, rewardText, resName, ico } from './fmt.js';
+import { fmt, money, dur, esc, rewardText, rewardTextPlain, resName, ico } from './fmt.js';
+import * as Audio from './audio.js';
 
 let view = null;
 const ui = (ctx) => (ctx.sub.base ||= { sel: null, place: null, cam: null, cat: 'money' });
@@ -94,7 +95,7 @@ function onTap(ctx, hit) {
   const u = ui(ctx), s = ctx.state;
   if (hit.kind === 'bubble') {
     const r = BS.collect(s, hit.id);
-    if (r.ok) ctx.floaty(`+${r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'}`, hit.sx + cvLeft(), hit.sy + cvTop());
+    if (r.ok) { Audio.play('collect'); ctx.floaty(`+${r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'}`, hit.sx + cvLeft(), hit.sy + cvTop()); }
     else if (r.full) ctx.toast(`Storage full. Build or upgrade a ${r.res === 'cash' ? 'Strongbox' : 'Ledger Office'}.`);
     ctx.save(); ctx.live(); view.dirty = true; panel(ctx);
     return;
@@ -283,7 +284,7 @@ export const actions = {
     ctx.toast(r.ok ? 'Reward ad (mock) watched: cash production x2 for 30 min' : 'Daily ad limit reached (6)');
     ctx.render();
   },
-  claimObj(ctx) { const r = M.claimObjective(ctx.state); if (r.ok) ctx.toast('Reward: ' + rewardText(r.reward)); ctx.render(); },
+  claimObj(ctx) { const r = M.claimObjective(ctx.state); if (r.ok) { Audio.play('collect'); ctx.toast('Reward: ' + rewardTextPlain(r.reward)); } ctx.render(); },
   objHint(ctx) { const o = M.currentObjective(ctx.state); if (o) ctx.toast(o.text); },
   openBuild(ctx) { const u = ui(ctx); u.place = null; syncGhost(ctx); ctx.modal(buildMenu(ctx), { cls: 'wide' }); },
   buildCat(ctx, el) { ui(ctx).cat = el.dataset.cat; const sh = document.querySelector('.overlay .sheet'); if (sh) sh.innerHTML = '<button class="x" data-act="closeModal">✕</button>' + buildMenu(ctx); },
@@ -305,7 +306,7 @@ export const actions = {
       if (!r.ok) return ctx.toast(r.reason);
       u.sel = p.moveId; u.place = null;
     } else {
-      const r = BS.startBuild(s, p.type, p.x, p.y, ctx.now());
+      const r = BS.startBuild(s, p.type, p.x, p.y, ctx.now()); if (r.ok) Audio.play('build');
       if (!r.ok) return ctx.toast(r.reason);
       ctx.toast(`${BUILDINGS[p.type].name} ${r.b.job ? 'under construction' : 'placed'}`);
       // walls: keep placing along the line, like laying a fence
@@ -332,7 +333,7 @@ export const actions = {
   upgradeWhy(ctx, el) { const b = BS.byId(ctx.state, el.dataset.id); ctx.toast(BS.upgradeInfo(ctx.state, b).reason); },
   collectB(ctx, el, e) {
     const r = BS.collect(ctx.state, el.dataset.id);
-    if (r.ok) ctx.floaty('+' + (r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'), e.clientX || 300, e.clientY || 300);
+    if (r.ok) { Audio.play('collect'); ctx.floaty('+' + (r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'), e.clientX || 300, e.clientY || 300); }
     else if (r.full) ctx.toast('Storage full');
     refresh(ctx); ctx.live();
   },
@@ -350,7 +351,7 @@ export const actions = {
     refresh(ctx); ctx.live();
   },
   clearO(ctx, el) {
-    const r = BS.startClear(ctx.state, el.dataset.id, ctx.now());
+    const r = BS.startClear(ctx.state, el.dataset.id, ctx.now()); if (r.ok) Audio.play('clear');
     if (!r.ok) return ctx.toast(r.reason);
     ctx.save(); refresh(ctx); ctx.live();
   },

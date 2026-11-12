@@ -38,3 +38,14 @@ export function rewardText(r) {
   if (r.skin) p.push(`✨ ${r.skin} skin`);
   return p.join(' · ');
 }
+
+export function rewardTextPlain(r) {
+  const p = [];
+  if (r.cash) p.push(money(r.cash));
+  if (r.teeth) p.push(`${fmt(r.teeth)} Ice`);
+  if (r.influence) p.push(`${fmt(r.influence)} Rep`);
+  if (r.ticket) p.push(`${r.ticket} rush ticket`);
+  if (r.gear) p.push('gear');
+  if (r.skin) p.push(`${r.skin} skin`);
+  return p.join(' · ');
+}
