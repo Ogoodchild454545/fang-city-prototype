@@ -1,13 +1,14 @@
 // Game state: one plain JSON object. Persistence goes through a tiny storage adapter so the
 // localStorage backend can later be swapped for an online save API without touching rules.
 import { DISTRICTS, GEAR, TROOPS } from './data.js';
+import { emptyHeroes, ensureHeroes } from './heroes.js';
 import { SPECIES_TO_TROOP, armyCap, spaceOf } from './crew.js';
 import { newSeed } from './rng.js';
 import { newBase, gain } from './base.js';
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export function newGame(now, seed = newSeed()) {
   const s = {
@@ -23,7 +24,8 @@ export function newGame(now, seed = newSeed()) {
     jobs: { day: '', list: [] },
     stats: { taps: 0, collects: 0, wins: 0, trains: 0, builds: 0, upgrades: 0, cleared: 0, battles: 0, raidWins: 0, missionWins: 0 },
     rivals: [], rivalsAt: 0,
-    battle: null, lastResult: null,
+    battle: null, lastResult: null, tactics: null,
+    heroes: emptyHeroes(),
     purchases: {}, vipUntil: 0, pass: false, noads: false, passXp: 0,
     tutorial: 0,
   };
@@ -85,18 +87,21 @@ export function migrateV2(old, now) {
   s.battle = null;
   if (s.gearRefund) s.gearRefund = gain(s, 'cash', s.gearRefund);
   s.teeth += 50; // sorry-for-the-shake-up gift
-  s.v = STATE_VERSION;
+  s.v = 3;
   s.migratedFrom = 2;
   return s;
 }
 
 export function migrate(s, now = Date.now()) {
   if (!s || typeof s !== 'object') return null;
-  if (s.v === 1) return migrateV1(s, now);
-  if (s.v === 2) return migrateV2(s, now);
+  if (s.v === 1) s = migrateV1(s, now);
+  if (s && s.v === 2) s = migrateV2(s, now);
+  if (!s) return null;
+  if (s.v === 3 && s.base) { ensureHeroes(s); s.v = 4; }
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
   s.missions ||= {}; s.bosses ||= {}; s.troopLv ||= {}; s.queue ||= []; s.army ||= {}; s.extraHousing ||= 0;
+  ensureHeroes(s);
   return s;
 }
 

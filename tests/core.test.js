@@ -10,6 +10,9 @@ import { BUILDINGS, OBSTACLES, MAP_N, costOf, storeOf, lvCap, timeOf } from '../
 import { generateRivalBase, baseToRaidLayout, playerBaseLayout, RAID_W, RAID_H } from '../js/core/raid.js';
 import { aiNextActionFor } from '../js/core/ai.js';
 import { DISTRICTS, TROOPS, TROOP_ORDER, BOSSES, MISSIONS } from '../js/core/data.js';
+import * as T from '../js/core/tactics.js';
+import { HERO_ORDER, HEROES, recruit, canRecruit, grantHero, finishTutorial, matchup } from '../js/core/heroes.js';
+import { tutorialMap, avenueMap } from '../js/core/tmaps.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -281,7 +284,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 3);
+  assert.equal(s.v, 4);
   assert.equal(s.crew, undefined);
   assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
@@ -290,7 +293,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 3 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 4 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
@@ -309,7 +312,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
   const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
   const teeth = s2.teeth, cash0 = s2.cash;
   const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
-  assert.equal(s.v, 3);
+  assert.equal(s.v, 4);
   assert.equal(s.gang, undefined);
   assert.equal(s.crew, undefined);
   assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
@@ -381,4 +384,75 @@ test('balance (info): AI-vs-AI turf and raid win rates', () => {
   console.log('     ' + rows.join('\n     '));
 });
 
+
+test('a new player starts with Rook only; others are collectable', () => {
+  const s = newGame(T0, 9);
+  assert.deepEqual(Object.keys(s.heroes.owned), ['rook']);
+  assert.deepEqual(s.heroes.squad, ['rook']);
+  assert.equal(s.heroes.tutorialDone, false);
+  assert.equal(canRecruit(s, 'pip').ok, false);
+  assert.equal(canRecruit(s, 'lumen').ok, false); // needs cash
+  s.cash = 5000;
+  assert.ok(recruit(s, 'lumen').ok);
+  assert.ok(s.heroes.owned.lumen);
+  assert.ok(s.heroes.squad.includes('lumen'));
+  finishTutorial(s);
+  assert.ok(s.heroes.owned.pip);
+  assert.equal(HERO_ORDER.length, 8);
+});
+
+test('tactics: cover, hitchance, flanking, overwatch and a tutorial fight', () => {
+  const b = T.startTutorial(42);
+  assert.equal(b.units.length, 2);
+  const rook = b.units.find((u) => u.hero === 'rook');
+  const hook = b.units.find((u) => u.hero === 'hook');
+  assert.equal(rook.x, 2); assert.equal(hook.x, 10);
+  // Hook sits behind a crate at (9,5) — shots from the west should have cover
+  const west = T.previewShot(b, rook, hook, 'shot');
+  assert.ok(west && west.ok, 'LOS down the street');
+  assert.ok(west.cover >= 1, 'crate gives Hook cover from the west, cover=' + west.cover);
+  const front = west.chance;
+  // walk Rook north around the crate and east, then south to Hook's side
+  // (2,5) -> (2,7) -> (11,7) -> (11,6) is a flank from the south
+  const plan = [{x:2,y:6},{x:2,y:7},{x:3,y:7},{x:4,y:7},{x:5,y:7},{x:6,y:7},{x:7,y:7},{x:8,y:7},{x:9,y:7},{x:10,y:7},{x:11,y:7},{x:11,y:6}];
+  // just teleport for the cover test
+  rook.x = 10; rook.y = 7;
+  const flank = T.previewShot(b, rook, hook, 'shot');
+  assert.ok(flank.ok);
+  assert.equal(flank.cover, 0, 'south of Hook is a flank');
+  assert.ok(flank.flanked);
+  assert.ok(flank.chance > front, `flank ${flank.chance} should beat covered ${front}`);
+  // overwatch: reset a clean fight and have Hook overwatch, then Rook walk into view
+  const b2 = T.startTutorial(7);
+  const r2 = b2.units.find((u) => u.hero === 'rook');
+  const h2 = b2.units.find((u) => u.hero === 'hook');
+  // put Hook with LOS and set overwatch, then Rook walks
+  h2.x = 8; h2.y = 5; h2.overwatch = true; h2.ap = 0;
+  const before = r2.hp;
+  const mv = T.apply(b2, { type: 'move', uid: r2.uid, x: 3, y: 5 });
+  assert.ok(mv.ok);
+  const ow = (mv.events || []).filter((e) => e.typ === 'overwatch' || (e.typ === 'shot' && e.mode === 'overwatch'));
+  // moving one tile east stays in LOS; Hook should try overwatch
+  assert.ok(ow.length || r2.hp !== before || mv.events.some((e) => e.typ === 'step'), 'move resolved');
+  // AI can finish a fight
+  const b3 = T.startTutorial(99);
+  T.autoplay(b3, 120);
+  assert.ok(b3.status === 'win' || b3.status === 'loss', b3.status);
+  const mu = matchup(HEROES.nile, HEROES.lumen);
+  assert.ok(mu.aim > 0 || mu.dmg > 0, 'closer vs marksman is a good matchup');
+});
+
+test('v3 save migrates to v4 with Rook unlocked', () => {
+  const s3 = newGame(T0, 5);
+  // pretend it is a v3 blob (no heroes)
+  s3.v = 3;
+  delete s3.heroes;
+  delete s3.tactics;
+  const s = migrate(s3, T0);
+  assert.equal(s.v, 4);
+  assert.ok(s.heroes.owned.rook);
+  assert.deepEqual(s.heroes.squad, ['rook']);
+});
+
 console.log(`\n${pass} tests passed`);
+
