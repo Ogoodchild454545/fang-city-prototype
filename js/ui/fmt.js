@@ -16,8 +16,12 @@ export const ICO = {
   cash: 'assets/icons/cash-64.png',
   influence: 'assets/icons/rep-64.png',
   teeth: 'assets/icons/ice-64.png',
+  ammo: 'assets/icons/ammo-64.png',
+  medkits: 'assets/icons/medkit-64.png',
+  parts: 'assets/icons/parts-64.png',
 };
-export const resName = (r) => (r === 'influence' ? 'Rep' : r === 'cash' ? 'Cash' : r === 'teeth' ? 'Ice' : r);
+const NAMES = { influence: 'Rep', cash: 'Cash', teeth: 'Ice', ammo: 'Ammo', medkits: 'Medkits', parts: 'Parts' };
+export const resName = (r) => NAMES[r] || r;
 export const ico = (r, cls = 'ico-img') => `<img class="${cls}" src="${ICO[r] || ICO.cash}" alt="${resName(r)}">`;
 export function dur(sec) {
   sec = Math.max(0, Math.ceil(sec));
@@ -33,6 +37,8 @@ export function rewardText(r) {
   if (r.cash) p.push(money(r.cash));
   if (r.teeth) p.push(`${ico('teeth')} ${fmt(r.teeth)} Ice`);
   if (r.influence) p.push(`${ico('influence')} ${fmt(r.influence)} Rep`);
+  if (r.ammo) p.push(`${ico('ammo')} ${fmt(r.ammo)} ammo`);
+  if (r.medkits) p.push(`${ico('medkits')} ${fmt(r.medkits)} medkits`);
   if (r.ticket) p.push(`🎟️ ${r.ticket} rush ticket`);
   if (r.gear) p.push(`🎒 gear`);
   if (r.skin) p.push(`✨ ${r.skin} skin`);
@@ -44,6 +50,8 @@ export function rewardTextPlain(r) {
   if (r.cash) p.push(money(r.cash));
   if (r.teeth) p.push(`${fmt(r.teeth)} Ice`);
   if (r.influence) p.push(`${fmt(r.influence)} Rep`);
+  if (r.ammo) p.push(`${fmt(r.ammo)} ammo`);
+  if (r.medkits) p.push(`${fmt(r.medkits)} medkits`);
   if (r.ticket) p.push(`${r.ticket} rush ticket`);
   if (r.gear) p.push('gear');
   if (r.skin) p.push(`${r.skin} skin`);

@@ -506,3 +506,7 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .hcard.pinned{border-color:#c9a227}
 .hcard.feat img{box-shadow:inset 0 0 0 2px #8fd18f}
 .cratecard .tiny{line-height:1.35}
+
+.pillbtn.supplies{display:inline-flex;align-items:center;gap:5px;pointer-events:none;font-size:12px}
+.pillbtn.supplies .ico-img{width:16px;height:16px}
+.hud-tr{display:flex;flex-direction:column;align-items:flex-end;gap:4px}

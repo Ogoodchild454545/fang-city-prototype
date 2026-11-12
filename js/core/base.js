@@ -3,7 +3,7 @@
 import { MAP_N, BUILDINGS, OBSTACLES, lvCap, costOf, timeOf, rateOf, tillOf, storeOf, housingOf } from './buildings.js';
 import { DISTRICTS } from './data.js';
 import { rngNext, rngInt, rngPick } from './rng.js';
-const RES_LABEL = { cash: 'Cash', influence: 'Rep', teeth: 'Ice' };
+const RES_LABEL = { cash: 'Cash', influence: 'Rep', teeth: 'Ice', ammo: 'Ammo', medkits: 'Medkits', parts: 'Parts' };
 
 const N = MAP_N;
 export const DEN_POS = { x: 18, y: 18 };
@@ -158,11 +158,11 @@ export function buildersBusy(state) {
 }
 export const buildersFree = (state) => state.base.builders - buildersBusy(state);
 
+export const STOCK_RES = ['cash', 'influence', 'ammo', 'medkits', 'parts'];
 export function caps(state) {
-  const c = { cash: 0, influence: 0 };
+  const c = { cash: 0, influence: 0, ammo: 0, medkits: 0, parts: 0 };
   for (const b of state.base.buildings) {
-    c.cash += storeOf(b.t, b.lv, 'cash');
-    c.influence += storeOf(b.t, b.lv, 'influence');
+    for (const r of STOCK_RES) c[r] += storeOf(b.t, b.lv, r);
   }
   return c;
 }
@@ -342,7 +342,7 @@ export function incomePerSec(state, res, now) {
 
 // Advance production by dt seconds.
 export function produce(state, dt, now) {
-  const banked = { cash: 0, influence: 0 };
+  const banked = { cash: 0, influence: 0, ammo: 0, medkits: 0, parts: 0 };
   for (const b of producers(state)) {
     const res = BUILDINGS[b.t].produce.res;
     const add = rate(state, b, now) * dt;
@@ -350,7 +350,7 @@ export function produce(state, dt, now) {
       // the lieutenant banks as it comes in; whatever won't fit in storage waits in the till
       const v = gain(state, res, b.till + add);
       b.till = Math.min(b.till + add - v, tillCap(state, b, now));
-      banked[res] += v;
+      banked[res] = (banked[res] || 0) + v;
     } else {
       b.till = Math.min(b.till + add, tillCap(state, b, now));
     }
@@ -368,8 +368,8 @@ export function collect(state, id) {
   return { ok: v > 0, amount: v, res, full: v <= 0 };
 }
 export function collectAll(state) {
-  const tot = { cash: 0, influence: 0 };
-  for (const b of producers(state)) { const r = collect(state, b.id); if (r.ok) tot[r.res] += r.amount; }
+  const tot = { cash: 0, influence: 0, ammo: 0, medkits: 0, parts: 0 };
+  for (const b of producers(state)) { const r = collect(state, b.id); if (r.ok) tot[r.res] = (tot[r.res] || 0) + r.amount; }
   return tot;
 }
 

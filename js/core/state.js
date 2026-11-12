@@ -10,13 +10,14 @@ setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 export function newGame(now, seed = newSeed()) {
   const s = {
     v: STATE_VERSION, createdAt: now, lastTick: now, rng: seed >>> 0, nextId: 1,
     bossName: 'You',
     cash: 500, lifetime: 0, runEarnings: 0, teeth: 50, influence: 150, rep: 0,
+    ammo: 30, medkits: 2, parts: 0, kit: {},
     cred: 0, credEarned: 0, prestiges: 0, tickets: 0,
     base: newBase(seed), boosts: { adIncomeUntil: 0, adsToday: 0, adsDay: '' },
     army: { rat: 4, fox: 3 }, queue: [], queueAt: 0, troopLv: {}, research: null, bosses: {}, extraBench: 0, extraHousing: 0,
@@ -100,9 +101,21 @@ export function migrate(s, now = Date.now()) {
   if (s && s.v === 2) s = migrateV2(s, now);
   if (!s) return null;
   if (s.v === 3 && s.base) { ensureHeroes(s); s.v = 4; }
+  if (s.v === 4 && s.base) {
+    ensureHeroes(s);
+    if (s.ammo == null) s.ammo = 30;
+    if (s.medkits == null) s.medkits = 2;
+    if (s.parts == null) s.parts = 0;
+    s.kit ||= {};
+    s.v = 5;
+  }
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
   s.missions ||= {}; s.bosses ||= {}; s.troopLv ||= {}; s.queue ||= []; s.army ||= {}; s.extraHousing ||= 0;
+  if (s.ammo == null) s.ammo = 30;
+  if (s.medkits == null) s.medkits = 2;
+  if (s.parts == null) s.parts = 0;
+  s.kit ||= {};
   ensureHeroes(s);
   return s;
 }

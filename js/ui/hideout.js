@@ -31,6 +31,9 @@ export function render(ctx) {
         <div class="tiny dim">${obj.done ? 'Tap to claim: ' : 'Reward: '}${rewardText(obj.reward)}</div></div></div>` : ''}
     </div>
     <div class="hud hud-tr">
+      <div class="pillbtn supplies">${ico('ammo')} <b data-live="ammo">${fmt(Math.floor(s.ammo || 0))}</b><span class="tiny dim">/${fmt(BS.caps(s).ammo)}</span>
+        ${ico('medkits')} <b data-live="medkits">${fmt(Math.floor(s.medkits || 0))}</b>
+        ${ico('parts')} <b data-live="parts">${fmt(Math.floor(s.parts || 0))}</b></div>
       <button class="pillbtn ${ad ? 'gold' : ''}" data-act="adBoost">${ad ? `x2 cash · <span data-live="adleft"></span>` : '▶ x2 cash (ad)'}</button>
     </div>
     <div class="hud hud-bl">
@@ -96,8 +99,8 @@ function onTap(ctx, hit) {
   const u = ui(ctx), s = ctx.state;
   if (hit.kind === 'bubble') {
     const r = BS.collect(s, hit.id);
-    if (r.ok) { Audio.play('collect'); ctx.floaty(`+${r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'}`, hit.sx + cvLeft(), hit.sy + cvTop()); }
-    else if (r.full) ctx.toast(`Storage full. Build or upgrade a ${r.res === 'cash' ? 'Strongbox' : 'Ledger Office'}.`);
+    if (r.ok) { Audio.play('collect'); ctx.floaty(`+${r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' ' + resName(r.res)}`, hit.sx + cvLeft(), hit.sy + cvTop()); }
+    else if (r.full) ctx.toast(`Storage full. Upgrade The Den or build more ${r.res === 'cash' ? 'Strongboxes' : r.res === 'influence' ? 'Ledgers' : r.res === 'ammo' ? 'Armoury space' : r.res === 'medkits' ? 'Clinic space' : 'Workshop space'}.`);
     ctx.save(); ctx.live(); view.dirty = true; panel(ctx);
     return;
   }
@@ -156,11 +159,21 @@ function statLine(ctx, b) {
   const lv = Math.max(1, b.lv);
   if (d.produce) {
     const r = BS.rate(s, b, now);
-    const per = d.produce.res === 'cash' ? `${money(r)}/s` : `${ico('influence')} ${fmt(r * 3600)}/h`;
-    return `${per} · holds ${d.produce.res === 'cash' ? money(BS.tillCap(s, b, now)) : ico('influence') + ' ' + fmt(BS.tillCap(s, b, now))}${BS.isAutoCollect(s, b, now) ? ' · <span class="green">auto-collect</span>' : ''}`;
+    const res = d.produce.res;
+    const per = res === 'cash' ? `${money(r)}/s` : `${ico(res)} ${fmt(res === 'influence' ? r * 3600 : r * 3600)}/h ${resName(res)}`;
+    const hold = res === 'cash' ? money(BS.tillCap(s, b, now)) : `${ico(res)} ${fmt(BS.tillCap(s, b, now))} ${resName(res)}`;
+    return `${per} · holds ${hold}${BS.isAutoCollect(s, b, now) ? ' · <span class="green">auto-collect</span>' : ''}`;
   }
-  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + ${ico('influence')} ${fmt(storeOf('den', lv, 'influence'))} Rep · houses ${housingOf('den', lv)} troop space · max building level ${lvCap('stall', lv)}`;
-  if (d.store) return `Stores ${d.store.cash ? money(storeOf(b.t, lv, 'cash')) : ico('influence') + ' ' + fmt(storeOf(b.t, lv, 'influence')) + ' Rep'}`;
+  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + ${ico('influence')} ${fmt(storeOf('den', lv, 'influence'))} Rep · ${ico('ammo')} ${fmt(storeOf('den', lv, 'ammo'))} ammo · houses ${housingOf('den', lv)} troop space · max building level ${lvCap('stall', lv)}`;
+  if (d.store) {
+    const bits = [];
+    if (d.store.cash) bits.push(money(storeOf(b.t, lv, 'cash')));
+    if (d.store.influence) bits.push(`${ico('influence')} ${fmt(storeOf(b.t, lv, 'influence'))} Rep`);
+    if (d.store.ammo) bits.push(`${ico('ammo')} ${fmt(storeOf(b.t, lv, 'ammo'))} ammo`);
+    if (d.store.medkits) bits.push(`${ico('medkits')} ${fmt(storeOf(b.t, lv, 'medkits'))} medkits`);
+    if (d.store.parts) bits.push(`${ico('parts')} ${fmt(storeOf(b.t, lv, 'parts'))} parts`);
+    return 'Stores ' + bits.join(' + ');
+  }
   if (d.housing) return `Houses ${housingOf(b.t, lv)} troop space · army ${C.armyUsed(s)}/${C.armyCap(s)}`;
   if (d.turret) { const t = turretOf(b.t, lv); return `Turret in raids: ${t.dmg} dmg · range ${t.range} · ${t.hp} HP`; }
   if (b.t === 'gym') { const nx = TROOP_ORDER.find((t) => TROOPS[t].yard > lv); return `Trains ${TROOP_ORDER.filter((t) => TROOPS[t].yard <= lv).length} troop types · ${Math.round(5 * (lv - 1))}% faster${nx ? ` · lv ${TROOPS[nx].yard} unlocks ${TROOPS[nx].name}` : ''}`; }
@@ -199,6 +212,9 @@ export function live(ctx, now) {
   const set = (sel, v) => { const n = document.querySelector(sel); if (n && n.textContent !== v) n.textContent = v; };
   set('[data-live="tapv"]', '+' + money(E.tapValue(s, now)));
   set('[data-live="builders"]', `${BS.buildersFree(s)}/${s.base.builders}`);
+  set('[data-live="ammo"]', fmt(Math.floor(s.ammo || 0)));
+  set('[data-live="medkits"]', fmt(Math.floor(s.medkits || 0)));
+  set('[data-live="parts"]', fmt(Math.floor(s.parts || 0)));
   const adl = document.querySelector('[data-live="adleft"]');
   if (adl) { const left = (s.boosts.adIncomeUntil - now) / 1000; if (left <= 0) return ctx.render(); adl.textContent = dur(left); }
   const u = ui(ctx);
@@ -334,7 +350,7 @@ export const actions = {
   upgradeWhy(ctx, el) { const b = BS.byId(ctx.state, el.dataset.id); ctx.toast(BS.upgradeInfo(ctx.state, b).reason); },
   collectB(ctx, el, e) {
     const r = BS.collect(ctx.state, el.dataset.id);
-    if (r.ok) { Audio.play('collect'); ctx.floaty('+' + (r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'), e.clientX || 300, e.clientY || 300); }
+    if (r.ok) { Audio.play('collect'); ctx.floaty('+' + (r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' ' + resName(r.res)), e.clientX || 300, e.clientY || 300); }
     else if (r.full) ctx.toast('Storage full');
     refresh(ctx); ctx.live();
   },

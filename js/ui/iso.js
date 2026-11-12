@@ -24,7 +24,7 @@ let loaded = 0;
 export function preload(onAll) {
   const list = [...new Set(ALL_SPRITES)];
   const tex = ['ground', 'grass', 'asphalt'];
-  const icons = { icon_cash: 'assets/icons/cash.png', icon_influence: 'assets/icons/rep.png' };
+  const icons = { icon_cash: 'assets/icons/cash.png', icon_influence: 'assets/icons/rep.png', icon_ammo: 'assets/icons/ammo.png', icon_medkits: 'assets/icons/medkit.png', icon_parts: 'assets/icons/parts.png' };
   let need = list.length + tex.length + Object.keys(icons).length;
   const done = () => { loaded++; if (--need === 0) onAll?.(); };
   for (const n of list) { if (imgs[n]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = `assets/base/${n}.webp`; imgs[n] = im; }
@@ -350,7 +350,7 @@ export class BaseView {
         const bob = Math.sin(now / 300 + it.x) * 3;
         const r = Math.round(10 + 5 * Math.min(1, z)), bx = sTop.x, by = Math.max(18, sTop.y + 4 + bob);
         animating = true;
-        const icon = imgs[bub.res === 'cash' ? 'icon_cash' : 'icon_influence'];
+        const icon = imgs['icon_' + (bub.res || 'cash')] || imgs.icon_cash;
         const s = Math.max(28, Math.round(r * 2.6));
         g.save();
         g.shadowColor = 'rgba(0,0,0,0.65)'; g.shadowBlur = 8; g.shadowOffsetY = 2;
@@ -358,8 +358,8 @@ export class BaseView {
         g.fillStyle = bub.full ? 'rgba(80,16,12,0.92)' : 'rgba(10,8,8,0.78)';
         g.fill();
         g.restore();
-        g.strokeStyle = bub.res === 'cash' ? '#e0a526' : '#e0a526';
-        if (bub.res !== 'cash') g.strokeStyle = '#d4a03a';
+        const ring = { cash: '#e0a526', influence: '#d4a03a', ammo: '#9aaa5a', medkits: '#3aa07a', parts: '#c07a3a' };
+        g.strokeStyle = ring[bub.res] || '#e0a526';
         g.lineWidth = 2;
         g.beginPath(); g.arc(bx, by, s / 2 + 2, 0, Math.PI * 2); g.stroke();
         if (icon && icon.complete && icon.naturalWidth) {

@@ -8,7 +8,8 @@ export const MAX_DEN = 6;
 export const BUILDINGS = {
   den:      { name: 'The Den', cat: 'core', size: 3, res: 'cash', maxLv: 6, unlock: 1, counts: [0, 1, 1, 1, 1, 1, 1],
               costs: [0, 0, 1000, 6000, 30000, 140000, 700000], times: [0, 0, 60, 300, 1200, 3600, 10800],
-              store: { cash: [0, 1500, 5000, 15000, 50000, 150000, 450000], influence: [0, 200, 500, 1200, 3000, 8000, 20000] },
+              store: { cash: [0, 1500, 5000, 15000, 50000, 150000, 450000], influence: [0, 200, 500, 1200, 3000, 8000, 20000],
+                       ammo: [0, 40, 70, 110, 160, 220, 300], medkits: [0, 4, 6, 8, 12, 16, 20], parts: [0, 4, 8, 12, 16, 22, 30] },
               housing: [0, 10, 12, 15, 20, 25, 30],
               desc: 'Your headquarters. Its level decides which buildings you can put up, how many, and how far they can be upgraded. Holds some cash and Rep.' },
   // ---- money makers (cash)
@@ -46,7 +47,17 @@ export const BUILDINGS = {
   bunk:     { name: 'Bunkhouse', cat: 'crew', size: 2, res: 'influence', cost0: 80, g: 2.1, t0: 15, maxLv: 10, unlock: 1, counts: [0, 1, 1, 2, 2, 3, 3],
               housing: { base: 6, per: 4 }, desc: 'Bunks for your troops. Every level houses 4 more space worth of crew.' },
   armoury:  { name: 'Armoury', cat: 'crew', size: 2, res: 'influence', cost0: 250, g: 2.1, t0: 60, maxLv: 10, unlock: 2, counts: [0, 0, 1, 1, 1, 1, 1],
-              desc: 'Upgrades troop types: better weapons, armour and health. Max troop level is the Armoury level + 1.' },
+              produce: { res: 'ammo', rate: 0.025, till: 1800 },
+              store: { ammo: { base: 80, g: 1.7 } },
+              desc: 'Makes ammo for street fights and stores a stockpile. Also upgrades troop types: max troop level is the Armoury level + 1.' },
+  clinic:   { name: 'Clinic', cat: 'supplies', size: 2, res: 'cash', cost0: 180, g: 2.0, t0: 20, maxLv: 10, unlock: 1, counts: [0, 1, 1, 1, 2, 2, 2],
+              produce: { res: 'medkits', rate: 0.0022, till: 3600 },
+              store: { medkits: { base: 6, g: 1.55 } },
+              desc: 'Turns out medkits for the operators. Used in street fights; once a kit is spent, it is gone.' },
+  workshop: { name: 'Workshop', cat: 'supplies', size: 2, res: 'cash', cost0: 400, g: 2.05, t0: 45, maxLv: 10, unlock: 2, counts: [0, 0, 1, 1, 1, 1, 1],
+              produce: { res: 'parts', rate: 0.004, till: 3600 },
+              store: { parts: { base: 10, g: 1.65 } },
+              desc: 'Makes parts you spend on operator gear — vests, grips, pouches and the rest.' },
   family:   { name: 'Family Club', cat: 'social', size: 3, res: 'cash', cost0: 20000, g: 2.0, t0: 600, maxLv: 1, unlock: 3, counts: [0, 0, 0, 1, 1, 1, 1],
               desc: 'Join or start a Family: shared chat, crew donations and Family wars. (Coming soon: online feature.)' },
   // ---- defence (only matter when your base is raided; act as turrets in raid battles)
@@ -77,7 +88,7 @@ export const OBSTACLES = {
 };
 
 export const CATS = [
-  ['money', 'Money'], ['influence', 'Rep'], ['storage', 'Storage'], ['crew', 'Crew'], ['defence', 'Defence'], ['wall', 'Walls'], ['social', 'Family'],
+  ['money', 'Money'], ['influence', 'Rep'], ['storage', 'Storage'], ['crew', 'Crew'], ['supplies', 'Supplies'], ['defence', 'Defence'], ['wall', 'Walls'], ['social', 'Family'],
 ];
 
 export const lvCap = (type, den) => (type === 'den' ? MAX_DEN : Math.min(BUILDINGS[type].maxLv, Math.max(1, den * 2)));

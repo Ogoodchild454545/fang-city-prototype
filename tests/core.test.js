@@ -285,7 +285,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 4);
+  assert.equal(s.v, 5);
   assert.equal(s.crew, undefined);
   assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
@@ -294,7 +294,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 4 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 5 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
@@ -313,7 +313,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
   const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
   const teeth = s2.teeth, cash0 = s2.cash;
   const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
-  assert.equal(s.v, 4);
+  assert.equal(s.v, 5);
   assert.equal(s.gang, undefined);
   assert.equal(s.crew, undefined);
   assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
@@ -490,17 +490,52 @@ test('tactics: cover, hitchance, flanking, overwatch and a tutorial fight', () =
   assert.ok(mu.aim > 0 || mu.dmg > 0, 'closer vs marksman is a good matchup');
 });
 
-test('v3 save migrates to v4 with Rook unlocked', () => {
+test('v3 save migrates to v5 with Rook and starting ammo', () => {
   const s3 = newGame(T0, 5);
   // pretend it is a v3 blob (no heroes)
   s3.v = 3;
   delete s3.heroes;
   delete s3.tactics;
   const s = migrate(s3, T0);
-  assert.equal(s.v, 4);
+  assert.equal(s.v, 5);
   assert.ok(s.heroes.owned.rook);
   assert.deepEqual(s.heroes.squad, ['rook']);
+  assert.ok((s.ammo || 0) >= 30);
+  assert.ok((s.medkits || 0) >= 2);
+});
+
+
+test('Armoury, Clinic and Workshop produce ammo, medkits and parts into capped stores', () => {
+  const s = newGame(T0, 8);
+  rich(s);
+  s.base.buildings[0].lv = 2; // den 2 unlocks armoury + workshop
+  const clinic = place(s, 'clinic').b;
+  BS.finishTimers(s, T0 + 1e7);
+  const yard = place(s, 'armoury');
+  assert.ok(yard.ok, yard.reason);
+  BS.finishTimers(s, T0 + 2e7);
+  const shop = place(s, 'workshop');
+  assert.ok(shop.ok, shop.reason);
+  BS.finishTimers(s, T0 + 3e7);
+  assert.ok(BS.caps(s).ammo >= 40);
+  assert.ok(BS.caps(s).medkits >= 4);
+  assert.ok(BS.caps(s).parts >= 4);
+  s.ammo = 0; s.medkits = 0; s.parts = 0;
+  E.tick(s, 400, T0);
+  assert.ok(clinic.till > 0, 'clinic till fills');
+  const c = BS.collect(s, clinic.id);
+  assert.ok(c.ok && c.res === 'medkits' && c.amount > 0);
+  const a = BS.collect(s, yard.b.id);
+  assert.ok(a.ok && a.res === 'ammo' && a.amount > 0, a);
+  const w = BS.collect(s, shop.b.id);
+  assert.ok(w.ok && w.res === 'parts' && w.amount > 0);
+  // cap respected
+  s.ammo = BS.caps(s).ammo;
+  yard.b.till = 50;
+  const full = BS.collect(s, yard.b.id);
+  assert.equal(full.ok, false);
 });
 
 console.log(`\n${pass} tests passed`);
+
 
