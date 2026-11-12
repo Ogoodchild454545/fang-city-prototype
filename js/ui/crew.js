@@ -80,7 +80,7 @@ function upgradesTab(ctx) {
   ${!arm ? `<div class="card"><b class="h">No Armoury yet</b><div class="tiny dim">Build an Armoury at the Hideout (unlocks at Den 2). It upgrades troop types: better weapons, armour and health for every troop of that type.</div><button class="btn sm" style="margin-top:6px" data-act="nav" data-tab="base">Go to the Hideout</button></div>` : ''}
   ${r ? `<div class="card glow"><div class="row"><div class="tpor sm" style="background-image:url(${img(r.t)})"></div><div class="grow"><b class="h small">Upgrading ${TROOPS[r.t].name} to lv ${C.troopLevel(s, r.t) + 1}</b><div class="tiny gold" data-live-res>${dur((r.endsAt - now) / 1000)}</div></div>
      <button class="btn sm gold" data-act="skipResearch">Finish · 🦷 ${C.skipCostSec((r.endsAt - now) / 1000)}</button></div></div>` : ''}
-  <div class="tiny dim" style="margin:0 2px 6px">Armoury lv ${arm || 0}: troops can reach level ${max}. One upgrade at a time, paid in influence 🐾.</div>
+  <div class="tiny dim" style="margin:0 2px 6px">Armoury lv ${arm || 0}: troops can reach level ${max}. One upgrade at a time, paid in Rep 🐾.</div>
   <div class="grid2">${TROOP_ORDER.map((t) => {
     const lv = C.troopLevel(s, t), ok = C.troopUnlocked(s, t);
     const a = C.troopStats(t, lv), b = C.troopStats(t, Math.min(10, lv + 1));
@@ -178,7 +178,7 @@ export const actions = {
   upgradeBoss(ctx, el) {
     const id = el.dataset.id;
     const r = C.upgradeBoss(ctx.state, id);
-    if (!r.ok) return ctx.toast(r.reason === 'influence' ? `Need 🐾 ${fmt(r.cost)}` : 'Max level for your Den');
+    if (!r.ok) return ctx.toast(r.reason === 'influence' ? `Need 🐾 ${fmt(r.cost)} Rep` : 'Max level for your Den');
     ctx.toast(`${BOSSES[id].name} is now level ${r.lv}`);
     reopen(ctx, bossModal(ctx, id)); ctx.render();
   },
@@ -190,7 +190,7 @@ export const actions = {
   research(ctx, el) {
     const t = el.dataset.t;
     const r = C.startResearch(ctx.state, t, ctx.now());
-    if (!r.ok) return ctx.toast({ busy: 'The Armoury is already upgrading something', armoury: 'Build an Armoury first', influence: `Need 🐾 ${fmt(r.cost || 0)}`, max: 'Upgrade the Armoury for higher levels', locked: 'Unlock this troop first' }[r.reason] || 'Cannot upgrade');
+    if (!r.ok) return ctx.toast({ busy: 'The Armoury is already upgrading something', armoury: 'Build an Armoury first', influence: `Need 🐾 ${fmt(r.cost || 0)} Rep`, max: 'Upgrade the Armoury for higher levels', locked: 'Unlock this troop first' }[r.reason] || 'Cannot upgrade');
     ctx.render();
   },
   skipResearch(ctx) {

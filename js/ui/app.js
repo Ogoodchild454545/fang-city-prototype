@@ -162,7 +162,7 @@ function welcomeBack(sum) {
   modal(`
     <div class="result win"><div class="h dim">While you were away (${dur(sum.seconds)})</div>
     <div class="big">${money(sum.banked + sum.tills)}</div>
-    <div class="dim small">${sum.banked >= 1 ? `${money(sum.banked)} banked by your lieutenants · ` : ''}${sum.tills > 0 ? `${money(sum.tills)} waiting to collect` : ''}${sum.influence >= 1 ? ` · 🐾 ${fmt(Math.floor(sum.influence))} influence` : ''}</div>
+    <div class="dim small">${sum.banked >= 1 ? `${money(sum.banked)} banked by your lieutenants · ` : ''}${sum.tills > 0 ? `${money(sum.tills)} waiting to collect` : ''}${sum.influence >= 1 ? ` · 🐾 ${fmt(Math.floor(sum.influence))} Rep` : ''}</div>
     ${sum.finished || sum.cleared ? `<div class="small" style="margin-top:4px">🔨 ${sum.finished ? `${sum.finished} build job${sum.finished > 1 ? 's' : ''} finished` : ''}${sum.finished && sum.cleared ? ' · ' : ''}${sum.cleared ? `${sum.cleared} junk pile${sum.cleared > 1 ? 's' : ''} cleared` : ''}</div>` : ''}
     ${sum.cappedSeconds < sum.seconds ? `<div class="tiny faint" style="margin-top:6px">Offline earnings cap at ${dur(sum.cappedSeconds)}. Made Members get 12h.</div>` : ''}
     <div class="row" style="margin-top:14px">

@@ -14,7 +14,7 @@ function districtState(s, d) {
   const prev = DISTRICTS.find((x) => x.tier === d.tier - 1);
   return !prev || s.districts[prev.id].owner === 'player' ? 'open' : 'locked';
 }
-const lootTotal = (r) => `${money(r.loot.cash)}${r.loot.influence ? ` · 🐾 ${fmt(r.loot.influence)}` : ''}`;
+const lootTotal = (r) => `${money(r.loot.cash)}${r.loot.influence ? ` · 🐾 ${fmt(r.loot.influence)} Rep` : ''}`;
 const defences = (r) => r.base.filter((b) => turretOf(b.t, b.lv)).length;
 
 export function render(ctx) {
@@ -37,7 +37,7 @@ export function render(ctx) {
   </div>
   <div>
     <div class="card" style="margin-top:4px">
-      <div class="row"><div class="grow"><div class="tiny red h">Reputation</div><div class="h" style="font-size:17px">${tier.name} · ${s.rep} rep</div></div>
+      <div class="row"><div class="grow"><div class="tiny red h">Reputation</div><div class="h" style="font-size:17px">${tier.name} · ${s.rep}</div></div>
       <div class="tiny dim" style="text-align:right">${next ? `${next.min - s.rep} to ${next.name}` : 'Top of the ladder'}</div></div>
       <div class="bar gold" style="margin-top:6px"><i style="width:${next ? ((s.rep - tier.min) / (next.min - tier.min)) * 100 : 100}%"></i></div>
     </div>
@@ -61,7 +61,7 @@ export const actions = {
     const st = districtState(s, d);
     const unlocks = unlocksOf(d.id);
     let body;
-    if (st === 'own') body = `<p class="green">Held by your gang.</p><p class="small dim">${d.bonus ? `+${Math.round(d.bonus * 100)}% income · 🐾 ${d.influencePerHour}/hour` : 'Home turf'}${unlocks.length ? ` · unlocks ${unlocks.join(', ')}` : ''}</p>
+    if (st === 'own') body = `<p class="green">Held by your gang.</p><p class="small dim">${d.bonus ? `+${Math.round(d.bonus * 100)}% income · 🐾 ${d.influencePerHour} Rep/hour` : 'Home turf'}${unlocks.length ? ` · unlocks ${unlocks.join(', ')}` : ''}</p>
       <p class="tiny faint">In the full game rival players can attack your districts while you're away; your base defences and guards fight back automatically.</p>`;
     else {
       const e = M.districtEnemy(d, s);
@@ -71,8 +71,8 @@ export const actions = {
         <div class="grow"><div class="h" style="color:${GANGS[rv].colour}">${GANGS[rv].name}</div><div class="tiny dim">${GANGS[rv].blurb}</div>
         <div class="small">${e.count} defenders · level ~${e.level}${e.boss ? ' · <b class="gold">Boss: Old Scales</b>' : ''}</div></div></div>
         <div class="card"><div class="tiny red h">Take it and you get</div>
-          <div class="small">+${Math.round(d.bonus * 100)}% income forever · 🐾 ${d.influencePerHour}/hour${unlocks.length ? ` · unlocks <b>${unlocks.join(', ')}</b> at the Hideout` : ''}</div>
-          <div class="small">Win: ${money(rw.cash)} · 🐾 ${rw.influence} · 🦷 ${rw.teeth} · +${rw.rep} rep · 60% gear drop</div></div>
+          <div class="small">+${Math.round(d.bonus * 100)}% income forever · 🐾 ${d.influencePerHour} Rep/hour${unlocks.length ? ` · unlocks <b>${unlocks.join(', ')}</b> at the Hideout` : ''}</div>
+          <div class="small">Win: ${money(rw.cash)} · 🐾 ${rw.influence} Rep · 🦷 ${rw.teeth} · +${rw.rep} Reputation · 60% gear drop</div></div>
         <div class="tiny dim">Your crew: power ${fmt(C.lineupPower(s, ctx.now()))} (${C.lineup(s, ctx.now()).length} fighters).</div>
         ${st === 'locked' ? `<button class="btn block off" style="margin-top:8px">Take the previous district first</button>` : `<button class="btn red block" style="margin-top:8px" data-act="startDistrict" data-id="${d.id}">Start turf war</button>`}`;
     }

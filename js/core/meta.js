@@ -298,7 +298,7 @@ export const OBJECTIVES = [
   { text: 'Build a Knock-off Stall (BUILD button)', check: (s) => has(s, 'stall'), reward: { cash: 100 } },
   { text: 'Collect cash from your stall when the bubble appears', check: (s) => s.stats.collects >= 1, reward: { cash: 100 } },
   { text: 'Clear 3 pieces of junk to free up land', check: (s) => (s.stats.cleared || 0) >= 3, reward: { teeth: 10 } },
-  { text: 'Build a Pirate Radio to earn influence (🐾)', check: (s) => has(s, 'radio'), reward: { influence: 50 } },
+  { text: 'Build a Pirate Radio to earn Rep (🐾)', check: (s) => has(s, 'radio'), reward: { influence: 50 } },
   { text: 'Build a Strongbox to hold more cash', check: (s) => has(s, 'strongbox'), reward: { cash: 200 } },
   { text: 'Build a Training Yard', check: (s) => has(s, 'gym'), reward: { influence: 40 } },
   { text: 'Train troops in the Crew tab', check: (s) => s.stats.trains >= 1, reward: { teeth: 10 } },

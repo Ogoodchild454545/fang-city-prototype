@@ -283,17 +283,17 @@ function finish(ctx) {
   if (!res) return;
   ctx.sub.battle = null;
   const parts = [];
-  if (res.kind === 'raid' && res.looted && (res.looted.cash || res.looted.influence)) parts.push(`<span>Stolen: ${money(res.looted.cash)}${res.looted.influence ? ` · 🐾 ${fmt(res.looted.influence)}` : ''}</span>`);
+  if (res.kind === 'raid' && res.looted && (res.looted.cash || res.looted.influence)) parts.push(`<span>Stolen: ${money(res.looted.cash)}${res.looted.influence ? ` · 🐾 ${fmt(res.looted.influence)} Rep` : ''}</span>`);
   const lc = (res.lost && res.lost.cash) || 0, li = (res.lost && res.lost.influence) || 0;
   if (res.kind === 'raid') {
     const bc = Math.max(0, (res.cash || 0) - lc), bi = Math.max(0, (res.influence || 0) - li);
     if (bc || bi) parts.push(`<span>Banked: ${bc ? money(bc) : ''}${bc && bi ? ' · ' : ''}${bi ? '🐾 ' + fmt(bi) : ''}</span>`);
   } else {
     if (res.cash) parts.push(`<span>${money(res.cash)}</span>`);
-    if (res.influence) parts.push(`<span>🐾 ${res.influence}</span>`);
+    if (res.influence) parts.push(`<span>🐾 ${res.influence} Rep</span>`);
   }
   if (res.teeth) parts.push(`<span>🦷 ${res.teeth}</span>`);
-  if (res.rep) parts.push(`<span>${res.rep > 0 ? '+' : ''}${res.rep} rep</span>`);
+  if (res.rep) parts.push(`<span>${res.rep > 0 ? '+' : ''}${res.rep} Reputation</span>`);
   const fallen = Object.entries(res.fallen || {});
   ctx.modal(`<div class="result ${res.win ? 'win' : 'loss'}">
     <div class="h dim">${esc(res.label)}</div>
@@ -301,7 +301,7 @@ function finish(ctx) {
     ${res.kind === 'raid' ? `<div>${starRow(res.stars || 0)}</div><div class="tiny dim">${res.pct}% of the base wrecked</div>` : ''}
     ${res.district ? `<div class="h gold">District taken! Income bonus applied.</div>` : ''}
     ${res.missionFirst ? `<div class="h gold">Mission cleared! The next one is open.</div>` : ''}
-    ${res.lost && (res.lost.cash || res.lost.influence) ? `<div class="small red">Storage full: ${res.lost.cash ? money(res.lost.cash) : ''}${res.lost.cash && res.lost.influence ? ' and ' : ''}${res.lost.influence ? '🐾 ' + fmt(res.lost.influence) : ''} left behind. Build more Strongboxes/Ledgers.</div>` : ''}
+    ${res.lost && (res.lost.cash || res.lost.influence) ? `<div class="small red">Storage full: ${res.lost.cash ? money(res.lost.cash) : ''}${res.lost.cash && res.lost.influence ? ' and ' : ''}${res.lost.influence ? '🐾 ' + fmt(res.lost.influence) + ' Rep' : ''} left behind. Build more Strongboxes or Ledgers.</div>` : ''}
     <div class="rewards">${parts.join('')}</div>
     <div class="tiny ${fallen.length ? 'red' : 'green'}" style="margin-top:6px">${fallen.length ? `Lost in the fight: ${fallen.map(([t, n]) => `${n}× ${TROOPS[t].name}`).join(', ')}. Retrain them in My Crew.` : 'No troops lost.'}${res.bossesDown && res.bossesDown.length ? ` ${res.bossesDown.join(' & ')} needs 10 minutes' rest.` : ''}</div>
     ${res.win ? '' : '<div class="small dim">Train more troops and upgrade them in the Armoury, then try again.</div>'}
@@ -329,7 +329,7 @@ export const actions = {
         return doAction(ctx, { type: 'attack', uid: sel.uid, target: occ.uid, mode: u.mode === 'throw' ? 'throw' : u.mode });
       }
       const p = sel && B.attackPreview(b, sel, occ, u.mode === 'aimed' ? 'aimed' : 'shot');
-      if (occ.structure) return ctx.toast(`${occ.name} (Lv ${occ.level}): HP ${occ.hp}/${occ.maxHp}${occ.weapon ? `, shoots ${occ.weapon.dmg} dmg at range ${occ.weapon.range}` : ''}${occ.loot && (occ.loot.cash || occ.loot.influence) ? `, holds ${money(occ.loot.cash)}${occ.loot.influence ? ' + 🐾' + fmt(occ.loot.influence) : ''}` : ''}. ${p ? `Need ${p.cost} AP` : 'Get closer or find a clear line'}`);
+      if (occ.structure) return ctx.toast(`${occ.name} (Lv ${occ.level}): HP ${occ.hp}/${occ.maxHp}${occ.weapon ? `, shoots ${occ.weapon.dmg} dmg at range ${occ.weapon.range}` : ''}${occ.loot && (occ.loot.cash || occ.loot.influence) ? `, holds ${money(occ.loot.cash)}${occ.loot.influence ? ' + 🐾' + fmt(occ.loot.influence) + ' Rep' : ''}` : ''}. ${p ? `Need ${p.cost} AP` : 'Get closer or find a clear line'}`);
       return ctx.toast(`${occ.name}: ${ROLES[occ.role].name}, HP ${occ.hp}/${occ.maxHp}, ${occ.weapon.name}. ${p ? `Need ${p.cost} AP` : 'Out of range or no line of sight'}`);
     }
     if (u.mode === 'shot' && sel && B.reachable(b, sel).has(`${x},${y}`)) return doAction(ctx, { type: 'move', uid: sel.uid, x, y });
@@ -361,7 +361,7 @@ export const actions = {
     play(ctx, r.ev).then(() => (b.status === 'done' ? finish(ctx) : runAI(ctx)));
   },
   retreat(ctx) {
-    ctx.modal(`<div class="h" style="font-size:22px">Retreat?</div><p class="dim">You lose this fight${ctx.state.battle?.kind === 'raid' ? ' and 15 rep' : ''}. Your crew walks away to fight another day.</p>
+    ctx.modal(`<div class="h" style="font-size:22px">Retreat?</div><p class="dim">You lose this fight${ctx.state.battle?.kind === 'raid' ? ' and 15 Reputation' : ''}. Your crew walks away to fight another day.</p>
       <button class="btn red block" data-act="confirmRetreat">Retreat</button>`, { center: true });
   },
   confirmRetreat(ctx) { ctx.closeModal(true); B.retreat(ctx.state.battle); finish(ctx); },

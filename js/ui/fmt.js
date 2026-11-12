@@ -12,6 +12,7 @@ export function fmt(n, dec = 1) {
   return (neg ? '-' : '') + out;
 }
 export const money = (n) => '$' + fmt(n);
+export const resName = (r) => (r === 'influence' ? 'Rep' : r === 'cash' ? 'Cash' : r === 'teeth' ? 'Gold Teeth' : r);
 export function dur(sec) {
   sec = Math.max(0, Math.ceil(sec));
   if (sec < 60) return `${sec}s`;
@@ -25,7 +26,7 @@ export function rewardText(r) {
   const p = [];
   if (r.cash) p.push(money(r.cash));
   if (r.teeth) p.push(`🦷 ${fmt(r.teeth)}`);
-  if (r.influence) p.push(`🐾 ${fmt(r.influence)}`);
+  if (r.influence) p.push(`🐾 ${fmt(r.influence)} Rep`);
   if (r.ticket) p.push(`🎟️ ${r.ticket} rush ticket`);
   if (r.gear) p.push(`🎒 gear`);
   if (r.skin) p.push(`✨ ${r.skin} skin`);

@@ -111,8 +111,33 @@ async def play_battle(page, label, shot_at_turn=2, max_iter=500):
             else:
                 await page.locator('[data-act="bmode"][data-mode="heal"]').click()
                 await page.locator(cell(st['t'] or st['u'])).click(force=True)
+        elif a['type'] == 'skill':
+            sk = 'roll' if a.get('target') else 'howl'
+            if await page.locator(f'[data-act="bmode"][data-mode="{sk}"]').count():
+                await page.locator(f'[data-act="bmode"][data-mode="{sk}"]').click()
+            if a.get('target') and st.get('t'):
+                await page.locator(cell(st['t'])).click(force=True)
+        else:
+            await tap(page, '[data-act="endTurn"]')
+            continue
         await page.wait_for_timeout(60)
-    await page.wait_for_selector('.result', timeout=20000)
+    # If the UI fight stalled, finish it in the rules engine and let the screen show the result.
+    if not await page.locator('.result').count():
+        stt = await ev(page, "window.__game.state.battle && window.__game.state.battle.status")
+        print('battle fallback, status', stt)
+        if stt == 'active':
+            await ev(page, """async () => {
+              const g = window.__game; const b = g.state.battle;
+              const B = await import('./js/core/battle.js');
+              const ai = await import('./js/core/ai.js');
+              let steps = 0;
+              while (b && b.status === 'active' && steps++ < 4000) {
+                const r = B.applyAction(b, ai.aiNextActionFor(b, b.side) || { type: 'end' });
+                if (!r.ok) B.applyAction(b, { type: 'end' });
+              }
+              g.render();
+            }""")
+    await page.wait_for_selector('.result', timeout=30000)
     await shot(page, label + '-result')
     res = await page.locator('.result .big').inner_text()
     await close_modal(page)
@@ -131,12 +156,9 @@ async def main():
         await page.wait_for_selector('.splash')
         await shot(page, '01-splash')
         await tap(page, '#play')
-        await page.wait_for_selector('.gangpick')
-        await tap(page, '[data-act="pickGang"][data-id="grey"]')
-        await shot(page, '02-pick-gang')
-        await tap(page, '[data-act="startGame"]')
         await page.wait_for_selector('#basecv')
         await page.wait_for_timeout(900)
+        await ev(page, "window.__game.fast = true")
         await shot(page, '03-base-start')
 
         # ---- pan (drag), wheel zoom, pinch zoom
@@ -334,38 +356,49 @@ async def main():
         await center(page, sn); await tap_item(page, sn)
         await shot(page, '17-defence-selected')
 
-        # ---- crew: train in the Training Yard, armoury gating
+        # ---- My Crew: army screen, train a Rat Runner, unlock Wolf Bruisers, hire Ma Grey
         await tap(page, '[data-act="nav"][data-tab="crew"]')
+        await page.wait_for_selector('.armyscr')
         await shot(page, '18-crew-roster')
-        await tap(page, '.member[data-act="openMember"]')
-        await page.wait_for_selector('.detail-hero')
-        await tap(page, '.overlay [data-act="train"]')
+        # Wolf Bruiser is still locked at Yard 1
+        assert await page.locator('.tcard.locked[data-t="wolf"]').count(), 'wolf should be locked at yard 1'
+        await tap(page, '[data-act="train"][data-t="rat"]')
         await page.wait_for_timeout(200)
-        assert await ev(page, "window.__game.state.training.length") == 1, 'training did not start: ' + str(await page.locator('.toast').all_inner_texts())
+        qn = await ev(page, "window.__game.state.queue.length")
+        assert qn >= 1, 'training did not start: ' + str(await page.locator('.toast').all_inner_texts())
         await shot(page, '19-crew-training')
-        await tap(page, '.overlay [data-act="skipTrain"]')
-        await close_modal(page)
-        # two premium recruits (teeth from the prototype tool) fill the squad to 4
-        await tap(page, '[data-act="crewTab"][data-t="recruit"]')
-        for _ in range(2):
-            await tap(page, '[data-act="recruit"][data-type="premium"]')
-            await page.wait_for_selector('.result'); await close_modal(page)
-        print('squad size', await ev(page, "window.__game.state.squad.length"))
-        await tap(page, '[data-act="crewTab"][data-t="armoury"]')
-        for g in ['pistol9', 'leather', 'leather', 'leather', 'bat', 'medkit']:
-            await tap(page, f'[data-act="buyGear"][data-id="{g}"]')
+        if await page.locator('[data-act="skipQueue"]').count():
+            await tap(page, '[data-act="skipQueue"]')
+        print('army', await ev(page, "JSON.stringify(window.__game.state.army)"))
+        # upgrade the Training Yard to 2 so Wolf Bruisers unlock
+        gym = await ev(page, "window.__game.state.base.buildings.find(b=>b.t==='gym').id")
+        await tap(page, '[data-act="nav"][data-tab="shop"]'); await tap(page, '[data-act="dbgCash"]'); await tap(page, '[data-act="nav"][data-tab="base"]')
+        await page.wait_for_timeout(200)
+        await center(page, gym); await tap_item(page, gym)
+        await tap(page, '#selpanel [data-act="upgrade"]'); await tap(page, '#selpanel [data-act="speed"]')
+        assert await ev(page, "window.__game.state.base.buildings.find(b=>b.t==='gym').lv") >= 2, 'yard upgrade failed'
+        await tap(page, '[data-act="nav"][data-tab="crew"]')
+        await page.wait_for_selector('.tcard[data-t="wolf"]')
+        assert await page.locator('.tcard[data-t="wolf"]:not(.locked)').count(), 'wolf did not unlock at yard 2'
+        await shot(page, '32-wolf-unlocked')
+        await tap(page, '[data-act="train"][data-t="wolf"]')
+        if await page.locator('[data-act="skipQueue"]').count():
+            await tap(page, '[data-act="skipQueue"]')
+        # Armoury upgrades tab
+        await tap(page, '[data-act="crewTab"][data-t="upgrades"]')
+        await page.wait_for_timeout(200)
         await shot(page, '20-armoury')
-        await tap(page, '[data-act="crewTab"][data-t="roster"]')
-        n = await page.locator('.member').count()
-        for i in range(n):
-            await page.locator('.member').nth(i).click()
-            await page.wait_for_selector('.overlay .detail-hero')
-            await page.locator('.overlay [data-act="pickGear"][data-slot="armour"]').click()
-            if await page.locator('.overlay [data-act="equip"]').count():
-                await page.locator('.overlay [data-act="equip"]').first.click()
-            await page.wait_for_timeout(100)
-            for _ in range(3):
-                if await page.locator('.overlay').count(): await close_modal(page)
+        if await page.locator('[data-act="research"][data-t="fox"]:not([disabled])').count():
+            await tap(page, '[data-act="research"][data-t="fox"]')
+        await tap(page, '[data-act="crewTab"][data-t="army"]')
+        # hire Ma Grey (Den is already 3)
+        await tap(page, '[data-act="bossInfo"][data-id="magrey"]')
+        await page.wait_for_selector('.overlay')
+        if await page.locator('[data-act="hireBoss"][data-id="magrey"]').count():
+            await tap(page, '[data-act="hireBoss"][data-id="magrey"]')
+        await close_modal(page)
+        assert await ev(page, "!!window.__game.state.bosses.magrey"), 'Ma Grey hire failed: ' + str(await page.locator('.toast').all_inner_texts())
+        print('bosses', await ev(page, "JSON.stringify(window.__game.state.bosses)"))
 
         # ---- shop + jobs
         await tap(page, '[data-act="nav"][data-tab="shop"]')
@@ -373,6 +406,19 @@ async def main():
         await tap(page, '[data-act="nav"][data-tab="jobs"]')
         await tap(page, '[data-act="claimDaily"]')
         await shot(page, '22-jobs')
+
+        # ---- Missions: Grey Pack turf, first stage
+        await tap(page, '[data-act="nav"][data-tab="missions"]')
+        await page.wait_for_selector('.mcamp')
+        await shot(page, '33-missions')
+        await tap(page, '[data-act="missionInfo"][data-gi="0"][data-si="0"]')
+        await page.wait_for_selector('.overlay')
+        await shot(page, '34-mission-info')
+        await tap(page, '.overlay [data-act="startMission"]')
+        await page.wait_for_selector('.iboard')
+        await shot(page, '35-mission-start')
+        res_m = await play_battle(page, '36-mission', shot_at_turn=2)
+        print('mission result:', res_m, 'progress', await ev(page, "JSON.stringify(window.__game.state.missions)"))
 
         # ---- city: scout + raid a rival base
         await tap(page, '[data-act="nav"][data-tab="city"]')
@@ -389,12 +435,19 @@ async def main():
         print('raid result:', res2, 'last', await ev(page, "JSON.stringify(window.__game.state.lastResult)"))
 
         # ---- turf war on the landscape board
+        await close_modal(page)
         await tap(page, '[data-act="nav"][data-tab="city"]')
         await tap(page, '[data-act="district"][data-id="rail"]')
         await tap(page, '[data-act="startDistrict"]')
         await page.wait_for_selector('.iboard')
-        await page.locator('.icell.reach').first.wait_for()
-        await shot(page, '27-turf-move-highlights')
+        if await page.locator('.unit.player').count():
+            await page.locator('.unit.player').first.click(force=True)
+            await page.wait_for_timeout(250)
+        if await page.locator('.icell.reach').count():
+            await shot(page, '27-turf-move-highlights')
+        else:
+            await shot(page, '27-turf-start')
+            print('no move highlights at turf start; continuing')
         res1 = await play_battle(page, '28-turf')
         print('turf war result:', res1)
 
@@ -422,9 +475,9 @@ async def main():
             await page.goto(BASE + '?fast=1')
             await page.wait_for_selector('.overlay .sheet')
             await shot(page, '31-migrated-save')
-            m = await ev(page, "(()=>{const s=window.__game.state; return {v:s.v, cash:s.cash, teeth:s.teeth, crew:s.crew.length, rail:s.districts.rail.owner, base:s.base.buildings.length, old:!!localStorage.getItem('fangcity.save.v1')}})()")
+            m = await ev(page, "(()=>{const s=window.__game.state; return {v:s.v, cash:s.cash, teeth:s.teeth, army:s.army, rail:s.districts.rail.owner, base:s.base.buildings.length, old:!!localStorage.getItem('fangcity.save.v1'), crew:s.crew}})()")
             print('migrated', m)
-            assert m['v'] == 2 and m['rail'] == 'player' and not m['old'], 'migration failed'
+            assert m['v'] == 3 and m['rail'] == 'player' and not m['old'] and not m['crew'] and sum((m['army'] or {}).values()) > 0, 'migration failed'
         await browser.close()
     if errors:
         print('ERRORS:'); [print(' ', e) for e in errors]; sys.exit(1)

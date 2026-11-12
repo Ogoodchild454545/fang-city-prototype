@@ -3,6 +3,7 @@ import { SHOP } from '../core/data.js';
 import * as E from '../core/economy.js';
 import * as M from '../core/meta.js';
 import * as BS from '../core/base.js';
+import * as C from '../core/crew.js';
 import { fmt, money, dur } from './fmt.js';
 
 export function render(ctx) {
@@ -71,16 +72,19 @@ export const actions = {
     const s = ctx.state;
     const h = +el.dataset.h;
     // Simulate being away: rewind lastTick, then run the same offline routine a real return uses.
-    s.lastTick -= h * 3600 * 1000;
     const ms = h * 3600 * 1000;
-    for (const t of s.training) t.endsAt -= ms;
+    s.lastTick -= ms;
+    if (s.queueAt) s.queueAt -= ms;
+    if (s.research) s.research.endsAt -= ms;
+    for (const b of Object.values(s.bosses || {})) if (b.restUntil) b.restUntil -= ms;
     for (const b of s.base.buildings) if (b.job) b.job.endsAt -= ms;
     for (const o of s.base.obstacles) if (o.clr) o.clr.endsAt -= ms;
     if (s.base.spawnAt) s.base.spawnAt -= ms;
     const sum = E.applyOffline(s, ctx.now());
+    C.finishQueue(s, ctx.now()); C.finishResearch(s, ctx.now());
     ctx.render();
     if (sum) ctx.modal(`<div class="result win"><div class="h dim">While you were away (${dur(sum.seconds)})</div><div class="big">${money(sum.banked + sum.tills)}</div>
-      <div class="dim small">${money(sum.banked)} banked by lieutenants · ${money(sum.tills)} waiting to collect${sum.influence >= 1 ? ` · 🐾 ${Math.floor(sum.influence)}` : ''}${sum.finished ? ` · ${sum.finished} builds finished` : ''}${sum.cleared ? ` · ${sum.cleared} cleared` : ''}</div>
+      <div class="dim small">${money(sum.banked)} banked by lieutenants · ${money(sum.tills)} waiting to collect${sum.influence >= 1 ? ` · 🐾 ${Math.floor(sum.influence)} Rep` : ''}${sum.finished ? ` · ${sum.finished} builds finished` : ''}${sum.cleared ? ` · ${sum.cleared} cleared` : ''}</div>
       <button class="btn block" style="margin-top:12px" data-act="closeModal">Collect</button></div>`, { center: true });
   },
   dbgCash(ctx) { BS.gain(ctx.state, 'cash', 1e6); BS.gain(ctx.state, 'influence', 5000); ctx.state.teeth += 500; ctx.toast('Filled storage + 500 🦷 (test)'); ctx.render(); },

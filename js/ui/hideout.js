@@ -6,7 +6,7 @@ import * as M from '../core/meta.js';
 import * as C from '../core/crew.js';
 import { TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER } from '../core/data.js';
 import { BaseView, preload, tileToWorld } from './iso.js';
-import { fmt, money, dur, esc, rewardText } from './fmt.js';
+import { fmt, money, dur, esc, rewardText, resName } from './fmt.js';
 
 let view = null;
 const ui = (ctx) => (ctx.sub.base ||= { sel: null, place: null, cam: null, cat: 'money' });
@@ -157,8 +157,8 @@ function statLine(ctx, b) {
     const per = d.produce.res === 'cash' ? `${money(r)}/s` : `🐾 ${fmt(r * 3600)}/h`;
     return `${per} · holds ${d.produce.res === 'cash' ? money(BS.tillCap(s, b, now)) : '🐾 ' + fmt(BS.tillCap(s, b, now))}${BS.isAutoCollect(s, b, now) ? ' · <span class="green">auto-collect</span>' : ''}`;
   }
-  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + 🐾 ${fmt(storeOf('den', lv, 'influence'))} · houses ${housingOf('den', lv)} troop space · max building level ${lvCap('stall', lv)}`;
-  if (d.store) return `Stores ${d.store.cash ? money(storeOf(b.t, lv, 'cash')) : '🐾 ' + fmt(storeOf(b.t, lv, 'influence'))}`;
+  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + 🐾 ${fmt(storeOf('den', lv, 'influence'))} Rep · houses ${housingOf('den', lv)} troop space · max building level ${lvCap('stall', lv)}`;
+  if (d.store) return `Stores ${d.store.cash ? money(storeOf(b.t, lv, 'cash')) : '🐾 ' + fmt(storeOf(b.t, lv, 'influence')) + ' Rep'}`;
   if (d.housing) return `Houses ${housingOf(b.t, lv)} troop space · army ${C.armyUsed(s)}/${C.armyCap(s)}`;
   if (d.turret) { const t = turretOf(b.t, lv); return `Turret in raids: ${t.dmg} dmg · range ${t.range} · ${t.hp} HP`; }
   if (b.t === 'gym') { const nx = TROOP_ORDER.find((t) => TROOPS[t].yard > lv); return `Trains ${TROOP_ORDER.filter((t) => TROOPS[t].yard <= lv).length} troop types · ${Math.round(5 * (lv - 1))}% faster${nx ? ` · lv ${TROOPS[nx].yard} unlocks ${TROOPS[nx].name}` : ''}`; }
@@ -254,9 +254,9 @@ function infoModal(ctx, b) {
   const rows = [];
   const row = (k, a, c) => rows.push(`<tr><td class="dim">${k}</td><td>${a}</td><td class="green">${c ?? ''}</td></tr>`);
   const can = nx <= d.maxLv;
-  if (d.produce) row(d.produce.res === 'cash' ? 'Cash per hour' : 'Influence per hour', fmt(rateOf(b.t, lv) * 3600), can ? fmt(rateOf(b.t, nx) * 3600) : null);
+  if (d.produce) row(d.produce.res === 'cash' ? 'Cash per hour' : 'Rep per hour', fmt(rateOf(b.t, lv) * 3600), can ? fmt(rateOf(b.t, nx) * 3600) : null);
   if (d.produce) row('Holds', fmt(tillOf(b.t, lv)), can ? fmt(tillOf(b.t, nx)) : null);
-  if (d.store) for (const r of ['cash', 'influence']) if (storeOf(b.t, lv, r)) row(`Stores ${r}`, fmt(storeOf(b.t, lv, r)), can ? fmt(storeOf(b.t, nx, r)) : null);
+  if (d.store) for (const r of ['cash', 'influence']) if (storeOf(b.t, lv, r)) row(`Stores ${resName(r)}`, fmt(storeOf(b.t, lv, r)), can ? fmt(storeOf(b.t, nx, r)) : null);
   if (d.housing) row('Troop space', housingOf(b.t, lv), can ? housingOf(b.t, nx) : null);
   if (d.turret) { const a = turretOf(b.t, lv), c = can ? turretOf(b.t, nx) : null; row('Damage', a.dmg, c?.dmg); row('Range', a.range, c?.range); row('Health', a.hp, c?.hp); }
   if (can) row('Next upgrade', `${price(d.res, costOf(b.t, nx))} · ${dur(timeOf(b.t, nx))}`);

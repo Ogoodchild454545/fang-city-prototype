@@ -66,7 +66,7 @@ export const actions = {
       <div class="tiny" style="color:${g.colour}">${esc(m.name)} · ${esc(g.name)} · mission ${si + 1} of ${m.stages.length}</div>
       <p class="small dim">${esc(m.blurb)}${stage.boss ? ' The gang’s boss is on the board.' : ''}</p>
       <div class="card"><div class="tiny red h">${st.done ? 'Rematch payout (first-clear already taken)' : 'Win and you get'}</div>
-        <div class="small">${money(r.cash)} · 🐾 ${fmt(r.influence)}${r.teeth ? ` · 🦷 ${r.teeth}` : ''} · +${r.rep} rep</div></div>
+        <div class="small">${money(r.cash)} · 🐾 ${fmt(r.influence)} Rep${r.teeth ? ` · 🦷 ${r.teeth}` : ''} · +${r.rep} Reputation</div></div>
       <div class="tiny dim">Your crew: ${line.length} fighters · power ${fmt(C.lineupPower(ctx.state, ctx.now()))}. Knocked-out troops are lost.</div>
       ${line.length ? `<button class="btn red block" style="margin-top:8px" data-act="startMission" data-gi="${gi}" data-si="${si}">${st.done ? 'Rematch' : 'Start mission'}</button>` : `<button class="btn block off" style="margin-top:8px">No troops. Train some in My Crew.</button>`}`, { center: true });
   },

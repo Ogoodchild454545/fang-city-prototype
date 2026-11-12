@@ -10,7 +10,7 @@ export const BUILDINGS = {
               costs: [0, 0, 1000, 6000, 30000, 140000, 700000], times: [0, 0, 60, 300, 1200, 3600, 10800],
               store: { cash: [0, 1500, 5000, 15000, 50000, 150000, 450000], influence: [0, 200, 500, 1200, 3000, 8000, 20000] },
               housing: [0, 10, 12, 15, 20, 25, 30],
-              desc: 'Your headquarters. Its level decides which buildings you can put up, how many, and how far they can be upgraded. Holds some cash and influence.' },
+              desc: 'Your headquarters. Its level decides which buildings you can put up, how many, and how far they can be upgraded. Holds some cash and Rep.' },
   // ---- money makers (cash)
   stall:    { name: 'Knock-off Stall', cat: 'money', size: 2, res: 'cash', cost0: 60, g: 2.0, t0: 5, maxLv: 10, unlock: 1, counts: [0, 1, 2, 2, 3, 3, 4],
               produce: { res: 'cash', rate: 0.6, till: 1200 }, desc: 'Fake watches and handbags. Small, steady cash.' },
@@ -32,14 +32,14 @@ export const BUILDINGS = {
               produce: { res: 'cash', rate: 1000, till: 3600 }, desc: 'Everything comes in through the docks.' },
   // ---- influence makers
   radio:    { name: 'Pirate Radio', cat: 'influence', size: 2, res: 'cash', cost0: 150, g: 2.0, t0: 10, maxLv: 10, unlock: 1, counts: [0, 1, 1, 2, 2, 3, 3],
-              produce: { res: 'influence', rate: 0.08, till: 3600 }, desc: 'Spreads your name across the city. Makes influence (🐾), used to train and upgrade crew.' },
+              produce: { res: 'influence', rate: 0.08, till: 3600 }, desc: 'Spreads your name across the city. Makes Rep (🐾), used to upgrade troops and bosses.' },
   pit:      { name: 'Fight Pit', cat: 'influence', size: 3, res: 'cash', cost0: 8000, g: 2.0, t0: 300, maxLv: 10, unlock: 3, counts: [0, 0, 0, 1, 1, 1, 2],
               produce: { res: 'influence', rate: 0.25, till: 3600 }, desc: 'Bare-knuckle nights build a reputation fast.' },
   // ---- storage
   strongbox:{ name: 'Strongbox', cat: 'storage', size: 2, res: 'cash', cost0: 300, g: 2.0, t0: 10, maxLv: 10, unlock: 1, counts: [0, 1, 1, 3, 3, 4, 4],
               store: { cash: { base: 1500, g: 2.5 } }, desc: 'Armoured container for cash. Raiders go for these first.' },
   ledger:   { name: 'Ledger Office', cat: 'storage', size: 2, res: 'cash', cost0: 400, g: 2.0, t0: 15, maxLv: 10, unlock: 1, counts: [0, 1, 1, 1, 2, 2, 2],
-              store: { influence: { base: 300, g: 2.0 } }, desc: 'Names, favours and debts. Stores influence.' },
+              store: { influence: { base: 300, g: 2.0 } }, desc: 'Names, favours and debts. Stores Rep.' },
   // ---- crew
   gym:      { name: 'Training Yard', cat: 'crew', size: 2, res: 'influence', cost0: 60, g: 2.1, t0: 10, maxLv: 10, unlock: 1, counts: [0, 1, 1, 1, 2, 2, 2],
               desc: 'Trains troops in a queue. Its level unlocks new troop types (Wolf Bruiser at 2, Snake Medic at 3, Badger Tank at 4, Croc Heavy at 5, Bear Breacher at 7) and trains a little faster.' },
@@ -77,7 +77,7 @@ export const OBSTACLES = {
 };
 
 export const CATS = [
-  ['money', 'Money'], ['influence', 'Influence'], ['storage', 'Storage'], ['crew', 'Crew'], ['defence', 'Defence'], ['wall', 'Walls'], ['social', 'Family'],
+  ['money', 'Money'], ['influence', 'Rep'], ['storage', 'Storage'], ['crew', 'Crew'], ['defence', 'Defence'], ['wall', 'Walls'], ['social', 'Family'],
 ];
 
 export const lvCap = (type, den) => (type === 'den' ? MAX_DEN : Math.min(BUILDINGS[type].maxLv, Math.max(1, den * 2)));
