@@ -377,3 +377,70 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .msheet .mright .gear{grid-template-columns:44px 1fr auto}
 .msheet .mright .gear .gi{width:44px;height:44px}
 .toast{pointer-events:none}
+
+/* ------------------------------------------------ My Crew army screen */
+.armyscr{display:grid;grid-template-columns:200px minmax(0,1fr);gap:10px;align-items:start;min-height:0}
+.bosscol{display:flex;flex-direction:column;gap:6px}
+.bslot{display:grid;grid-template-columns:56px 1fr;gap:8px;align-items:center;background:linear-gradient(#1f1a17,#120f0e);border:1px solid var(--line2);border-radius:8px;padding:6px 8px 6px 6px;position:relative;text-align:left;min-height:68px;width:100%}
+.bslot.own{border-color:#8a6b1e;box-shadow:0 0 10px rgba(224,165,38,.18)}
+.bslot.avail{border-color:var(--red2);box-shadow:0 0 10px rgba(201,48,44,.18)}
+.bslot.locked{opacity:.62}
+.bpor{width:56px;height:56px;border-radius:8px;background:#000 center 20%/cover;border:1px solid var(--line2);position:relative;flex:none}
+.blv{position:absolute;left:3px;bottom:3px;font-family:var(--font);font-size:11px;background:rgba(0,0,0,.8);color:var(--gold);padding:0 4px;border-radius:3px}
+.bmeta{display:flex;flex-direction:column;gap:1px;min-width:0}
+.bmeta b{line-height:1.1}
+.lockic{position:absolute;top:6px;right:7px;font-size:12px}
+.armymain{min-width:0}
+.armyhead{display:flex;align-items:center;gap:8px}
+.house{font-family:var(--font);font-size:15px;background:#0e0c0b;border:1px solid var(--line2);border-radius:6px;padding:4px 8px;white-space:nowrap}
+.battlebtn{min-width:92px}
+.troops{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 0 6px;min-height:74px}
+.troops::-webkit-scrollbar{display:none}
+.tchip{display:flex;flex-direction:column;align-items:center;gap:2px;flex:none;width:64px}
+.tpor{width:56px;height:56px;border-radius:8px;background:#000 center 20%/cover;border:1px solid var(--line2);position:relative}
+.tpor.sm{width:40px;height:40px;border-radius:6px}
+.tn,.tl,.ti{position:absolute;font-family:var(--font);font-size:11px;background:rgba(0,0,0,.8);padding:0 4px;border-radius:3px;line-height:1.3}
+.tn{left:3px;bottom:3px;color:#fff}
+.tl{right:3px;top:3px;color:var(--gold)}
+.ti{right:3px;bottom:3px;color:#ccc;border:1px solid var(--line2);width:16px;height:16px;padding:0;display:grid;place-items:center;border-radius:50%}
+.queue{display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;min-height:48px;background:#0e0c0b;border:1px solid var(--line);border-radius:8px;padding:6px}
+.queue::-webkit-scrollbar{display:none}
+.qchip{position:relative;flex:none;border:1px solid var(--line2);border-radius:8px;padding:2px;background:#161312}
+.qchip.head{border-color:var(--gold)}
+.qbar{position:absolute;left:3px;right:3px;bottom:3px;height:4px;background:#000;border-radius:2px;overflow:hidden}
+.qbar>i{display:block;height:100%;background:linear-gradient(90deg,#9a6b10,var(--gold));width:0}
+.qx{position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#2a1513;border:1px solid var(--red2);font-size:9px;line-height:14px;text-align:center;color:#ff8a7a}
+.trainrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.tcard{display:flex;flex-direction:column;align-items:center;gap:2px;background:linear-gradient(#1f1a17,#120f0e);border:1px solid var(--line2);border-radius:8px;padding:6px 4px 8px;text-align:center}
+.tcard.locked{opacity:.55}
+.tcard.cant{filter:grayscale(.25) brightness(.85)}
+.tcard b{line-height:1.1}
+.card.upg{padding:8px}
+.card.upg.lockedc{opacity:.55}
+
+/* ------------------------------------------------ Missions */
+.mcamp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.mcard{background:linear-gradient(#1c1918,#120f0e);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.mcard.locked{opacity:.72}
+.mhero{position:relative;height:92px;background:#000 center/cover}
+.mshade{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:8px;background:linear-gradient(transparent 20%,rgba(0,0,0,.88));}
+.mshade .h{font-size:15px;line-height:1.1;text-shadow:0 2px 6px #000}
+.mlock,.mdone{position:absolute;top:6px;right:6px;font-family:var(--font);font-size:11px;text-transform:uppercase;background:rgba(0,0,0,.75);border:1px solid var(--line2);border-radius:4px;padding:1px 6px}
+.mdone{color:var(--green);border-color:#2f6b25}
+.mblurb{margin:6px 8px 4px;min-height:2.4em}
+.mstages{display:flex;flex-direction:column;gap:4px;padding:0 6px 8px}
+.mstage{display:grid;grid-template-columns:22px 1fr auto;gap:6px;align-items:center;text-align:left;background:#0e0c0b;border:1px solid var(--line);border-radius:6px;padding:5px 6px}
+.mstage.open{border-color:var(--red2)}
+.mstage.done{border-color:#2f6b25}
+.mstage.locked{opacity:.55}
+.mn{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-family:var(--font);font-size:12px;background:#1a1514;border:1px solid var(--line2)}
+.mstage.open .mn{background:var(--red2);border-color:var(--red);color:#fff}
+.mstage.done .mn{background:#2f6b25;border-color:var(--green);color:#fff}
+.mpreview{height:120px;border-radius:8px;background:#000 center/cover;border:1px solid var(--line2)}
+.bstage{background-size:cover;background-position:center}
+
+@media (max-width:700px){
+  .armyscr{grid-template-columns:1fr}
+  .bosscol{display:grid;grid-template-columns:repeat(3,1fr)}
+  .mcamp{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

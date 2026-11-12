@@ -16,7 +16,7 @@ export function newGame(now, seed = newSeed()) {
     cash: 500, lifetime: 0, runEarnings: 0, teeth: 50, influence: 150, rep: 0,
     cred: 0, credEarned: 0, prestiges: 0, tickets: 0,
     base: newBase(seed), boosts: { adIncomeUntil: 0, adsToday: 0, adsDay: '' },
-    army: { rat: 4, fox: 3 }, queue: [], queueAt: 0, troopLv: {}, research: null, bosses: {}, extraBench: 0,
+    army: { rat: 4, fox: 3 }, queue: [], queueAt: 0, troopLv: {}, research: null, bosses: {}, extraBench: 0, extraHousing: 0,
     missions: {},
     districts: {},
     daily: { lastClaim: '', streak: 0 },
@@ -96,7 +96,7 @@ export function migrate(s, now = Date.now()) {
   if (s.v === 2) return migrateV2(s, now);
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
-  s.missions ||= {}; s.bosses ||= {}; s.troopLv ||= {}; s.queue ||= []; s.army ||= {};
+  s.missions ||= {}; s.bosses ||= {}; s.troopLv ||= {}; s.queue ||= []; s.army ||= {}; s.extraHousing ||= 0;
   return s;
 }
 

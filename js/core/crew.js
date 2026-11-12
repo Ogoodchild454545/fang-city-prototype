@@ -80,7 +80,7 @@ export function troopFighter(t, lv, i = 0) {
 export const troopStats = (t, lv) => troopFighter(t, lv).stats;
 export const troopPower = (t, lv) => memberPower(troopFighter(t, lv));
 
-export const armyCap = (state) => housing(state);
+export const armyCap = (state) => housing(state) + (state.extraHousing || 0);
 export const spaceOf = (counts) => Object.entries(counts || {}).reduce((s, [t, n]) => s + (TROOPS[t] ? TROOPS[t].space * n : 0), 0);
 export const armyUsed = (state) => spaceOf(state.army);
 export const queuedSpace = (state) => state.queue.reduce((s, q) => s + TROOPS[q.t].space, 0);

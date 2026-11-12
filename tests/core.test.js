@@ -9,7 +9,7 @@ import * as BS from '../js/core/base.js';
 import { BUILDINGS, OBSTACLES, MAP_N, costOf, storeOf, lvCap, timeOf } from '../js/core/buildings.js';
 import { generateRivalBase, baseToRaidLayout, playerBaseLayout, RAID_W, RAID_H } from '../js/core/raid.js';
 import { aiNextActionFor } from '../js/core/ai.js';
-import { DISTRICTS } from '../js/core/data.js';
+import { DISTRICTS, TROOPS, TROOP_ORDER, BOSSES, MISSIONS } from '../js/core/data.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -21,9 +21,18 @@ function autoplay(b, maxSteps = 4000) {
   while (b.status === 'active' && steps++ < maxSteps) { const r = B.applyAction(b, aiNextActionFor(b, b.side) || { type: 'end' }); if (!r.ok) B.applyAction(b, { type: 'end' }); }
   return b;
 }
+function beefArmy(s, { den = 3, yard = 5, lv = 4, boss = true } = {}) {
+  BS.den(s).lv = Math.max(BS.denLevel(s), den);
+  s.extraHousing = 80;
+  s.army = { rat: 6, fox: 4, wolf: 3, snake: 2, badger: 2, croc: yard >= 5 ? 1 : 0, bear: yard >= 7 ? 1 : 0 };
+  for (const t of Object.keys(s.army)) if (!s.army[t]) delete s.army[t];
+  s.troopLv = Object.fromEntries(Object.keys(s.army).map((t) => [t, lv]));
+  if (boss) C.hireBoss(s, 'magrey', true);
+  return s;
+}
 
 test('new game: JSON round-trip, wasteland map with a shack and junk', () => {
-  const s = newGame(T0, 'grey', 123);
+  const s = newGame(T0, 123);
   assert.deepEqual(deserialize(serialize(s), T0), s);
   assert.equal(s.base.buildings.length, 1);
   assert.equal(s.base.buildings[0].t, 'den');
@@ -35,7 +44,7 @@ test('new game: JSON round-trip, wasteland map with a shack and junk', () => {
 });
 
 test('placement, builders, timers, moving', () => {
-  const s = newGame(T0, 'grey', 1);
+  const s = newGame(T0, 1);
   const d = BS.den(s);
   assert.equal(BS.canPlace(s.base, 'stall', d.x, d.y), false);
   const r = place(s, 'stall');
@@ -53,7 +62,7 @@ test('placement, builders, timers, moving', () => {
 });
 
 test('The Den gates buildings, counts and max levels', () => {
-  const s = newGame(T0, 'grey', 1);
+  const s = newGame(T0, 1);
   s.cash = 1e6; s.influence = 1e4;
   assert.equal(BS.unlockInfo(s, 'phone').ok, false);
   assert.equal(BS.unlockInfo(s, 'sniper').ok, false);
@@ -83,7 +92,7 @@ test('every upgrade fits under the best storage you can have at that Den level',
 });
 
 test('production fills tills, collecting respects storage caps', () => {
-  const s = newGame(T0, 'grey', 1);
+  const s = newGame(T0, 1);
   const st = place(s, 'stall').b; BS.finishTimers(s, T0 + 1e7);
   E.tick(s, 10, T0);
   assert.ok(Math.abs(st.till - 6) < 1e-6);
@@ -100,7 +109,7 @@ test('production fills tills, collecting respects storage caps', () => {
 });
 
 test('clearing junk costs cash and time, can drop gold teeth', () => {
-  const s = newGame(T0, 'grey', 4);
+  const s = newGame(T0, 4);
   s.cash = 1e5; BS.den(s).lv = 6; s.base.builders = 5;
   const n0 = s.base.obstacles.length, t0 = s.teeth;
   const ids = s.base.obstacles.filter((o) => o.t === 'ruin3' || o.t === 'wreck').slice(0, 5).map((o) => o.id);
@@ -114,7 +123,7 @@ test('clearing junk costs cash and time, can drop gold teeth', () => {
 });
 
 test('speed-ups cost teeth by time left; extra builders cost teeth', () => {
-  const s = newGame(T0, 'grey', 1);
+  const s = newGame(T0, 1);
   s.cash = 1e6; BS.den(s).lv = 2; s.teeth = 5000;
   const r = BS.startUpgrade(s, BS.den(s).id, T0);
   assert.ok(r.ok);
@@ -129,7 +138,7 @@ test('speed-ups cost teeth by time left; extra builders cost teeth', () => {
 });
 
 test('offline: lieutenants bank, tills fill, builds finish, capped at 8h', () => {
-  const s = newGame(T0, 'grey', 1);
+  const s = newGame(T0, 1);
   s.cash = 1e5;
   const st = place(s, 'stall').b; BS.finishTimers(s, T0 + 1e4);
   s.cash = 1000;
@@ -143,35 +152,55 @@ test('offline: lieutenants bank, tills fill, builds finish, capped at 8h', () =>
   assert.equal(s.cash, BS.caps(s).cash, 'lieutenant banked up to the cap');
 });
 
-test('crew: training needs a Training Yard, housing caps the roster, armoury gates gear', () => {
-  const s = newGame(T0, 'grey', 7);
+test('troops: unlock by Training Yard, queue trains into the army, housing caps it, Armoury upgrades a type', () => {
+  const s = newGame(T0, 7);
   s.cash = 1e6; s.influence = 1e4; s.teeth = 1e5;
-  const m = s.crew[0];
-  assert.equal(C.startTraining(s, m.id, T0).reason, 'yard');
-  assert.equal(C.buyGear(s, 'leather').reason, 'armoury');
-  assert.equal(C.rosterCap(s), BS.housing(s));
-  while (s.crew.length < C.rosterCap(s)) assert.ok(C.recruit(s, 'premium').ok);
-  assert.equal(C.recruit(s, 'premium').reason, 'roster');
+  assert.equal(C.armyUsed(s), 10);
+  assert.equal(C.armyCap(s), 10, 'Den 1 houses 10');
+  assert.ok(C.troopUnlocked(s, 'rat') === false, 'no yard yet, even starting troops are locked for training');
+  // Starting army is already in the barracks; training more needs a yard and free beds.
+  assert.equal(C.enqueue(s, 'rat', T0).reason, 'yard');
   place(s, 'gym'); BS.finishTimers(s, T0 + 1e7);
-  assert.ok(C.startTraining(s, m.id, T0).ok);
-  assert.equal(C.startTraining(s, s.crew[1].id, T0).reason, 'bench');
-  BS.den(s).lv = 2; s.base.builders = 3; assert.ok(place(s, 'armoury').ok); assert.ok(place(s, 'bunk').ok); BS.finishTimers(s, T0 + 1e8);
-  assert.ok(C.buyGear(s, 'leather').ok);
-  assert.ok(C.rosterCap(s) > 3);
-  C.finishTraining(s, T0 + 1e9);
-  assert.ok(m.level >= 2);
+  assert.ok(C.troopUnlocked(s, 'rat') && C.troopUnlocked(s, 'fox'));
+  assert.equal(C.troopUnlocked(s, 'wolf'), false, 'wolves need yard 2');
+  assert.equal(C.enqueue(s, 'wolf', T0).reason, 'locked');
+  assert.equal(C.enqueue(s, 'rat', T0).reason, 'housing', 'starting army already fills Den 1 housing');
+  BS.den(s).lv = 2; s.base.builders = 3;
+  assert.ok(place(s, 'bunk').ok); assert.ok(place(s, 'armoury').ok);
+  BS.finishTimers(s, T0 + 1e8);
+  assert.ok(C.armyCap(s) > 10);
+  const r = C.enqueue(s, 'rat', T0);
+  assert.ok(r.ok && s.queue.length === 1);
+  const paid = 500000; // just to compare cash moved
+  C.finishQueue(s, T0 + 1e9);
+  assert.equal(s.army.rat, 5);
+  assert.equal(s.stats.trains, 1);
+  assert.equal(C.startResearch(s, 'fox', T0).ok, true);
+  assert.equal(C.startResearch(s, 'rat', T0).reason, 'busy');
+  const done = C.finishResearch(s, T0 + 1e9);
+  assert.equal(done.t, 'fox'); assert.equal(s.troopLv.fox, 2);
+  assert.equal(C.hireBoss(s, 'magrey').ok, true);
+  assert.equal(C.hireBoss(s, 'scales').reason, 'den');
 });
 
-test('pity guarantees a legendary within 30 premium recruits', () => {
-  const s = newGame(T0, 'grey', 99);
-  s.teeth = 1e6; s.rosterBonus = 100;
-  let got = false;
-  for (let i = 0; i < 30; i++) if (C.recruit(s, 'premium').member.rarity === 'legendary') got = true;
-  assert.ok(got);
+test('bosses join the line-up and Rally Howl grants AP once', () => {
+  const s = newGame(T0, 11);
+  C.hireBoss(s, 'magrey', true);
+  const line = C.lineup(s, T0);
+  assert.ok(line.some((m) => m.bossId === 'magrey'));
+  assert.ok(M.startMission(s, 0, 0, T0).ok);
+  const u = s.battle.units.find((x) => x.bossId === 'magrey' && x.side === 'player');
+  assert.ok(u);
+  const ap0 = s.battle.units.filter((x) => x.side === 'player' && x.alive && x !== u).map((x) => x.ap);
+  const r = B.applyAction(s.battle, { type: 'skill', uid: u.uid });
+  assert.ok(r.ok);
+  const ap1 = s.battle.units.filter((x) => x.side === 'player' && x.alive && x !== u).map((x) => x.ap);
+  assert.ok(ap1.every((a, i) => a === ap0[i] + 2), 'howl adds 2 AP');
+  assert.equal(B.applyAction(s.battle, { type: 'skill', uid: u.uid }).ok, false, 'once per battle');
 });
 
 test('daily reward streak and jobs', () => {
-  const s = newGame(T0, 'grey', 1);
+  const s = newGame(T0, 1);
   assert.ok(M.claimDaily(s, T0).ok);
   assert.equal(M.claimDaily(s, T0 + 1000).ok, false);
   assert.ok(M.claimDaily(s, T0 + 86400000).ok);
@@ -184,7 +213,7 @@ test('daily reward streak and jobs', () => {
 });
 
 test('turf battle: landscape grid, validated actions, deterministic replay', () => {
-  const s = newGame(T0, 'grey', 5);
+  const s = newGame(T0, 5);
   assert.ok(M.startDistrictBattle(s, 'rail', T0).ok);
   const b = s.battle;
   assert.equal(b.w, B.W); assert.equal(b.h, B.H); assert.ok(b.w > b.h, 'wide board for landscape');
@@ -211,9 +240,8 @@ test('rival bases: valid layouts at every Den level, every structure reachable',
 test('raid: turrets shoot, storages pay out, Den win takes the rest, stars', () => {
   let wins = 0, turretShots = 0, lossLoot = 0;
   for (let k = 0; k < 20; k++) {
-    const s = newGame(T0, 'grey', 300 + k);
-    BS.den(s).lv = 3;
-    for (const m of s.crew) m.level = 6;
+    const s = newGame(T0, 300 + k);
+    beefArmy(s, { den: 3, yard: 5, lv: 6 });
     M.refreshRivals(s, T0, true);
     const r = s.rivals[0];
     assert.ok(M.startRaid(s, r.id).ok);
@@ -239,7 +267,7 @@ test('raid: turrets shoot, storages pay out, Den win takes the rest, stars', () 
 });
 
 test('player base converts to a raid layout (groundwork for defence mode)', () => {
-  const s = newGame(T0, 'grey', 1);
+  const s = newGame(T0, 1);
   rich(s); s.base.builders = 5;
   for (const t of ['strongbox', 'sniper', 'cannon']) place(s, t);
   BS.finishTimers(s, T0 + 1e9);
@@ -253,23 +281,73 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 2);
-  assert.equal(s.crew.length, old.crew.length);
+  assert.equal(s.v, 3);
+  assert.equal(s.crew, undefined);
+  assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
   assert.equal(s.teeth, old.teeth + 100);
   assert.equal(s.base.buildings[0].t, 'den');
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 2 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 3 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
+test('v2 save migrates: base kept, individual crew becomes troops, gang choice dropped', () => {
+  const s2 = newGame(T0, 42);
+  s2.v = 2;
+  s2.gang = 'grey';
+  s2.crew = [
+    { id: 'm1', species: 'wolf', role: 'enforcer', rarity: 'rare', level: 9 },
+    { id: 'm2', species: 'rat', role: 'enforcer', rarity: 'common', level: 5 },
+    { id: 'm3', species: 'fox', role: 'shooter', rarity: 'rare', level: 8 },
+  ];
+  s2.squad = ['m1', 'm2'];
+  s2.inventory = { bat: 2 };
+  s2.training = [];
+  const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
+  const teeth = s2.teeth, cash0 = s2.cash;
+  const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
+  assert.equal(s.v, 3);
+  assert.equal(s.gang, undefined);
+  assert.equal(s.crew, undefined);
+  assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
+  assert.ok(s.troopLv.wolf >= 2, 'level 9 member becomes troop lv 3 max 3, or 2+');
+  assert.equal(s.base.buildings.find((b) => b.id === stall.id).t, 'stall');
+  assert.equal(s.teeth, teeth + 50);
+  assert.ok(s.cash >= cash0, 'spare gear sold for cash');
+});
+
+test('missions: locked by Den and previous stage, first clear pays more, progress saves', () => {
+  const s = newGame(T0, 8);
+  assert.equal(M.missionStatus(s, 1, 0).locked, true, 'Iron Claw needs Den 2');
+  assert.ok(!M.missionStatus(s, 0, 0).locked);
+  assert.equal(M.missionStatus(s, 0, 1).locked, true, 'stage 2 waits on stage 1');
+  const first = M.missionReward(0, 0, false);
+  const rematch = M.missionReward(0, 0, true);
+  assert.ok(first.teeth > 0 && rematch.teeth === 0);
+  assert.ok(first.cash > rematch.cash);
+  assert.ok(M.startMission(s, 0, 0, T0).ok);
+  autoplay(s.battle);
+  const out = M.resolveBattle(s, T0);
+  if (out.win) {
+    assert.equal(s.missions.grey, 1);
+    assert.ok(out.missionFirst);
+    assert.ok(!M.missionStatus(s, 0, 1).locked);
+  } else {
+    assert.equal(s.missions.grey || 0, 0);
+  }
+  assert.equal(s.battle, null);
+});
+
 test('mock purchases: builder pack, VIP slot, one-time offers', () => {
-  const s = newGame(T0, 'grey', 3);
+  const s = newGame(T0, 3);
   assert.ok(M.mockPurchase(s, 'offer', 'builder', T0).ok);
   assert.equal(s.base.builders, 2);
   assert.ok(M.mockPurchase(s, 'offer', 'starter', T0).ok);
+  assert.ok(s.bosses.magrey);
+  assert.equal(s.army.wolf, 3);
   assert.equal(M.mockPurchase(s, 'offer', 'starter', T0).ok, false);
   M.mockPurchase(s, 'offer', 'vip', T0);
   assert.ok(E.isVip(s, T0 + 1000));
@@ -282,8 +360,8 @@ test('balance (info): AI-vs-AI turf and raid win rates', () => {
     let wins = 0; const N = 40;
     const e = M.districtEnemy(d);
     for (let i = 0; i < N; i++) {
-      const s = newGame(T0, 'grey', 1000 + i);
-      if (d.tier > 1) { s.crew = M.makeEnemyCrew(500 + i, 'grey', 4, e.level, d.tier - 1).map((m, k) => ({ ...m, id: 'x' + k })); s.squad = s.crew.map((m) => m.id); }
+      const s = newGame(T0, 1000 + i);
+      if (d.tier > 1) beefArmy(s, { den: Math.max(2, d.tier), yard: 7, lv: Math.max(3, e.level - 2) });
       for (const p of DISTRICTS.filter((x) => x.tier < d.tier)) s.districts[p.id].owner = 'player';
       M.startDistrictBattle(s, d.id, T0); autoplay(s.battle);
       if (s.battle.result === 'win') wins++;
@@ -293,9 +371,8 @@ test('balance (info): AI-vs-AI turf and raid win rates', () => {
   for (let L = 1; L <= 6; L++) {
     let wins = 0, stars = 0; const N = 20;
     for (let i = 0; i < N; i++) {
-      const s = newGame(T0, 'grey', 2000 + i);
-      BS.den(s).lv = L;
-      s.crew = M.makeEnemyCrew(700 + i, 'grey', 4, 2 + L * 2, Math.min(5, L - 1)).map((m, k) => ({ ...m, id: 'x' + k })); s.squad = s.crew.map((m) => m.id);
+      const s = newGame(T0, 2000 + i);
+      beefArmy(s, { den: L, yard: Math.max(1, L + 1), lv: 2 + L });
       M.refreshRivals(s, T0, true); M.startRaid(s, s.rivals[1].id); autoplay(s.battle);
       if (s.battle.result === 'win') wins++; stars += B.raidStars(s.battle).stars;
     }

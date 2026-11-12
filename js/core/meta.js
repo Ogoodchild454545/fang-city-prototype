@@ -272,6 +272,7 @@ export function mockPurchase(state, kind, id, now) {
     const g = o.grant;
     if (g.teeth) state.teeth += g.teeth;
     if (g.boss) hireBoss(state, g.boss, true);
+    if (g.housing) state.extraHousing = (state.extraHousing || 0) + g.housing;
     if (g.troops) for (const [t, n] of Object.entries(g.troops)) for (let i = 0; i < n; i++) if (armyUsed(state) + TROOPS[t].space <= armyCap(state)) state.army[t] = (state.army[t] || 0) + 1;
     if (g.vip) state.vipUntil = Math.max(now, state.vipUntil) + g.vip * 86400000;
     if (g.pass) state.pass = true;

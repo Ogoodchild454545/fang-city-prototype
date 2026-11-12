@@ -178,7 +178,7 @@ export const SHOP = {
     { id: 't6', teeth: 14000, price: '£99.99', tag: 'Best value' },
   ],
   offers: [
-    { id: 'starter', name: 'Starter Crate', price: '£2.99', once: true, desc: '500 Gold Teeth, Ma Grey unlocked early, and your army topped up with Wolf Bruisers. One per player.', grant: { teeth: 500, boss: 'magrey', troops: { wolf: 3 } } },
+    { id: 'starter', name: 'Starter Crate', price: '£2.99', once: true, desc: '500 Gold Teeth, Ma Grey unlocked early, and your army topped up with Wolf Bruisers. One per player.', grant: { teeth: 500, boss: 'magrey', troops: { wolf: 3 }, housing: 10 } },
     { id: 'builder', name: 'Second Builder', price: '£3.99', once: true, desc: 'A second builder for your base: two upgrades or clear-ups at once. Permanent. (Also buyable for 250 Gold Teeth.)', grant: { builder: 1 } },
     { id: 'vip',     name: 'Made Member (monthly)', price: '£4.99 / month', desc: '50 Gold Teeth daily, offline earnings up to 12h, all buildings auto-collect, troops train 25% faster, gold name badge.', grant: { vip: 30 } },
     { id: 'pass',    name: 'Street Pass (season)', price: '£7.99', desc: 'Premium reward track for this 30-day season: exclusive Neon Rain skin, 1,000+ Gold Teeth, training boosts.', grant: { pass: true } },
