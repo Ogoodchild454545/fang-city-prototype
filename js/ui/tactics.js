@@ -8,6 +8,7 @@ import { PERKS, rankName, xpToNext } from '../core/progress.js';
 import * as Audio from './audio.js';
 import * as Dock from './dockart.js';
 import { chooseAction, opponentLabel } from '../core/pvp.js';
+import * as Actors from './actors.js';
 
 const TW = Dock.TW, TH = Dock.TH;
 const portraits = {};
@@ -37,7 +38,7 @@ function fitCam(b, cv) {
   const us = (b.units || []).filter((un) => un.hp > 0);
   const pts = us.length ? us : [{ x: Math.floor((b.map.w || 12) / 2), y: Math.floor((b.map.h || 10) / 2) }];
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  const pad = 3;
+  const pad = 2;
   for (const un of pts) {
     for (const [dx, dy] of [[-pad, -pad], [pad, pad], [-pad, pad], [pad, -pad], [0, 0]]) {
       const p = toWorld(un.x + dx, un.y + dy);
@@ -45,11 +46,14 @@ function fitCam(b, cv) {
       minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
     }
   }
-  const bw = Math.max(TW * 4, maxX - minX);
-  const bh = Math.max(TH * 6, maxY - minY);
-  const z = Math.max(0.7, Math.min(1.4, Math.min(cv.width / (bw + TW), cv.height / (bh + TH * 3))));
+  let bw = Math.max(TW * 4, maxX - minX);
+  let bh = Math.max(TH * 5, maxY - minY);
+  // Don't zoom out far enough that operators become specks on empty concrete.
+  bw = Math.min(bw, TW * 11);
+  bh = Math.min(bh, TH * 12);
+  const z = Math.max(cv.width / (13 * TW), Math.min(cv.width / (7 * TW), Math.min(cv.width / (bw + TW), cv.height / (bh + TH * 3))));
   const midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
-  return { x: cv.width / 2 - midX * z, y: cv.height * 0.52 - midY * z, z };
+  return { x: cv.width / 2 - midX * z, y: cv.height * 0.58 - midY * z, z };
 }
 
 function pvpTimerOn(b) {
@@ -226,49 +230,66 @@ function draw(ctx) {
     const un = sp.un;
     const p = toWorld(sp.x, sp.y);
     const sx = p.x * z, sy = p.y * z;
-    const bob = un.hp > 0 ? Math.sin(now / 380 + un.uid.charCodeAt(1)) * 1.6 * z : 0;
-    const r = 16 * z;
     const dead = un.hp <= 0;
-    g.save();
-    if (dead) { g.globalAlpha = 0.45; g.translate(sx, sy + 6 * z); g.rotate(-0.4); g.translate(-sx, -sy); }
-    g.fillStyle = 'rgba(0,0,0,0.4)';
-    g.beginPath(); g.ellipse(sx, sy + 10 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.fill();
-    const def = defOf(un.hero);
-    const im = preload(def.portrait);
-    const cx = sx, cy = sy - 10 * z + bob;
-    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
-    g.fillStyle = un.side === 'player' ? '#1d2a22' : '#2a1614';
-    g.fill();
-    g.save();
-    g.beginPath(); g.arc(cx, cy, r - 1, 0, Math.PI * 2); g.clip();
-    if (im && im.complete && im.naturalWidth) g.drawImage(im, cx - r, cy - r, r * 2, r * 2);
-    else { g.fillStyle = '#888'; g.fill(); }
-    if (u.flash && u.flash.uid === un.uid && now < u.flash.until) {
-      g.fillStyle = 'rgba(255,255,255,0.65)';
-      g.fillRect(cx - r, cy - r, r * 2, r * 2);
-    }
-    g.restore();
     const acting = actor && actor.uid === un.uid;
-    g.lineWidth = ((sel && sel.uid === un.uid) || acting ? 3 : 2) * z;
-    g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? '#8fd18f' : '#e07a6a';
-    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    const def = defOf(un.hero);
+    Actors.tickAnim(un, now, !!(u.hitstop && now < u.hitstop));
+    let cx = sx, cy = sy - 10 * z, r = 16 * z;
+    g.save();
+    if (Actors.hasActor(un.hero)) {
+      if (u.flash && u.flash.uid === un.uid && now < u.flash.until) {
+        const a = Actors.ensureAnim(un); a.flash = Math.max(a.flash, 0.7);
+      }
+      const pose = Actors.drawActor(g, un, sx, sy, z, now);
+      if (pose) { cx = pose.headX; cy = pose.headY; r = 12 * z; }
+    } else {
+      const bob = un.hp > 0 ? Math.sin(now / 380 + un.uid.charCodeAt(1)) * 1.6 * z : 0;
+      if (dead) { g.globalAlpha = 0.45; g.translate(sx, sy + 6 * z); g.rotate(-0.4); g.translate(-sx, -sy); }
+      g.fillStyle = 'rgba(0,0,0,0.4)';
+      g.beginPath(); g.ellipse(sx, sy + 10 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.fill();
+      const im = preload(def.portrait);
+      cx = sx; cy = sy - 10 * z + bob;
+      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.fillStyle = un.side === 'player' ? '#1d2a22' : '#2a1614';
+      g.fill();
+      g.save();
+      g.beginPath(); g.arc(cx, cy, r - 1, 0, Math.PI * 2); g.clip();
+      if (im && im.complete && im.naturalWidth) g.drawImage(im, cx - r, cy - r, r * 2, r * 2);
+      else { g.fillStyle = '#888'; g.fill(); }
+      if (u.flash && u.flash.uid === un.uid && now < u.flash.until) {
+        g.fillStyle = 'rgba(255,255,255,0.65)';
+        g.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+      g.restore();
+      g.lineWidth = ((sel && sel.uid === un.uid) || acting ? 3 : 2) * z;
+      g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? '#8fd18f' : '#e07a6a';
+      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    }
+    // rings for actors (feet/head hint of who is up)
+    if (Actors.hasActor(un.hero) && !dead) {
+      g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? 'rgba(143,209,143,0.85)' : 'rgba(224,122,106,0.85)';
+      g.lineWidth = (acting ? 2.4 : 1.4) * z;
+      g.beginPath(); g.ellipse(sx, sy + 3 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.stroke();
+    }
     const bw = 22 * z, bh = 3.5 * z;
+    const barY = Actors.hasActor(un.hero) ? cy - 8 * z : cy + r + 2 * z;
     g.fillStyle = 'rgba(0,0,0,0.65)';
-    g.fillRect(cx - bw / 2, cy + r + 2 * z, bw, bh);
+    g.fillRect(cx - bw / 2, barY, bw, bh);
     g.fillStyle = un.hp / un.maxHp > 0.5 ? '#5dba6a' : un.hp / un.maxHp > 0.25 ? '#e0c15a' : '#d4544a';
-    g.fillRect(cx - bw / 2, cy + r + 2 * z, bw * Math.max(0, un.hp / un.maxHp), bh);
+    g.fillRect(cx - bw / 2, barY, bw * Math.max(0, un.hp / un.maxHp), bh);
     if (!dead && un.side === 'player' && b.side === 'player' && acting) {
       g.fillStyle = '#d8e8ff';
       g.font = `${Math.round(8 * z)}px sans-serif`;
       g.textAlign = 'center';
-      g.fillText('●'.repeat(un.ap) + '○'.repeat(Math.max(0, un.maxAp - un.ap)), cx, cy + r + 12 * z);
+      g.fillText('●'.repeat(un.ap) + '○'.repeat(Math.max(0, un.maxAp - un.ap)), cx, barY + 12 * z);
     }
     if (!dead) {
       g.font = `bold ${Math.round(7.5 * z)}px Inter, sans-serif`;
       g.textAlign = 'left';
       const ammoTxt = (un.ammo || 0) > 0 ? String(un.ammo) : '×';
       const aw = g.measureText(ammoTxt).width + 6 * z;
-      const ax = cx + r - 2 * z, ay = cy + r - 2 * z;
+      const ax = cx + (Actors.hasActor(un.hero) ? 10 * z : r - 2 * z);
+      const ay = barY + 10 * z;
       g.fillStyle = (un.ammo || 0) > 0 ? 'rgba(20,24,16,0.85)' : 'rgba(60,18,14,0.9)';
       g.beginPath(); g.roundRect(ax, ay - 8 * z, aw, 10 * z, 2 * z); g.fill();
       g.fillStyle = (un.ammo || 0) > 0 ? '#f3e7c9' : '#e07a6a';
@@ -278,7 +299,7 @@ function draw(ctx) {
       g.fillStyle = '#e0c15a';
       g.font = `bold ${Math.round(9 * z)}px sans-serif`;
       g.textAlign = 'center';
-      g.fillText('OW', cx, cy - r - 4 * z);
+      g.fillText('OW', cx, barY - 6 * z);
     }
     if (sel && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
       const prev = T.previewShot(b, sel, un, u.mode === 'aimed' ? 'aimed' : u.mode === 'melee' || u.mode === 'knife' || u.mode === 'roll' ? u.mode : u.mode === 'venom' ? 'venom' : u.mode === 'suppress' ? 'suppress' : 'shot');
@@ -287,30 +308,39 @@ function draw(ctx) {
         g.font = `bold ${Math.round(11 * z)}px Oswald, sans-serif`;
         g.textAlign = 'center';
         const tw = g.measureText(label).width + 10 * z;
+        const ly = barY - 16 * z;
         g.fillStyle = 'rgba(10,8,8,0.82)';
-        g.beginPath(); g.roundRect(cx - tw / 2, cy - r - 20 * z, tw, 14 * z, 4 * z); g.fill();
+        g.beginPath(); g.roundRect(cx - tw / 2, ly - 11 * z, tw, 14 * z, 4 * z); g.fill();
         g.fillStyle = chanceColor(prev.chance);
-        g.fillText(label, cx, cy - r - 9 * z);
+        g.fillText(label, cx, ly);
         const cov = T.coverLabel(prev.cover) + (prev.flanked ? ' · Flank' : '');
         g.font = `${Math.round(7.5 * z)}px Inter, sans-serif`;
         g.fillStyle = '#f3e7c9';
-        g.fillText(cov, cx, cy - r - 22 * z);
+        g.fillText(cov, cx, ly - 12 * z);
       }
     }
-    // speech bubble
+    // speech bubble with pop and a tail
     const bub = (u.bubbles || []).find((bb) => bb.uid === un.uid && now < bb.until);
     if (bub) {
-      const k = Math.min(1, (bub.until - now) / 400);
-      g.globalAlpha = k;
+      const age = now - bub.t;
+      const enter = Math.min(1, age / 160);
+      const pop = enter < 1 ? 1.15 * (1 - Math.pow(1 - enter, 3)) : 1;
+      const fade = Math.min(1, (bub.until - now) / 280);
+      g.save();
+      g.translate(cx, cy - r - 16 * z);
+      g.scale(pop, pop);
+      g.globalAlpha = fade;
       g.font = `${Math.round(8.5 * z)}px Inter, sans-serif`;
       g.textAlign = 'center';
-      const tw = Math.min(120 * z, g.measureText(bub.text).width + 10 * z);
-      const bx = cx, by = cy - r - 28 * z;
-      g.fillStyle = 'rgba(14,12,10,0.9)';
-      g.beginPath(); g.roundRect(bx - tw / 2, by - 12 * z, tw, 14 * z, 4 * z); g.fill();
+      const tw = Math.min(130 * z, g.measureText(bub.text).width + 12 * z);
+      const th = 15 * z;
+      g.fillStyle = 'rgba(14,12,10,0.92)';
+      g.beginPath(); g.roundRect(-tw / 2, -th, tw, th, 4 * z); g.fill();
+      g.beginPath();
+      g.moveTo(-3 * z, 0); g.lineTo(3 * z, 0); g.lineTo(0, 5 * z); g.closePath(); g.fill();
       g.fillStyle = '#f3e7c9';
-      g.fillText(bub.text, bx, by - 2 * z);
-      g.globalAlpha = 1;
+      g.fillText(bub.text, 0, -4 * z);
+      g.restore();
     }
     g.restore();
   }
@@ -340,15 +370,25 @@ function draw(ctx) {
     g.restore();
   }
 
-  u.floats = u.floats.filter((f) => now - f.t < 800);
+  u.floats = u.floats.filter((f) => now - f.t < 900);
   for (const f of u.floats) {
-    const k = (now - f.t) / 800;
-    g.globalAlpha = 1 - k;
-    g.font = `bold ${Math.round(14 * z)}px Oswald, sans-serif`;
+    const age = now - f.t;
+    const k = age / 900;
+    const pop = age < 100 ? 0.5 + 0.9 * (age / 100) : age < 180 ? 1.4 - 0.4 * ((age - 100) / 80) : 1;
+    g.save();
+    g.globalAlpha = 1 - k * k;
+    const fy = f.y - k * 28 * z;
+    g.translate(f.x, fy);
+    g.scale(pop, pop);
+    g.font = `bold ${Math.round(15 * z)}px Oswald, sans-serif`;
     g.textAlign = 'center';
-    g.fillStyle = f.heal ? '#8fd18f' : f.miss ? '#bbb' : '#ffd0c8';
-    g.fillText(f.text, f.x, f.y - k * 24 * z);
-    g.globalAlpha = 1;
+    g.lineJoin = 'round';
+    g.lineWidth = 3 * z;
+    g.strokeStyle = 'rgba(10,8,8,0.8)';
+    g.fillStyle = f.heal ? '#8fd18f' : f.miss ? '#d0d0d0' : (f.crit ? '#ffe080' : '#ffd0c8');
+    g.strokeText(f.text, 0, 0);
+    g.fillText(f.text, 0, 0);
+    g.restore();
   }
   g.restore();
 
@@ -367,8 +407,10 @@ function loop(ctx) {
   raf = 0;
   const u = ui(ctx);
   const b = ctx.state.tactics;
-  if (u.pathAnim) {
-    const a = u.pathAnim, now = performance.now();
+  const now = performance.now();
+  const frozen = u.hitstop && now < u.hitstop;
+  if (u.pathAnim && !frozen) {
+    const a = u.pathAnim;
     const t = Math.min(1, (now - a.t0) / a.dur);
     const pts = [a.from, ...a.path];
     const seg = Math.min(pts.length - 1, Math.max(0, (pts.length - 1) * t));
@@ -483,9 +525,16 @@ async function playEvents(ctx, events) {
       const start = ev.from || ev.path[0];
       Audio.play('move');
       say(u, b, ev.uid, 'move');
+      const mover = b.units.find((x) => x.uid === ev.uid);
+      if (mover && ev.path.length) {
+        const dest = ev.path[ev.path.length - 1];
+        Actors.faceToward(mover, start.x, start.y, dest.x, dest.y);
+        Actors.playClip(mover, 'walk');
+      }
       u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * 140), x: start.x, y: start.y };
       await wait(u.pathAnim.dur);
       u.pathAnim = null;
+      if (mover) Actors.playClip(mover, 'idle');
     }
     if (ev.typ === 'shot' || ev.typ === 'overwatch' || ev.mode) {
       const att = b.units.find((x) => x.uid === ev.uid);
@@ -500,17 +549,22 @@ async function playEvents(ctx, events) {
           mx: (a.x + (t.x - a.x) * 0.15) * zz,
           my: (a.y + (t.y - a.y) * 0.15 - 10) * zz,
         };
+        Actors.faceToward(att, att.x, att.y, def.x, def.y);
+        Actors.playClip(att, ev.mode === 'melee' || ev.mode === 'knife' || ev.mode === 'lunge' || ev.mode === 'roll' ? 'melee' : 'shoot');
         Audio.play('shoot');
         say(u, b, ev.uid, 'shoot');
         await wait(120);
         if (ev.hit) {
-          u.shake = 7; Audio.play('hit');
-          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 18) * zz, text: ev.crit ? `${ev.dmg}!` : `${ev.dmg}`, heal: 0 });
+          u.shake = ev.crit ? 11 : 7; Audio.play('hit');
+          u.hitstop = performance.now() + (ev.crit ? 120 : 80);
+          Actors.playClip(def, ev.ko ? 'ko' : 'hit');
+          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 22) * zz, text: ev.crit ? `${ev.dmg}!` : `${ev.dmg}`, heal: 0, crit: ev.crit });
           if (ev.ko) say(u, b, ev.target, 'ko');
+          await wait(Math.max(0, u.hitstop - performance.now() + 40));
         } else {
-          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 18) * zz, text: 'Miss', miss: 1 });
+          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 22) * zz, text: 'Miss', miss: 1 });
         }
-        await wait(280);
+        await wait(240);
       }
     }
     if (ev.typ === 'heal') {
@@ -528,6 +582,9 @@ async function playEvents(ctx, events) {
         const t = toWorld(def.x, def.y);
         u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1 });
         say(u, b, ev.uid, 'revive');
+        Actors.playClip(def, 'revive');
+        const medic = b.units.find((x) => x.uid === ev.uid);
+        if (medic) Actors.playClip(medic, 'ability');
         Audio.play('collect');
         await wait(280);
       }
@@ -545,7 +602,10 @@ async function playEvents(ctx, events) {
       if (un) {
         const t = toWorld(un.x, un.y);
         u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `${ev.dmg}`, heal: 0 });
+        Actors.playClip(un, un.hp <= 0 ? 'ko' : 'hit');
         if (un.hp <= 0) say(u, b, ev.uid, 'ko');
+        u.hitstop = performance.now() + 70;
+        u.shake = Math.max(u.shake, 10);
       }
     }
     if (ev.typ === 'overwatch' && !ev.target) Audio.play('overwatch');
@@ -719,7 +779,8 @@ export function mount(ctx, el) {
   const b = ctx.state.tactics;
   const u = ui(ctx);
   if (b) {
-    b.units.forEach((un) => preload(defOf(un.hero).portrait));
+    Actors.preloadActors();
+    b.units.forEach((un) => { preload(defOf(un.hero).portrait); Actors.ensureAnim(un); });
     const act = T.actingUnit(b);
     if (act && act.side === 'player') u.sel = act.uid;
   }
