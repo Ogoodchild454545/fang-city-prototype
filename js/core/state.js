@@ -55,7 +55,7 @@ function convertCrew(s, crew = [], inventory = {}) {
   return s;
 }
 
-// v1 (racket list) -> v3. Keeps turf, Gold Teeth, purchases and progress; starts on the wasteland.
+// v1 (racket list) -> v3. Keeps turf, Ice, purchases and progress; starts on the wasteland.
 export function migrateV1(old, now) {
   if (!old || old.v !== 1) return null;
   const s = newGame(now, old.rng || newSeed());

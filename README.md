@@ -20,8 +20,8 @@ factions you fight in Missions.
   bushes, rubble, scrap, tyres, car wrecks and puddles, with just a shack (The Den, level 1).
 - **The Den** (HQ) level gates which buildings exist, how many of each, and their max level (2 x Den level).
 - Producers fill a till (collect bubble); **Strongboxes** cap cash and **Ledger Offices** cap Rep.
-- **Builders** limit concurrent builds, upgrades and clear-ups (start with 1; 2nd costs 250 Gold Teeth or the £3.99 mock pack).
-- Clearing junk costs cash and time and sometimes drops Gold Teeth. The wasteland slowly grows back.
+- **Builders** limit concurrent builds, upgrades and clear-ups (start with 1; 2nd costs 250 Ice or the £3.99 mock pack).
+- Clearing junk costs cash and time and sometimes drops Ice. The wasteland slowly grows back.
 - **Training Yard** trains troop types over time (a queue, sped up by yard level, a Drill Sergeant or VIP);
   **Bunkhouses** + the Den give housing (space cap); **Armoury** upgrades a whole troop type at once;
   **Family Club** is a placeholder for the clan system.

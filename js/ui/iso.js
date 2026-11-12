@@ -24,10 +24,12 @@ let loaded = 0;
 export function preload(onAll) {
   const list = [...new Set(ALL_SPRITES)];
   const tex = ['ground', 'grass', 'asphalt'];
-  let need = list.length + tex.length;
+  const icons = { icon_cash: 'assets/icons/cash.png', icon_influence: 'assets/icons/rep.png' };
+  let need = list.length + tex.length + Object.keys(icons).length;
   const done = () => { loaded++; if (--need === 0) onAll?.(); };
   for (const n of list) { if (imgs[n]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = `assets/base/${n}.webp`; imgs[n] = im; }
   for (const n of tex) { if (imgs[n]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = `assets/base/${n}.jpg`; imgs[n] = im; }
+  for (const [k, src] of Object.entries(icons)) { if (imgs[k]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = src; imgs[k] = im; }
 }
 export const spriteImg = (n) => imgs[n];
 
@@ -348,16 +350,22 @@ export class BaseView {
         const bob = Math.sin(now / 300 + it.x) * 3;
         const r = Math.round(10 + 5 * Math.min(1, z)), bx = sTop.x, by = Math.max(18, sTop.y + 4 + bob);
         animating = true;
+        const icon = imgs[bub.res === 'cash' ? 'icon_cash' : 'icon_influence'];
+        const s = Math.max(28, Math.round(r * 2.6));
         g.save();
-        g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 6;
-        g.fillStyle = bub.full ? '#7a1d18' : '#f3e7c9';
-        g.beginPath(); g.arc(bx, by, r, 0, Math.PI * 2); g.fill();
+        g.shadowColor = 'rgba(0,0,0,0.65)'; g.shadowBlur = 8; g.shadowOffsetY = 2;
+        g.beginPath(); g.arc(bx, by, s / 2 + 2, 0, Math.PI * 2);
+        g.fillStyle = bub.full ? 'rgba(80,16,12,0.92)' : 'rgba(10,8,8,0.78)';
+        g.fill();
         g.restore();
-        g.strokeStyle = bub.res === 'cash' ? '#e0a526' : '#ff8a7a'; g.lineWidth = 2.5; g.beginPath(); g.arc(bx, by, r, 0, Math.PI * 2); g.stroke();
-        g.font = `${Math.round(r * 1.05)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(bub.res === 'cash' ? '💰' : '🐾', bx, by + 1);
-        g.textBaseline = 'alphabetic';
-        this.hitBubbles.push({ id: it.id, x: bx, y: by, r: Math.max(r, 15) });
+        g.strokeStyle = bub.res === 'cash' ? '#e0a526' : '#e0a526';
+        if (bub.res !== 'cash') g.strokeStyle = '#d4a03a';
+        g.lineWidth = 2;
+        g.beginPath(); g.arc(bx, by, s / 2 + 2, 0, Math.PI * 2); g.stroke();
+        if (icon && icon.complete && icon.naturalWidth) {
+          g.drawImage(icon, bx - s / 2, by - s / 2, s, s);
+        }
+        this.hitBubbles.push({ id: it.id, x: bx, y: by, r: Math.max(s / 2 + 6, 18) });
       }
     }
     this.anim = animating ? 1 : 0;

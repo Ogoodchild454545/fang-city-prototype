@@ -6,12 +6,12 @@ import * as M from '../core/meta.js';
 import * as C from '../core/crew.js';
 import { TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER } from '../core/data.js';
 import { BaseView, preload, tileToWorld } from './iso.js';
-import { fmt, money, dur, esc, rewardText, resName } from './fmt.js';
+import { fmt, money, dur, esc, rewardText, resName, ico } from './fmt.js';
 
 let view = null;
 const ui = (ctx) => (ctx.sub.base ||= { sel: null, place: null, cam: null, cat: 'money' });
-const resIcon = (r) => (r === 'cash' ? '$' : r === 'influence' ? '🐾' : '🦷');
-const price = (res, v) => (res === 'cash' ? money(v) : `🐾 ${fmt(v)}`);
+const resIcon = (r) => ico(r);
+const price = (res, v) => (res === 'cash' ? money(v) : `${ico(res)} ${fmt(v)}`);
 const afford = (s, res, v) => (s[res] || 0) >= v;
 
 export function render(ctx) {
@@ -94,7 +94,7 @@ function onTap(ctx, hit) {
   const u = ui(ctx), s = ctx.state;
   if (hit.kind === 'bubble') {
     const r = BS.collect(s, hit.id);
-    if (r.ok) ctx.floaty(`+${r.res === 'cash' ? money(r.amount) : '🐾 ' + fmt(r.amount)}`, hit.sx + cvLeft(), hit.sy + cvTop());
+    if (r.ok) ctx.floaty(`+${r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'}`, hit.sx + cvLeft(), hit.sy + cvTop());
     else if (r.full) ctx.toast(`Storage full. Build or upgrade a ${r.res === 'cash' ? 'Strongbox' : 'Ledger Office'}.`);
     ctx.save(); ctx.live(); view.dirty = true; panel(ctx);
     return;
@@ -143,9 +143,9 @@ function obstaclePanel(ctx, o, now) {
   if (o.clr) {
     const c = BS.speedUpCost(o, now);
     return `<div class="selbar"><div class="col grow"><b class="h">${d.name}</b><span class="tiny dim">Clearing · <span data-live="jobleft">${dur((o.clr.endsAt - now) / 1000)}</span></span></div>
-      <button class="act2 gold" data-act="speed" data-id="${o.id}"><span class="i">⚡</span>Finish<span class="c" data-live="speedc">🦷 ${c}</span></button></div>`;
+      <button class="act2 gold" data-act="speed" data-id="${o.id}"><span class="i">⚡</span>Finish<span class="c" data-live="speedc">${ico('teeth')} ${c}</span></button></div>`;
   }
-  return `<div class="selbar"><div class="col grow"><b class="h">${d.name}</b><span class="tiny dim">Clear it to free ${d.size * d.size} tile${d.size > 1 ? 's' : ''}. Takes ${dur(d.time)}, needs a builder. Sometimes hides Gold Teeth 🦷.</span></div>
+  return `<div class="selbar"><div class="col grow"><b class="h">${d.name}</b><span class="tiny dim">Clear it to free ${d.size * d.size} tile${d.size > 1 ? 's' : ''}. Takes ${dur(d.time)}, needs a builder. Sometimes hides Ice.</span></div>
     <button class="act2 ${afford(s, 'cash', d.cost) && BS.buildersFree(s) > 0 ? 'red' : 'off'}" data-act="clearO" data-id="${o.id}"><span class="i">🪓</span>Clear<span class="c">${money(d.cost)}</span></button></div>`;
 }
 
@@ -154,11 +154,11 @@ function statLine(ctx, b) {
   const lv = Math.max(1, b.lv);
   if (d.produce) {
     const r = BS.rate(s, b, now);
-    const per = d.produce.res === 'cash' ? `${money(r)}/s` : `🐾 ${fmt(r * 3600)}/h`;
-    return `${per} · holds ${d.produce.res === 'cash' ? money(BS.tillCap(s, b, now)) : '🐾 ' + fmt(BS.tillCap(s, b, now))}${BS.isAutoCollect(s, b, now) ? ' · <span class="green">auto-collect</span>' : ''}`;
+    const per = d.produce.res === 'cash' ? `${money(r)}/s` : `${ico('influence')} ${fmt(r * 3600)}/h`;
+    return `${per} · holds ${d.produce.res === 'cash' ? money(BS.tillCap(s, b, now)) : ico('influence') + ' ' + fmt(BS.tillCap(s, b, now))}${BS.isAutoCollect(s, b, now) ? ' · <span class="green">auto-collect</span>' : ''}`;
   }
-  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + 🐾 ${fmt(storeOf('den', lv, 'influence'))} Rep · houses ${housingOf('den', lv)} troop space · max building level ${lvCap('stall', lv)}`;
-  if (d.store) return `Stores ${d.store.cash ? money(storeOf(b.t, lv, 'cash')) : '🐾 ' + fmt(storeOf(b.t, lv, 'influence')) + ' Rep'}`;
+  if (b.t === 'den') return `Stores ${money(storeOf('den', lv, 'cash'))} + ${ico('influence')} ${fmt(storeOf('den', lv, 'influence'))} Rep · houses ${housingOf('den', lv)} troop space · max building level ${lvCap('stall', lv)}`;
+  if (d.store) return `Stores ${d.store.cash ? money(storeOf(b.t, lv, 'cash')) : ico('influence') + ' ' + fmt(storeOf(b.t, lv, 'influence')) + ' Rep'}`;
   if (d.housing) return `Houses ${housingOf(b.t, lv)} troop space · army ${C.armyUsed(s)}/${C.armyCap(s)}`;
   if (d.turret) { const t = turretOf(b.t, lv); return `Turret in raids: ${t.dmg} dmg · range ${t.range} · ${t.hp} HP`; }
   if (b.t === 'gym') { const nx = TROOP_ORDER.find((t) => TROOPS[t].yard > lv); return `Trains ${TROOP_ORDER.filter((t) => TROOPS[t].yard <= lv).length} troop types · ${Math.round(5 * (lv - 1))}% faster${nx ? ` · lv ${TROOPS[nx].yard} unlocks ${TROOPS[nx].name}` : ''}`; }
@@ -172,13 +172,13 @@ function buildingPanel(ctx, b, now) {
   const btns = [];
   if (b.job) {
     const c = BS.speedUpCost(b, now);
-    btns.push(`<button class="act2 gold" data-act="speed" data-id="${b.id}"><span class="i">⚡</span>Finish<span class="c" data-live="speedc">🦷 ${c}</span></button>`);
+    btns.push(`<button class="act2 gold" data-act="speed" data-id="${b.id}"><span class="i">⚡</span>Finish<span class="c" data-live="speedc">${ico('teeth')} ${c}</span></button>`);
   } else {
     const up = BS.upgradeInfo(s, b);
     if (up.ok) btns.push(`<button class="act2 ${afford(s, up.res, up.cost) && (up.time === 0 || BS.buildersFree(s) > 0) ? 'red' : 'off'}" data-act="upgrade" data-id="${b.id}"><span class="i">⬆</span>Upgrade<span class="c">${price(up.res, up.cost)}</span></button>`);
     else if (!up.max) btns.push(`<button class="act2 off" data-act="upgradeWhy" data-id="${b.id}"><span class="i">🔒</span>Upgrade<span class="c">Den ${Math.ceil((b.lv + 1) / 2)}</span></button>`);
   }
-  if (d.produce && b.lv > 0 && b.till >= 1) btns.push(`<button class="act2" data-act="collectB" data-id="${b.id}"><span class="i">${d.produce.res === 'cash' ? '💰' : '🐾'}</span>Collect<span class="c" data-live="till">${d.produce.res === 'cash' ? money(b.till) : fmt(b.till)}</span></button>`);
+  if (d.produce && b.lv > 0 && b.till >= 1) btns.push(`<button class="act2" data-act="collectB" data-id="${b.id}"><span class="i">${ico(d.produce.res)}</span>Collect<span class="c" data-live="till">${d.produce.res === 'cash' ? money(b.till) : fmt(b.till)}</span></button>`);
   if (d.produce && b.lv > 0 && !b.lt) btns.push(`<button class="act2" data-act="hireLt" data-id="${b.id}"><span class="i">🕴</span>Lieutenant<span class="c">${money(BS.lieutenantCost(b))}</span></button>`);
   if (b.t === 'gym' || b.t === 'bunk') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="army"><span class="i">🐾</span>Crew<span class="c">train</span></button>`);
   if (b.t === 'armoury') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="upgrades"><span class="i">🔫</span>Troops<span class="c">upgrade</span></button>`);
@@ -203,7 +203,7 @@ export function live(ctx, now) {
   if (u.sel) {
     const it = BS.byId(s, u.sel);
     const j = it && BS.jobOf(it);
-    if (j) { set('[data-live="jobleft"]', dur((j.endsAt - now) / 1000)); set('[data-live="speedc"]', '🦷 ' + BS.speedUpCost(it, now)); }
+    if (j) { set('[data-live="jobleft"]', dur((j.endsAt - now) / 1000)); set('[data-live="speedc"]', ''); const sc=document.querySelector('[data-live="speedc"]'); if(sc) sc.innerHTML = ico('teeth') + ' ' + BS.speedUpCost(it, now); }
     if (it && BUILDINGS[it.t]?.produce) set('[data-live="till"]', BUILDINGS[it.t].produce.res === 'cash' ? money(it.till) : fmt(it.till));
   }
   if (view) view.dirty = true;
@@ -292,7 +292,7 @@ export const actions = {
     const info = BS.unlockInfo(s, t);
     if (!info.ok) return ctx.toast(info.reason);
     const d = BUILDINGS[t];
-    if (!afford(s, d.res, costOf(t, 1))) return ctx.toast(`Not enough ${d.res}: ${price(d.res, costOf(t, 1))}`);
+    if (!afford(s, d.res, costOf(t, 1))) return ctx.toast(`Not enough ${resName(d.res)}`);
     if (timeOf(t, 1) > 0 && BS.buildersFree(s) < 1) return ctx.toast('All builders are busy. Finish a job or hire another builder.');
     ctx.closeModal(true);
     enterPlace(ctx, t);
@@ -332,7 +332,7 @@ export const actions = {
   upgradeWhy(ctx, el) { const b = BS.byId(ctx.state, el.dataset.id); ctx.toast(BS.upgradeInfo(ctx.state, b).reason); },
   collectB(ctx, el, e) {
     const r = BS.collect(ctx.state, el.dataset.id);
-    if (r.ok) ctx.floaty('+' + (r.res === 'cash' ? money(r.amount) : '🐾 ' + fmt(r.amount)), e.clientX || 300, e.clientY || 300);
+    if (r.ok) ctx.floaty('+' + (r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' Rep'), e.clientX || 300, e.clientY || 300);
     else if (r.full) ctx.toast('Storage full');
     refresh(ctx); ctx.live();
   },
@@ -360,10 +360,10 @@ export const actions = {
     ctx.modal(`<div class="h" style="font-size:22px">Builders</div>
       <p class="dim small">Every build, upgrade and clear-up needs a free builder. ${BS.buildersFree(s)} of ${n} free right now.</p>
       ${n < BS.MAX_BUILDERS ? `<div class="card row"><div class="grow"><b class="h">Hire builder #${n + 1}</b><div class="tiny dim">Permanent. Two builders roughly doubles how fast your base grows.</div></div>
-        <button class="btn gold" data-act="hireBuilder">🦷 ${next}</button></div>
+        <button class="btn gold" data-act="hireBuilder">${ico('teeth')} ${next}</button></div>
         <div class="tiny faint">Or buy the Second Builder pack in the Shop (£3.99, prototype: free).</div>` : '<p class="green">All builders hired.</p>'}`, { center: true });
   },
-  hireBuilder(ctx) { const r = BS.buyBuilder(ctx.state); ctx.closeModal(true); ctx.toast(r.ok ? `New builder hired (🦷 ${r.cost})` : r.reason); ctx.render(); },
+  hireBuilder(ctx) { const r = BS.buyBuilder(ctx.state); ctx.closeModal(true); ctx.toast(r.ok ? `New builder hired (${r.cost} Ice)` : r.reason); ctx.render(); },
   gotoCrew(ctx, el) { ctx.sub.crewTab = el.dataset.sub; ctx.go('crew'); },
   gotoCity(ctx) { ctx.go('city'); },
   family(ctx) {

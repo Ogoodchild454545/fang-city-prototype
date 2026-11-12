@@ -4,7 +4,7 @@ import { BUILDINGS, turretOf } from '../core/buildings.js';
 import * as C from '../core/crew.js';
 import * as M from '../core/meta.js';
 import { layoutPreview } from './battle.js';
-import { fmt, money, dur, esc } from './fmt.js';
+import { fmt, money, dur, esc, ico } from './fmt.js';
 
 const gangImg = (g) => SPECIES[GANGS[g].species[0]].img;
 const unlocksOf = (id) => Object.values(BUILDINGS).filter((b) => b.req === id).map((b) => b.name);
@@ -14,7 +14,7 @@ function districtState(s, d) {
   const prev = DISTRICTS.find((x) => x.tier === d.tier - 1);
   return !prev || s.districts[prev.id].owner === 'player' ? 'open' : 'locked';
 }
-const lootTotal = (r) => `${money(r.loot.cash)}${r.loot.influence ? ` · 🐾 ${fmt(r.loot.influence)} Rep` : ''}`;
+const lootTotal = (r) => `${money(r.loot.cash)}${r.loot.influence ? ` · ${ico('influence')} ${fmt(r.loot.influence)} Rep` : ''}`;
 const defences = (r) => r.base.filter((b) => turretOf(b.t, b.lv)).length;
 
 export function render(ctx) {
@@ -50,7 +50,7 @@ export function render(ctx) {
       <div class="col"><button class="btn sm" data-act="scout" data-id="${r.id}">Scout</button><button class="btn red sm" data-act="raid" data-id="${r.id}">Raid</button></div>
     </div>`).join('') || '<div class="card tiny dim">No rivals around. New targets in a few minutes.</div>'}
     <div class="row"><span class="tiny dim grow">Crew power <b>${fmt(C.lineupPower(s, ctx.now()))}</b>. New targets every 15 min.</span>
-    <button class="btn sm" data-act="refreshRivals">Next · 🦷 5</button></div>
+    <button class="btn sm" data-act="refreshRivals">Next · ${ico('teeth')} 5</button></div>
   </div></div>`;
 }
 
@@ -61,7 +61,7 @@ export const actions = {
     const st = districtState(s, d);
     const unlocks = unlocksOf(d.id);
     let body;
-    if (st === 'own') body = `<p class="green">Held by your gang.</p><p class="small dim">${d.bonus ? `+${Math.round(d.bonus * 100)}% income · 🐾 ${d.influencePerHour} Rep/hour` : 'Home turf'}${unlocks.length ? ` · unlocks ${unlocks.join(', ')}` : ''}</p>
+    if (st === 'own') body = `<p class="green">Held by your gang.</p><p class="small dim">${d.bonus ? `+${Math.round(d.bonus * 100)}% income · ${ico('influence')} ${d.influencePerHour} Rep/hour` : 'Home turf'}${unlocks.length ? ` · unlocks ${unlocks.join(', ')}` : ''}</p>
       <p class="tiny faint">In the full game rival players can attack your districts while you're away; your base defences and guards fight back automatically.</p>`;
     else {
       const e = M.districtEnemy(d, s);
@@ -71,8 +71,8 @@ export const actions = {
         <div class="grow"><div class="h" style="color:${GANGS[rv].colour}">${GANGS[rv].name}</div><div class="tiny dim">${GANGS[rv].blurb}</div>
         <div class="small">${e.count} defenders · level ~${e.level}${e.boss ? ' · <b class="gold">Boss: Old Scales</b>' : ''}</div></div></div>
         <div class="card"><div class="tiny red h">Take it and you get</div>
-          <div class="small">+${Math.round(d.bonus * 100)}% income forever · 🐾 ${d.influencePerHour} Rep/hour${unlocks.length ? ` · unlocks <b>${unlocks.join(', ')}</b> at the Hideout` : ''}</div>
-          <div class="small">Win: ${money(rw.cash)} · 🐾 ${rw.influence} Rep · 🦷 ${rw.teeth} · +${rw.rep} Reputation · 60% gear drop</div></div>
+          <div class="small">+${Math.round(d.bonus * 100)}% income forever · ${ico('influence')} ${d.influencePerHour} Rep/hour${unlocks.length ? ` · unlocks <b>${unlocks.join(', ')}</b> at the Hideout` : ''}</div>
+          <div class="small">Win: ${money(rw.cash)} · ${ico('influence')} ${rw.influence} Rep · ${ico('teeth')} ${rw.teeth} · +${rw.rep} Reputation · 60% gear drop</div></div>
         <div class="tiny dim">Your crew: power ${fmt(C.lineupPower(s, ctx.now()))} (${C.lineup(s, ctx.now()).length} fighters).</div>
         ${st === 'locked' ? `<button class="btn block off" style="margin-top:8px">Take the previous district first</button>` : `<button class="btn red block" style="margin-top:8px" data-act="startDistrict" data-id="${d.id}">Start turf war</button>`}`;
     }
@@ -104,7 +104,7 @@ export const actions = {
     ctx.go('battle');
   },
   refreshRivals(ctx) {
-    if (ctx.state.teeth < 5) return ctx.toast('Not enough Gold Teeth');
+    if (ctx.state.teeth < 5) return ctx.toast('Not enough Ice');
     ctx.state.teeth -= 5;
     M.refreshRivals(ctx.state, ctx.now(), true);
     ctx.render();

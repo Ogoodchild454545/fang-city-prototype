@@ -3,7 +3,7 @@
 import { SPECIES, ROLES, TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER, BOSS_SLOTS, DEPLOY_CAP, GEAR } from '../core/data.js';
 import * as C from '../core/crew.js';
 import * as BS from '../core/base.js';
-import { fmt, money, dur, esc } from './fmt.js';
+import { fmt, money, dur, esc, ico } from './fmt.js';
 
 const img = (t) => SPECIES[TROOPS[t].species].img;
 
@@ -50,7 +50,7 @@ function armyTab(ctx) {
       <div class="tiny faint">Next fight: ${Math.min(DEPLOY_CAP, C.armyCount(s))} of ${C.armyCount(s)} troops${line.some((m) => m.boss) ? ' + ' + line.filter((m) => m.boss).map((m) => m.name).join(' & ') : ''} · power ${fmt(C.lineupPower(s, now))}. Troops knocked out in a fight are lost; survivors come home.</div>
       <div class="armyhead" style="margin-top:6px">
         <div class="sect" style="margin:0;flex:1">Training ${s.queue.length ? `(${s.queue.length})` : ''}</div>
-        ${s.queue.length ? `<span class="tiny gold" data-live-q>${dur(remain)}</span><button class="btn sm gold" data-act="skipQueue">${skip ? (s.tickets > 0 ? '🎟️ Finish' : `Finish · 🦷 ${skip}`) : 'Finish'}</button>` : ''}
+        ${s.queue.length ? `<span class="tiny gold" data-live-q>${dur(remain)}</span><button class="btn sm gold" data-act="skipQueue">${skip ? (s.tickets > 0 ? '🎟️ Finish' : `Finish · ${ico('teeth')} ${skip}`) : 'Finish'}</button>` : ''}
       </div>
       <div class="queue">${s.queue.length ? s.queue.map((x, i) => `<button class="qchip ${i === 0 ? 'head' : ''}" data-act="unqueue" data-i="${i}"><div class="tpor sm" style="background-image:url(${img(x.t)})"></div>${i === 0 ? `<div class="qbar"><i data-live-qbar style="width:${Math.min(100, ((now - s.queueAt) / (x.dur * 1000)) * 100)}%"></i></div>` : ''}<span class="qx">✕</span></button>`).join('') : `<span class="tiny dim">${yard ? 'Queue empty. Tap a troop to train it.' : 'Build a Training Yard at the Hideout to train troops.'}</span>`}</div>
       <div class="sect">Train <span class="tiny dim" style="text-transform:none;letter-spacing:0">Training Yard lv ${yard || '-'}</span></div>
@@ -79,8 +79,8 @@ function upgradesTab(ctx) {
   return `
   ${!arm ? `<div class="card"><b class="h">No Armoury yet</b><div class="tiny dim">Build an Armoury at the Hideout (unlocks at Den 2). It upgrades troop types: better weapons, armour and health for every troop of that type.</div><button class="btn sm" style="margin-top:6px" data-act="nav" data-tab="base">Go to the Hideout</button></div>` : ''}
   ${r ? `<div class="card glow"><div class="row"><div class="tpor sm" style="background-image:url(${img(r.t)})"></div><div class="grow"><b class="h small">Upgrading ${TROOPS[r.t].name} to lv ${C.troopLevel(s, r.t) + 1}</b><div class="tiny gold" data-live-res>${dur((r.endsAt - now) / 1000)}</div></div>
-     <button class="btn sm gold" data-act="skipResearch">Finish · 🦷 ${C.skipCostSec((r.endsAt - now) / 1000)}</button></div></div>` : ''}
-  <div class="tiny dim" style="margin:0 2px 6px">Armoury lv ${arm || 0}: troops can reach level ${max}. One upgrade at a time, paid in Rep 🐾.</div>
+     <button class="btn sm gold" data-act="skipResearch">Finish · ${ico('teeth')} ${C.skipCostSec((r.endsAt - now) / 1000)}</button></div></div>` : ''}
+  <div class="tiny dim" style="margin:0 2px 6px">Armoury lv ${arm || 0}: troops can reach level ${max}. One upgrade at a time, paid in Rep ${ico('influence')}.</div>
   <div class="grid2">${TROOP_ORDER.map((t) => {
     const lv = C.troopLevel(s, t), ok = C.troopUnlocked(s, t);
     const a = C.troopStats(t, lv), b = C.troopStats(t, Math.min(10, lv + 1));
@@ -88,7 +88,7 @@ function upgradesTab(ctx) {
     const can = ok && arm && !r && lv < max;
     return `<div class="card upg ${ok ? '' : 'lockedc'}"><div class="row"><div class="tpor sm" style="background-image:url(${img(t)})"><span class="tl">${lv}</span></div>
       <div class="grow"><b class="h small">${TROOPS[t].name}</b><div class="tiny dim">HP ${a.hp}${lv < 10 ? `→<span class="green">${b.hp}</span>` : ''} · ${a.weapon.name} ${a.weapon.dmg}${b.weapon.dmg !== a.weapon.dmg ? `→<span class="green">${b.weapon.dmg}</span>` : ''} dmg · DEF ${a.def}${b.def !== a.def ? `→<span class="green">${b.def}</span>` : ''}</div></div>
-      ${!ok ? `<span class="pill">Yard ${TROOPS[t].yard}</span>` : lv >= 10 ? '<span class="pill">Max</span>' : `<button class="btn sm ${can && s.influence >= cost ? 'red' : ''}" data-act="research" data-t="${t}" ${can ? '' : 'disabled'}>🐾 ${fmt(cost)}<br><span class="tiny">${dur(C.researchSeconds(t, lv))}</span></button>`}</div></div>`;
+      ${!ok ? `<span class="pill">Yard ${TROOPS[t].yard}</span>` : lv >= 10 ? '<span class="pill">Max</span>' : `<button class="btn sm ${can && s.influence >= cost ? 'red' : ''}" data-act="research" data-t="${t}" ${can ? '' : 'disabled'}>${ico('influence')} ${fmt(cost)}<br><span class="tiny">${dur(C.researchSeconds(t, lv))}</span></button>`}</div></div>`;
   }).join('')}</div>`;
 }
 
@@ -139,8 +139,8 @@ function bossModal(ctx, id) {
       <div class="card"><table class="stats"><tr><td>Health</td><td>${st.hp}</td></tr><tr><td>Weapon</td><td>${st.weapon.name} · ${st.weapon.dmg} dmg · range ${st.weapon.range}</td></tr><tr><td>Armour</td><td>DEF ${st.def}</td></tr></table>
         <div class="tiny faint">Bosses join every fight on top of your troops. If knocked out they rest for 10 minutes; they are never lost.</div></div>
       ${!own ? (unlocked ? `<button class="btn red block" data-act="hireBoss" data-id="${id}">Hire ${d.name} · ${money(d.cost)}</button>` : `<div class="tiny faint">Upgrade The Den to level ${d.den} to unlock.</div>`)
-        : `${own.restUntil > now ? `<button class="btn gold block" data-act="reviveBoss" data-id="${id}">Patch up now · 🦷 ${C.skipCostSec((own.restUntil - now) / 1000)}</button>` : ''}
-           ${lv < max ? `<button class="btn red block" style="margin-top:6px" data-act="upgradeBoss" data-id="${id}">Level up · 🐾 ${fmt(cost)}</button>` : `<div class="tiny faint">Max level for your Den. Upgrade The Den for more.</div>`}`}
+        : `${own.restUntil > now ? `<button class="btn gold block" data-act="reviveBoss" data-id="${id}">Patch up now · ${ico('teeth')} ${C.skipCostSec((own.restUntil - now) / 1000)}</button>` : ''}
+           ${lv < max ? `<button class="btn red block" style="margin-top:6px" data-act="upgradeBoss" data-id="${id}">Level up · ${ico('influence')} ${fmt(cost)}</button>` : `<div class="tiny faint">Max level for your Den. Upgrade The Den for more.</div>`}`}
     </div></div>`;
 }
 
@@ -162,8 +162,8 @@ export const actions = {
   unqueue(ctx, el) { C.unqueue(ctx.state, +el.dataset.i, ctx.now()); ctx.render(); },
   skipQueue(ctx) {
     const r = C.skipQueue(ctx.state, ctx.now());
-    if (!r.ok) return ctx.toast(r.reason === 'teeth' ? 'Not enough Gold Teeth' : 'Nothing to finish');
-    ctx.toast(`${r.done.length} troops ready${r.ticket ? ' (rush ticket used)' : r.cost ? ` for 🦷 ${r.cost}` : ''}`);
+    if (!r.ok) return ctx.toast(r.reason === 'teeth' ? 'Not enough Ice' : 'Nothing to finish');
+    ctx.toast(`${r.done.length} troops ready${r.ticket ? ' (rush ticket used)' : r.cost ? ` for ${r.cost} Ice` : ''}`);
     ctx.render();
   },
   troopInfo(ctx, el, e) { e?.stopPropagation?.(); ctx.modal(troopModal(ctx, el.dataset.t), { cls: 'wide' }); },
@@ -178,24 +178,24 @@ export const actions = {
   upgradeBoss(ctx, el) {
     const id = el.dataset.id;
     const r = C.upgradeBoss(ctx.state, id);
-    if (!r.ok) return ctx.toast(r.reason === 'influence' ? `Need 🐾 ${fmt(r.cost)} Rep` : 'Max level for your Den');
+    if (!r.ok) return ctx.toast(r.reason === 'influence' ? `Need ${fmt(r.cost)} Rep` : 'Max level for your Den');
     ctx.toast(`${BOSSES[id].name} is now level ${r.lv}`);
     reopen(ctx, bossModal(ctx, id)); ctx.render();
   },
   reviveBoss(ctx, el) {
     const r = C.reviveBoss(ctx.state, el.dataset.id, ctx.now());
-    if (!r.ok) return ctx.toast('Not enough Gold Teeth');
+    if (!r.ok) return ctx.toast('Not enough Ice');
     reopen(ctx, bossModal(ctx, el.dataset.id)); ctx.render();
   },
   research(ctx, el) {
     const t = el.dataset.t;
     const r = C.startResearch(ctx.state, t, ctx.now());
-    if (!r.ok) return ctx.toast({ busy: 'The Armoury is already upgrading something', armoury: 'Build an Armoury first', influence: `Need 🐾 ${fmt(r.cost || 0)} Rep`, max: 'Upgrade the Armoury for higher levels', locked: 'Unlock this troop first' }[r.reason] || 'Cannot upgrade');
+    if (!r.ok) return ctx.toast({ busy: 'The Armoury is already upgrading something', armoury: 'Build an Armoury first', influence: `Need ${fmt(r.cost || 0)} Rep`, max: 'Upgrade the Armoury for higher levels', locked: 'Unlock this troop first' }[r.reason] || 'Cannot upgrade');
     ctx.render();
   },
   skipResearch(ctx) {
     const r = C.skipResearch(ctx.state, ctx.now());
-    if (!r.ok) return ctx.toast('Not enough Gold Teeth');
+    if (!r.ok) return ctx.toast('Not enough Ice');
     ctx.toast(`${TROOPS[r.done.t].name} upgraded to level ${r.done.lv}`);
     ctx.render();
   },

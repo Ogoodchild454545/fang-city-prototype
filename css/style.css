@@ -19,7 +19,11 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 /* top bar */
 .topbar{display:flex;gap:6px;align-items:center;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));background:linear-gradient(#120f0e,#0d0b0a);border-bottom:1px solid var(--line);z-index:5}
 .res{flex:1;display:flex;align-items:center;gap:6px;background:#0a0808;border:1px solid var(--line2);border-radius:6px;padding:4px 8px;min-width:0}
-.res .ico{font-size:15px}.res b{font-family:var(--font);font-size:16px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res .ico{font-size:15px;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none}
+.res .ico img,.ico-img{width:18px;height:18px;vertical-align:-4px;object-fit:contain;display:inline-block}
+.res .ico img{width:22px;height:22px;vertical-align:0}
+.act2 .i img{width:18px;height:18px}
+.ico-img.lg{width:28px;height:28px;vertical-align:-8px}.res b{font-family:var(--font);font-size:16px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .res.cash b{color:#f3e7c9}.res.inf b{color:#ff8a7a}.res.teeth b{color:var(--gold)}
 .res .plus{margin-left:auto;font-weight:700;color:var(--gold);border:1px solid var(--line2);border-radius:4px;width:20px;height:20px;line-height:18px;text-align:center;font-size:14px}
 .vipbadge{font-family:var(--font);font-size:10px;background:var(--gold);color:#1a1200;border-radius:3px;padding:1px 4px;margin-left:4px}

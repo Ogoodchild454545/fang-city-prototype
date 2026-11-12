@@ -4,7 +4,7 @@ import * as E from '../core/economy.js';
 import * as M from '../core/meta.js';
 import * as BS from '../core/base.js';
 import * as C from '../core/crew.js';
-import { fmt, money, dur } from './fmt.js';
+import { fmt, money, dur, ico } from './fmt.js';
 
 export function render(ctx) {
   const s = ctx.state, now = ctx.now();
@@ -27,9 +27,9 @@ export function render(ctx) {
       <div class="tiny dim">${SHOP.offers[0].desc}</div>
       <button class="btn red" style="margin-top:6px" data-act="buy" data-kind="offer" data-id="starter">${SHOP.offers[0].price}</button></div></div></div>`}
 
-  <div class="sect">Gold Teeth 🦷</div>
+  <div class="sect">Ice ${ico('teeth')}</div>
   <div class="packs">${SHOP.teeth.map((p) => `<button class="pack" data-act="buy" data-kind="teeth" data-id="${p.id}">
-    ${p.tag ? `<span class="tag">${p.tag}</span>` : ''}<div style="font-size:22px">🦷</div><div class="amt">${fmt(p.teeth)}</div>
+    ${p.tag ? `<span class="tag">${p.tag}</span>` : ''}<div style="font-size:22px">${ico('teeth', 'ico-img lg')}</div><div class="amt">${fmt(p.teeth)}</div>
     ${!s.purchases['first_' + p.id] ? '<div class="tiny green">x2 first buy</div>' : '<div class="tiny">&nbsp;</div>'}
     <div class="btn sm block" style="margin-top:4px">${p.price}</div></button>`).join('')}</div>
 
@@ -51,7 +51,7 @@ export function render(ctx) {
   <div class="card"><div class="row" style="flex-wrap:wrap;gap:6px">
     <button class="btn sm" data-act="dbgTime" data-h="1">Skip 1h (test offline)</button>
     <button class="btn sm" data-act="dbgTime" data-h="8">Skip 8h</button>
-    <button class="btn sm" data-act="dbgCash">Fill storage + 500 🦷</button>
+    <button class="btn sm" data-act="dbgCash">Fill storage + 500 Ice</button>
     <button class="btn sm" data-act="dbgReset">Reset save</button>
   </div><div class="tiny faint" style="margin-top:6px">For play-testing only. Not in the real game.</div></div>`;
 }
@@ -84,9 +84,9 @@ export const actions = {
     C.finishQueue(s, ctx.now()); C.finishResearch(s, ctx.now());
     ctx.render();
     if (sum) ctx.modal(`<div class="result win"><div class="h dim">While you were away (${dur(sum.seconds)})</div><div class="big">${money(sum.banked + sum.tills)}</div>
-      <div class="dim small">${money(sum.banked)} banked by lieutenants · ${money(sum.tills)} waiting to collect${sum.influence >= 1 ? ` · 🐾 ${Math.floor(sum.influence)} Rep` : ''}${sum.finished ? ` · ${sum.finished} builds finished` : ''}${sum.cleared ? ` · ${sum.cleared} cleared` : ''}</div>
+      <div class="dim small">${money(sum.banked)} banked by lieutenants · ${money(sum.tills)} waiting to collect${sum.influence >= 1 ? ` · ${ico('influence')} ${Math.floor(sum.influence)} Rep` : ''}${sum.finished ? ` · ${sum.finished} builds finished` : ''}${sum.cleared ? ` · ${sum.cleared} cleared` : ''}</div>
       <button class="btn block" style="margin-top:12px" data-act="closeModal">Collect</button></div>`, { center: true });
   },
-  dbgCash(ctx) { BS.gain(ctx.state, 'cash', 1e6); BS.gain(ctx.state, 'influence', 5000); ctx.state.teeth += 500; ctx.toast('Filled storage + 500 🦷 (test)'); ctx.render(); },
+  dbgCash(ctx) { BS.gain(ctx.state, 'cash', 1e6); BS.gain(ctx.state, 'influence', 5000); ctx.state.teeth += 500; ctx.toast('Filled storage + 500 Ice (test)'); ctx.render(); },
   dbgReset(ctx) { localStorage.clear(); location.href = location.pathname; },
 };

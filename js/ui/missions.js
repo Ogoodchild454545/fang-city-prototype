@@ -4,7 +4,7 @@ import { MISSIONS, GANGS } from '../core/data.js';
 import * as M from '../core/meta.js';
 import * as C from '../core/crew.js';
 import * as BS from '../core/base.js';
-import { fmt, money, esc } from './fmt.js';
+import { fmt, money, esc, ico } from './fmt.js';
 
 function stageRow(ctx, gi, si, campLocked) {
   const m = MISSIONS[gi], stage = m.stages[si];
@@ -66,7 +66,7 @@ export const actions = {
       <div class="tiny" style="color:${g.colour}">${esc(m.name)} · ${esc(g.name)} · mission ${si + 1} of ${m.stages.length}</div>
       <p class="small dim">${esc(m.blurb)}${stage.boss ? ' The gang’s boss is on the board.' : ''}</p>
       <div class="card"><div class="tiny red h">${st.done ? 'Rematch payout (first-clear already taken)' : 'Win and you get'}</div>
-        <div class="small">${money(r.cash)} · 🐾 ${fmt(r.influence)} Rep${r.teeth ? ` · 🦷 ${r.teeth}` : ''} · +${r.rep} Reputation</div></div>
+        <div class="small">${money(r.cash)} · ${ico('influence')} ${fmt(r.influence)} Rep${r.teeth ? ` · ${ico('teeth')} ${r.teeth}` : ''} · +${r.rep} Reputation</div></div>
       <div class="tiny dim">Your crew: ${line.length} fighters · power ${fmt(C.lineupPower(ctx.state, ctx.now()))}. Knocked-out troops are lost.</div>
       ${line.length ? `<button class="btn red block" style="margin-top:8px" data-act="startMission" data-gi="${gi}" data-si="${si}">${st.done ? 'Rematch' : 'Start mission'}</button>` : `<button class="btn block off" style="margin-top:8px">No troops. Train some in My Crew.</button>`}`, { center: true });
   },

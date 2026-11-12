@@ -32,7 +32,7 @@ export const BUILDINGS = {
               produce: { res: 'cash', rate: 1000, till: 3600 }, desc: 'Everything comes in through the docks.' },
   // ---- influence makers
   radio:    { name: 'Pirate Radio', cat: 'influence', size: 2, res: 'cash', cost0: 150, g: 2.0, t0: 10, maxLv: 10, unlock: 1, counts: [0, 1, 1, 2, 2, 3, 3],
-              produce: { res: 'influence', rate: 0.08, till: 3600 }, desc: 'Spreads your name across the city. Makes Rep (🐾), used to upgrade troops and bosses.' },
+              produce: { res: 'influence', rate: 0.08, till: 3600 }, desc: 'Spreads your name across the city. Makes Rep, used to upgrade troops and bosses.' },
   pit:      { name: 'Fight Pit', cat: 'influence', size: 3, res: 'cash', cost0: 8000, g: 2.0, t0: 300, maxLv: 10, unlock: 3, counts: [0, 0, 0, 1, 1, 1, 2],
               produce: { res: 'influence', rate: 0.25, till: 3600 }, desc: 'Bare-knuckle nights build a reputation fast.' },
   // ---- storage

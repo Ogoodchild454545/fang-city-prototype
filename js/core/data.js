@@ -149,7 +149,7 @@ export const MISSIONS = [
 
 export const RECRUIT = {
   street:  { name: 'Street Recruit', currency: 'cash', odds: [['common', 72], ['rare', 24], ['epic', 4]] },
-  premium: { name: 'Gold Teeth Recruit', currency: 'teeth', cost: 100, odds: [['rare', 62], ['epic', 31], ['legendary', 7]], pity: 30 },
+  premium: { name: 'Ice Recruit', currency: 'teeth', cost: 100, odds: [['rare', 62], ['epic', 31], ['legendary', 7]], pity: 30 },
 };
 export const ROSTER_BASE = 10;
 export const SQUAD_SIZE = 4;
@@ -178,10 +178,10 @@ export const SHOP = {
     { id: 't6', teeth: 14000, price: '£99.99', tag: 'Best value' },
   ],
   offers: [
-    { id: 'starter', name: 'Starter Crate', price: '£2.99', once: true, desc: '500 Gold Teeth, Ma Grey unlocked early, and your army topped up with Wolf Bruisers. One per player.', grant: { teeth: 500, boss: 'magrey', troops: { wolf: 3 }, housing: 10 } },
-    { id: 'builder', name: 'Second Builder', price: '£3.99', once: true, desc: 'A second builder for your base: two upgrades or clear-ups at once. Permanent. (Also buyable for 250 Gold Teeth.)', grant: { builder: 1 } },
-    { id: 'vip',     name: 'Made Member (monthly)', price: '£4.99 / month', desc: '50 Gold Teeth daily, offline earnings up to 12h, all buildings auto-collect, troops train 25% faster, gold name badge.', grant: { vip: 30 } },
-    { id: 'pass',    name: 'Street Pass (season)', price: '£7.99', desc: 'Premium reward track for this 30-day season: exclusive Neon Rain skin, 1,000+ Gold Teeth, training boosts.', grant: { pass: true } },
+    { id: 'starter', name: 'Starter Crate', price: '£2.99', once: true, desc: '500 Ice, Ma Grey unlocked early, and your army topped up with Wolf Bruisers. One per player.', grant: { teeth: 500, boss: 'magrey', troops: { wolf: 3 }, housing: 10 } },
+    { id: 'builder', name: 'Second Builder', price: '£3.99', once: true, desc: 'A second builder for your base: two upgrades or clear-ups at once. Permanent. (Also buyable for 250 Ice.)', grant: { builder: 1 } },
+    { id: 'vip',     name: 'Made Member (monthly)', price: '£4.99 / month', desc: '50 Ice daily, offline earnings up to 12h, all buildings auto-collect, troops train 25% faster, gold name badge.', grant: { vip: 30 } },
+    { id: 'pass',    name: 'Street Pass (season)', price: '£7.99', desc: 'Premium reward track for this 30-day season: exclusive Neon Rain skin, 1,000+ Ice, training boosts.', grant: { pass: true } },
     { id: 'bench',   name: 'Drill Sergeant', price: '£2.99', once: true, desc: 'Troops train 25% faster, for good.', grant: { bench: 1 } },
     { id: 'noads',   name: 'No Ads', price: '£3.99', once: true, desc: 'Removes interstitial ads. Reward ads stay optional and still pay out.', grant: { noads: true } },
   ],

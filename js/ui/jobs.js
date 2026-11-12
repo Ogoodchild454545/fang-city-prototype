@@ -1,7 +1,7 @@
 // Jobs screen: daily login streak, daily jobs, season pass track.
 import { DAILY_REWARDS, GEAR } from '../core/data.js';
 import * as M from '../core/meta.js';
-import { fmt, money, rewardText } from './fmt.js';
+import { fmt, money, rewardText, ico } from './fmt.js';
 
 export function render(ctx) {
   const s = ctx.state, now = ctx.now();
@@ -15,7 +15,7 @@ export function render(ctx) {
   <div class="days">${DAILY_REWARDS.map((r, i) => {
     const done = ds.claimedToday ? i <= ds.index : i < ds.index;
     const today = !ds.claimedToday && i === ds.index;
-    return `<div class="day ${done ? 'done' : ''} ${today ? 'today' : ''}"><div class="d">Day ${i + 1}</div><div>${r.cash ? '💵' : r.teeth && r.ticket ? '🎟️' : r.teeth ? '🦷' : r.influence ? '🐾' : '🎒'}</div><div class="tiny">${r.gear ? GEAR[r.gear].name.split(' ')[0] : rewardText(r).replace('recruit ticket', '')}</div></div>`; }).join('')}</div>
+    return `<div class="day ${done ? 'done' : ''} ${today ? 'today' : ''}"><div class="d">Day ${i + 1}</div><div>${r.cash ? ico('cash') : r.teeth && r.ticket ? '🎟️' : r.teeth ? ico('teeth') : r.influence ? ico('influence') : '🎒'}</div><div class="tiny">${r.gear ? GEAR[r.gear].name.split(' ')[0] : rewardText(r).replace('recruit ticket', '')}</div></div>`; }).join('')}</div>
   <button class="btn ${ds.claimedToday ? '' : 'red'} block" style="margin-top:8px" data-act="claimDaily" ${ds.claimedToday ? 'disabled' : ''}>${ds.claimedToday ? 'Come back tomorrow' : 'Claim today\'s pay-out'}</button>
 
   <div class="sect">Today's jobs</div>

@@ -5,7 +5,7 @@ import { newGame, makeLocalStorage } from '../core/state.js';
 import * as E from '../core/economy.js';
 import * as C from '../core/crew.js';
 import * as M from '../core/meta.js';
-import { fmt, money, dur, esc } from './fmt.js';
+import { fmt, money, dur, esc, ico } from './fmt.js';
 import * as Hideout from './hideout.js';
 import * as BS from '../core/base.js';
 import { BUILDINGS, OBSTACLES } from '../core/buildings.js';
@@ -47,9 +47,9 @@ function topbar() {
   const vip = E.isVip(s, now) ? '<span class="vipbadge">MADE</span>' : '';
   const cap = BS.caps(s);
   return `
-    <div class="res cash"><span class="ico">$</span><div class="col grow"><b data-live="cash">${money(s.cash)}</b><div class="capbar"><i data-live-bar="cash" style="width:${Math.min(100, (s.cash / cap.cash) * 100)}%"></i></div></div><span class="cap tiny" data-live="capcash">/${fmt(cap.cash)}</span>${vip}</div>
-    <div class="res inf"><span class="ico">🐾</span><div class="col grow"><b data-live="influence">${fmt(Math.floor(s.influence))}</b><div class="capbar"><i data-live-bar="influence" style="width:${Math.min(100, (s.influence / cap.influence) * 100)}%"></i></div></div><span class="cap tiny" data-live="capinf">/${fmt(cap.influence)}</span></div>
-    <div class="res teeth" data-act="nav" data-tab="shop"><span class="ico">🦷</span><b data-live="teeth">${fmt(s.teeth)}</b><span class="plus">+</span></div>`;
+    <div class="res cash"><span class="ico">${ico('cash')}</span><div class="col grow"><b data-live="cash">${money(s.cash)}</b><div class="capbar"><i data-live-bar="cash" style="width:${Math.min(100, (s.cash / cap.cash) * 100)}%"></i></div></div><span class="cap tiny" data-live="capcash">/${fmt(cap.cash)}</span>${vip}</div>
+    <div class="res inf"><span class="ico">${ico('influence')}</span><div class="col grow"><b data-live="influence">${fmt(Math.floor(s.influence))}</b><div class="capbar"><i data-live-bar="influence" style="width:${Math.min(100, (s.influence / cap.influence) * 100)}%"></i></div></div><span class="cap tiny" data-live="capinf">/${fmt(cap.influence)}</span></div>
+    <div class="res teeth" data-act="nav" data-tab="shop"><span class="ico">${ico('teeth')}</span><b data-live="teeth">${fmt(s.teeth)}</b><span class="plus">+</span></div>`;
 }
 
 function nav() {
@@ -135,7 +135,7 @@ function handleBaseEvents(ev) {
   if (!ev || !ev.length) return;
   const e = ev[ev.length - 1];
   const name = (BUILDINGS[e.t] || OBSTACLES[e.t]).name;
-  let msg = e.type === 'built' ? `${name} is open for business` : e.type === 'upgraded' ? `${name} upgraded to level ${e.lv}` : `${name} cleared${e.teeth ? `: found 🦷 ${e.teeth} Gold Teeth!` : ''}`;
+  let msg = e.type === 'built' ? `${name} is open for business` : e.type === 'upgraded' ? `${name} upgraded to level ${e.lv}` : `${name} cleared${e.teeth ? `: found ${e.teeth} Ice!` : ''}`;
   if (ev.length > 1) msg += ` (+${ev.length - 1} more done)`;
   toast(msg);
   ctx.save();
@@ -162,7 +162,7 @@ function welcomeBack(sum) {
   modal(`
     <div class="result win"><div class="h dim">While you were away (${dur(sum.seconds)})</div>
     <div class="big">${money(sum.banked + sum.tills)}</div>
-    <div class="dim small">${sum.banked >= 1 ? `${money(sum.banked)} banked by your lieutenants · ` : ''}${sum.tills > 0 ? `${money(sum.tills)} waiting to collect` : ''}${sum.influence >= 1 ? ` · 🐾 ${fmt(Math.floor(sum.influence))} Rep` : ''}</div>
+    <div class="dim small">${sum.banked >= 1 ? `${money(sum.banked)} banked by your lieutenants · ` : ''}${sum.tills > 0 ? `${money(sum.tills)} waiting to collect` : ''}${sum.influence >= 1 ? ` · ${ico('influence')} ${fmt(Math.floor(sum.influence))} Rep` : ''}</div>
     ${sum.finished || sum.cleared ? `<div class="small" style="margin-top:4px">🔨 ${sum.finished ? `${sum.finished} build job${sum.finished > 1 ? 's' : ''} finished` : ''}${sum.finished && sum.cleared ? ' · ' : ''}${sum.cleared ? `${sum.cleared} junk pile${sum.cleared > 1 ? 's' : ''} cleared` : ''}</div>` : ''}
     ${sum.cappedSeconds < sum.seconds ? `<div class="tiny faint" style="margin-top:6px">Offline earnings cap at ${dur(sum.cappedSeconds)}. Made Members get 12h.</div>` : ''}
     <div class="row" style="margin-top:14px">
@@ -222,8 +222,8 @@ function boot() {
       render();
       const army = Object.entries(saved.army).map(([t, n]) => `${n}× ${TROOPS[t].name}`).join(', ');
       modal(`<div class="h" style="font-size:22px">${from === 1 ? 'The Hideout moved' : 'Fang City 0.3: one crew, many animals'}</div>
-        <p class="dim">${from === 1 ? 'Fang City now has a free-build base. Your turf, Gold Teeth and purchases came with you; your old rackets were sold off.' : 'Gangs are gone: every boss now runs one mixed crew. Your base is untouched.'}</p>
-        <p class="small">Your old crew became troops: <b>${army}</b>. Spare gear was sold${saved.gearRefund ? ` for ${money(saved.gearRefund)}` : ''}, and you get +${from === 1 ? 100 : 50} 🦷.</p>
+        <p class="dim">${from === 1 ? 'Fang City now has a free-build base. Your turf, Ice and purchases came with you; your old rackets were sold off.' : 'Gangs are gone: every boss now runs one mixed crew. Your base is untouched.'}</p>
+        <p class="small">Your old crew became troops: <b>${army}</b>. Spare gear was sold${saved.gearRefund ? ` for ${money(saved.gearRefund)}` : ''}, and you get +${from === 1 ? 100 : 50} Ice.</p>
         <p class="small">New: train troops in <b>My Crew</b>, unlock bosses with The Den, and fight the four gangs in <b>Missions</b>.</p>
         <button class="btn red block" data-act="closeModal">Let's go</button>`, { center: true });
       delete saved.gearRefund;

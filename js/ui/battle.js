@@ -4,7 +4,7 @@ import { GANGS, SPECIES, ROLES, GEAR, TROOPS, BOSSES } from '../core/data.js';
 import * as B from '../core/battle.js';
 import { aiNextAction } from '../core/ai.js';
 import * as M from '../core/meta.js';
-import { fmt, money, esc, rewardText } from './fmt.js';
+import { fmt, money, esc, rewardText, ico } from './fmt.js';
 import { spriteFor } from '../core/buildings.js';
 import { SPR } from './iso.js';
 
@@ -145,7 +145,7 @@ export function render(ctx) {
         <div class="mid tiny h">vs</div>
         <div class="side e" style="border-color:${eg.colour}"><span style="color:${eg.colour}">${eg.name}</span><br><span class="dim">${alive('enemy')} up${raid ? ` · ${B.combatants(b, 'enemy').filter((x) => x.structure).length}🎯` : ''}</span></div>
       </div>
-      ${raid ? `<div class="lootbar"><span>Loot <b class="gold" id="lootc">${money(b.looted.cash)}</b>${b.looted.influence ? ` · 🐾 ${fmt(b.looted.influence)}` : ''}</span><span id="starsnow">${starRow(rs.stars)}</span></div>
+      ${raid ? `<div class="lootbar"><span>Loot <b class="gold" id="lootc">${money(b.looted.cash)}</b>${b.looted.influence ? ` · ${ico('influence')} ${fmt(b.looted.influence)}` : ''}</span><span id="starsnow">${starRow(rs.stars)}</span></div>
         <div class="tiny faint">Wreck The Den to win and take everything left. Strongboxes and Ledgers pay out when destroyed. Turrets 🎯 shoot back.</div>` : ''}
       ${sel ? `<div class="bpanel">
         <div class="portrait rar-${sel.rarity}" data-act="nextUnit" style="background-image:url(${unitImg(sel)})"></div>
@@ -216,7 +216,7 @@ async function play(ctx, events) {
         if (el) { el.classList.add('shake'); const hp = el.querySelector('.hp i'); if (hp) hp.style.width = (t.hp / t.maxHp) * 100 + '%'; if (ev.kill) setTimeout(() => el.classList.add('dead'), 250); }
         if (ev.kill && t.structure) {
           document.querySelector(`.iprop[data-suid="${t.uid}"]`)?.classList.add('wrecked');
-          if (t.loot && (t.loot.cash || t.loot.influence)) { await sleep(D(ctx, 200)); pop(`+${t.loot.cash ? money(t.loot.cash) : '🐾 ' + fmt(t.loot.influence)}`, t, 'heal'); }
+          if (t.loot && (t.loot.cash || t.loot.influence)) { await sleep(D(ctx, 200)); pop(`+${t.loot.cash ? money(t.loot.cash) : fmt(t.loot.influence) + ' Rep'}`, t, 'heal'); }
           const lc = document.getElementById('lootc'); if (lc) lc.textContent = money(b.looted.cash);
           const sn = document.getElementById('starsnow'); if (sn) sn.innerHTML = starRow(B.raidStars(b).stars);
         }
@@ -283,16 +283,16 @@ function finish(ctx) {
   if (!res) return;
   ctx.sub.battle = null;
   const parts = [];
-  if (res.kind === 'raid' && res.looted && (res.looted.cash || res.looted.influence)) parts.push(`<span>Stolen: ${money(res.looted.cash)}${res.looted.influence ? ` · 🐾 ${fmt(res.looted.influence)} Rep` : ''}</span>`);
+  if (res.kind === 'raid' && res.looted && (res.looted.cash || res.looted.influence)) parts.push(`<span>Stolen: ${money(res.looted.cash)}${res.looted.influence ? ` · ${ico('influence')} ${fmt(res.looted.influence)} Rep` : ''}</span>`);
   const lc = (res.lost && res.lost.cash) || 0, li = (res.lost && res.lost.influence) || 0;
   if (res.kind === 'raid') {
     const bc = Math.max(0, (res.cash || 0) - lc), bi = Math.max(0, (res.influence || 0) - li);
-    if (bc || bi) parts.push(`<span>Banked: ${bc ? money(bc) : ''}${bc && bi ? ' · ' : ''}${bi ? '🐾 ' + fmt(bi) : ''}</span>`);
+    if (bc || bi) parts.push(`<span>Banked: ${bc ? money(bc) : ''}${bc && bi ? ' · ' : ''}${bi ? ico('influence') + ' ' + fmt(bi) : ''}</span>`);
   } else {
     if (res.cash) parts.push(`<span>${money(res.cash)}</span>`);
-    if (res.influence) parts.push(`<span>🐾 ${res.influence} Rep</span>`);
+    if (res.influence) parts.push(`<span>${ico('influence')} ${res.influence} Rep</span>`);
   }
-  if (res.teeth) parts.push(`<span>🦷 ${res.teeth}</span>`);
+  if (res.teeth) parts.push(`<span>${ico('teeth')} ${res.teeth} Ice</span>`);
   if (res.rep) parts.push(`<span>${res.rep > 0 ? '+' : ''}${res.rep} Reputation</span>`);
   const fallen = Object.entries(res.fallen || {});
   ctx.modal(`<div class="result ${res.win ? 'win' : 'loss'}">
@@ -301,7 +301,7 @@ function finish(ctx) {
     ${res.kind === 'raid' ? `<div>${starRow(res.stars || 0)}</div><div class="tiny dim">${res.pct}% of the base wrecked</div>` : ''}
     ${res.district ? `<div class="h gold">District taken! Income bonus applied.</div>` : ''}
     ${res.missionFirst ? `<div class="h gold">Mission cleared! The next one is open.</div>` : ''}
-    ${res.lost && (res.lost.cash || res.lost.influence) ? `<div class="small red">Storage full: ${res.lost.cash ? money(res.lost.cash) : ''}${res.lost.cash && res.lost.influence ? ' and ' : ''}${res.lost.influence ? '🐾 ' + fmt(res.lost.influence) + ' Rep' : ''} left behind. Build more Strongboxes or Ledgers.</div>` : ''}
+    ${res.lost && (res.lost.cash || res.lost.influence) ? `<div class="small red">Storage full: ${res.lost.cash ? money(res.lost.cash) : ''}${res.lost.cash && res.lost.influence ? ' and ' : ''}${res.lost.influence ? ico('influence') + ' ' + fmt(res.lost.influence) + ' Rep' : ''} left behind. Build more Strongboxes or Ledgers.</div>` : ''}
     <div class="rewards">${parts.join('')}</div>
     <div class="tiny ${fallen.length ? 'red' : 'green'}" style="margin-top:6px">${fallen.length ? `Lost in the fight: ${fallen.map(([t, n]) => `${n}× ${TROOPS[t].name}`).join(', ')}. Retrain them in My Crew.` : 'No troops lost.'}${res.bossesDown && res.bossesDown.length ? ` ${res.bossesDown.join(' & ')} needs 10 minutes' rest.` : ''}</div>
     ${res.win ? '' : '<div class="small dim">Train more troops and upgrade them in the Armoury, then try again.</div>'}
@@ -329,7 +329,7 @@ export const actions = {
         return doAction(ctx, { type: 'attack', uid: sel.uid, target: occ.uid, mode: u.mode === 'throw' ? 'throw' : u.mode });
       }
       const p = sel && B.attackPreview(b, sel, occ, u.mode === 'aimed' ? 'aimed' : 'shot');
-      if (occ.structure) return ctx.toast(`${occ.name} (Lv ${occ.level}): HP ${occ.hp}/${occ.maxHp}${occ.weapon ? `, shoots ${occ.weapon.dmg} dmg at range ${occ.weapon.range}` : ''}${occ.loot && (occ.loot.cash || occ.loot.influence) ? `, holds ${money(occ.loot.cash)}${occ.loot.influence ? ' + 🐾' + fmt(occ.loot.influence) + ' Rep' : ''}` : ''}. ${p ? `Need ${p.cost} AP` : 'Get closer or find a clear line'}`);
+      if (occ.structure) return ctx.toast(`${occ.name} (Lv ${occ.level}): HP ${occ.hp}/${occ.maxHp}${occ.weapon ? `, shoots ${occ.weapon.dmg} dmg at range ${occ.weapon.range}` : ''}${occ.loot && (occ.loot.cash || occ.loot.influence) ? `, holds ${money(occ.loot.cash)}${occ.loot.influence ? ' + ' + ico('influence') + ' ' + fmt(occ.loot.influence) + ' Rep' : ''}` : ''}. ${p ? `Need ${p.cost} AP` : 'Get closer or find a clear line'}`);
       return ctx.toast(`${occ.name}: ${ROLES[occ.role].name}, HP ${occ.hp}/${occ.maxHp}, ${occ.weapon.name}. ${p ? `Need ${p.cost} AP` : 'Out of range or no line of sight'}`);
     }
     if (u.mode === 'shot' && sel && B.reachable(b, sel).has(`${x},${y}`)) return doAction(ctx, { type: 'move', uid: sel.uid, x, y });

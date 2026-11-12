@@ -3,6 +3,7 @@
 import { MAP_N, BUILDINGS, OBSTACLES, lvCap, costOf, timeOf, rateOf, tillOf, storeOf, housingOf } from './buildings.js';
 import { DISTRICTS } from './data.js';
 import { rngNext, rngInt, rngPick } from './rng.js';
+const RES_LABEL = { cash: 'Cash', influence: 'Rep', teeth: 'Ice' };
 
 const N = MAP_N;
 export const DEN_POS = { x: 18, y: 18 };
@@ -203,7 +204,7 @@ export function startBuild(state, type, x, y, now) {
   const t = timeOf(type, 1);
   if (t > 0 && buildersFree(state) < 1) return { ok: false, reason: 'All builders are busy' };
   const cost = costOf(type, 1);
-  if (!spend(state, d.res, cost)) return { ok: false, reason: `Not enough ${d.res}` };
+  if (!spend(state, d.res, cost)) return { ok: false, reason: `Not enough ${RES_LABEL[d.res] || d.res}` };
   const b = { id: 'b' + state.base.nextId++, t: type, x, y, lv: 0, till: 0, job: null, lt: false };
   if (t > 0) b.job = { kind: 'build', toLv: 1, endsAt: now + t * 1000, total: t };
   else b.lv = 1;
@@ -228,7 +229,7 @@ export function startUpgrade(state, id, now) {
   const u = upgradeInfo(state, b);
   if (!u.ok) return u;
   if (u.time > 0 && buildersFree(state) < 1) return { ok: false, reason: 'All builders are busy' };
-  if (!spend(state, u.res, u.cost)) return { ok: false, reason: `Not enough ${u.res}` };
+  if (!spend(state, u.res, u.cost)) return { ok: false, reason: `Not enough ${RES_LABEL[u.res] || u.res}` };
   if (u.time > 0) b.job = { kind: 'upgrade', toLv: u.to, endsAt: now + u.time * 1000, total: u.time };
   else b.lv = u.to;
   state.stats.upgrades = (state.stats.upgrades || 0) + 1;
@@ -248,7 +249,7 @@ export function startClear(state, id, now) {
   if (!o || o.clr) return { ok: false, reason: 'Already clearing' };
   if (buildersFree(state) < 1) return { ok: false, reason: 'All builders are busy' };
   const d = OBSTACLES[o.t];
-  if (!spend(state, 'cash', d.cost)) return { ok: false, reason: 'Not enough cash' };
+  if (!spend(state, 'cash', d.cost)) return { ok: false, reason: 'Not enough Cash' };
   o.clr = { endsAt: now + d.time * 1000, total: d.time };
   return { ok: true, cost: d.cost };
 }
@@ -265,7 +266,7 @@ export function speedUp(state, id, now) {
   const j = it && jobOf(it);
   if (!j) return { ok: false };
   const c = speedUpCost(it, now);
-  if (state.teeth < c) return { ok: false, reason: 'Not enough Gold Teeth' };
+  if (state.teeth < c) return { ok: false, reason: 'Not enough Ice' };
   state.teeth -= c;
   j.endsAt = now;
   const ev = finishTimers(state, now);
@@ -372,7 +373,7 @@ export const lieutenantCost = (b) => Math.round((BUILDINGS[b.t].cost0 || 100) * 
 export function hireLieutenant(state, id) {
   const b = state.base.buildings.find((x) => x.id === id);
   if (!b || !BUILDINGS[b.t].produce || b.lt || b.lv < 1) return { ok: false };
-  if (!spend(state, 'cash', lieutenantCost(b))) return { ok: false, reason: 'Not enough cash' };
+  if (!spend(state, 'cash', lieutenantCost(b))) return { ok: false, reason: 'Not enough Cash' };
   b.lt = true;
   return { ok: true };
 }
@@ -384,7 +385,7 @@ export function buyBuilder(state) {
   const n = state.base.builders;
   if (n >= MAX_BUILDERS) return { ok: false, reason: 'All builders hired' };
   const c = BUILDER_TEETH[n + 1];
-  if (state.teeth < c) return { ok: false, reason: 'Not enough Gold Teeth' };
+  if (state.teeth < c) return { ok: false, reason: 'Not enough Ice' };
   state.teeth -= c;
   state.base.builders++;
   return { ok: true, cost: c };
