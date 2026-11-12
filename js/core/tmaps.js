@@ -135,8 +135,8 @@ export function docklandsMap() {
 
   // Clear spawn zones — west apron for the player, east lane for the opponent.
   m.start = {
-    player: [{ x: 5, y: 5 }, { x: 6, y: 5 }, { x: 5, y: 6 }, { x: 6, y: 6 }],
-    enemy: [{ x: 19, y: 5 }, { x: 20, y: 5 }, { x: 19, y: 6 }, { x: 20, y: 6 }],
+    player: [{ x: 4, y: 4 }, { x: 6, y: 5 }, { x: 4, y: 7 }, { x: 6, y: 8 }],
+    enemy: [{ x: 18, y: 4 }, { x: 20, y: 5 }, { x: 18, y: 7 }, { x: 21, y: 6 }],
   };
   m.flavour = 'docklands';
   m.id = 'docklands';

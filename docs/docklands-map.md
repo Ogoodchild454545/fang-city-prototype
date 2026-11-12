@@ -6,8 +6,8 @@ Camera starts zoomed to the action; pan and zoom are kept.
 
 ## Spawns
 
-- Player: (5,5), (6,5), (5,6), (6,6)
-- Enemy: (19,5), (20,5), (19,6), (20,6)
+- Player: (4,4), (6,5), (4,7), (6,8) — spread across the west apron so four operators do not overlap on a tight 2×2
+- Enemy: (18,4), (20,5), (18,7), (21,6) — matching spread on the east lane
 
 Tutorial placements: Rook (6,9), Hook (13,9), crate at (12,9) for the west-cover lesson, with a clear southern flank at y=11.
 
