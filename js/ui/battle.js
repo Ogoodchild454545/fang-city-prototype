@@ -5,6 +5,7 @@ import * as B from '../core/battle.js';
 import { aiNextAction } from '../core/ai.js';
 import * as M from '../core/meta.js';
 import { fmt, money, esc, rewardText, ico } from './fmt.js';
+import { formatDrop } from '../core/shards.js';
 import { spriteFor } from '../core/buildings.js';
 import { SPR } from './iso.js';
 
@@ -301,6 +302,7 @@ function finish(ctx) {
     ${res.kind === 'raid' ? `<div>${starRow(res.stars || 0)}</div><div class="tiny dim">${res.pct}% of the base wrecked</div>` : ''}
     ${res.district ? `<div class="h gold">District taken! Income bonus applied.</div>` : ''}
     ${res.missionFirst ? `<div class="h gold">Mission cleared! The next one is open.</div>` : ''}
+    ${res.shardDrop ? `<div class="small gold">${esc(formatDrop(res.shardDrop))}${res.shardDrop.unlocked ? ' — they joined your operators!' : ''}</div>` : ''}
     ${res.lost && (res.lost.cash || res.lost.influence) ? `<div class="small red">Storage full: ${res.lost.cash ? money(res.lost.cash) : ''}${res.lost.cash && res.lost.influence ? ' and ' : ''}${res.lost.influence ? ico('influence') + ' ' + fmt(res.lost.influence) + ' Rep' : ''} left behind. Build more Strongboxes or Ledgers.</div>` : ''}
     <div class="rewards">${parts.join('')}</div>
     <div class="tiny ${fallen.length ? 'red' : 'green'}" style="margin-top:6px">${fallen.length ? `Lost in the fight: ${fallen.map(([t, n]) => `${n}× ${TROOPS[t].name}`).join(', ')}. Retrain them in My Crew.` : 'No troops lost.'}${res.bossesDown && res.bossesDown.length ? ` ${res.bossesDown.join(' & ')} needs 10 minutes' rest.` : ''}</div>

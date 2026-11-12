@@ -2,6 +2,7 @@
 // overwatch, and a simple enemy AI. Outcomes depend on positioning and decisions.
 import { rngNext, rngInt, newSeed } from './rng.js';
 import { defOf, HEROES, matchup, synergiesFor } from './heroes.js';
+import { starBonus, tutorialShardGift } from './shards.js';
 import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, DIRS4 } from './tmaps.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
@@ -188,11 +189,13 @@ export function pathTo(b, u, x, y) {
   return { path, cost: dist.get(k) };
 }
 
-function freshUnit(hero, side, x, y, uid) {
+function freshUnit(hero, side, x, y, uid, stars = 1) {
   const d = defOf(hero);
   const extraAp = d.passive?.id === 'scurry' ? 1 : 0;
+  const bon = starBonus(stars);
+  const hp = d.hp + bon.hp;
   return {
-    uid, hero, side, x, y, hp: d.hp, maxHp: d.hp,
+    uid, hero, side, x, y, hp, maxHp: hp, stars: stars || 1, aimMod: bon.aim,
     ap: d.ap + extraAp, maxAp: d.ap + extraAp, move: d.move,
     overwatch: false, moved: 0, acted: 0, fired: 0, lastFired: 0,
     suppressed: 0, fortify: 0, venom: 0, dashUsed: 0, rollUsed: 0, sprint: 0,
@@ -200,7 +203,7 @@ function freshUnit(hero, side, x, y, uid) {
   };
 }
 
-export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind }) {
+export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars }) {
   const b = {
     kind: kind || (tutorial ? 'tutorial' : 'street'),
     label: label || (tutorial ? 'Street lesson' : 'Street fight'),
@@ -211,9 +214,10 @@ export function startBattle({ map, player, enemy, seed, label, tutorial, reward,
   };
   const pSpots = pickDeploys(map, 'player', player.length, b.seed);
   const eSpots = pickDeploys(map, 'enemy', enemy.length, b.seed + 17);
+  const starMap = stars || {};
   player.forEach((id, i) => {
     const s = pSpots[i] || { x: 1, y: 1 + i };
-    b.units.push(freshUnit(id, 'player', s.x, s.y, 'p' + i));
+    b.units.push(freshUnit(id, 'player', s.x, s.y, 'p' + i, starMap[id] || 1));
   });
   enemy.forEach((id, i) => {
     const s = eSpots[i] || { x: map.w - 2, y: 1 + i };
@@ -249,8 +253,10 @@ export function startStreet(s, seed) {
   }
   const maps = [avenueMap, alleyMap, crossingMap];
   const map = maps[rngInt(holder, 0, maps.length - 1)](holder.rng);
+  const stars = {};
+  for (const id of squad) stars[id] = s.heroes.owned[id]?.stars || 1;
   return startBattle({
-    map, player: squad, enemy, seed: holder.rng,
+    map, player: squad, enemy, seed: holder.rng, stars,
     label: 'Street fight', kind: 'street',
     reward: { cash: 200 + n * 80, influence: 15 + n * 8 },
   });
@@ -342,7 +348,7 @@ export function apply(b, action) {
     if (!info) return { ok: false, reason: 'Cannot walk there' };
     if (!spend(u, info.cost)) return { ok: false, reason: 'Not enough AP' };
     u.moved = 1;
-    events.push({ typ: 'move', uid: u.uid, path: info.path, cost: info.cost });
+    events.push({ typ: 'move', uid: u.uid, path: info.path, cost: info.cost, from: { x: u.x, y: u.y } });
     events.push(...stepMove(b, u, info.path));
     checkEnd(b);
     return { ok: true, events, status: b.status };
@@ -422,7 +428,7 @@ export function apply(b, action) {
       const dest = opts[0];
       const info = pathTo(b, { ...u, ap: 8, move: 8, sprint: 0 }, dest.x, dest.y);
       const path = info && info.cost <= 3 ? info.path : [dest];
-      events.push({ typ: 'move', uid: u.uid, path, cost: 0 });
+      events.push({ typ: 'move', uid: u.uid, path, cost: 0, from: { x: u.x, y: u.y } });
       events.push(...stepMove(b, u, path));
       if (u.hp <= 0 || b.status !== 'active') return { ok: true, events, status: b.status };
     }
@@ -581,11 +587,8 @@ export function resolveTactics(s, b) {
     s.stats.wins = (s.stats.wins || 0) + 1;
     if (b.kind === 'tutorial' && !s.heroes.tutorialDone) {
       s.heroes.tutorialDone = true;
-      if (!s.heroes.owned.pip) {
-        s.heroes.owned.pip = { xp: 0 };
-        if (s.heroes.squad.length < 4) s.heroes.squad.push('pip');
-        res.unlocked = 'pip';
-      }
+      res.tutorial = true;
+      res.shardDrop = tutorialShardGift(s);
     }
   }
   s.stats.battles = (s.stats.battles || 0) + 1;

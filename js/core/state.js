@@ -4,7 +4,9 @@ import { DISTRICTS, GEAR, TROOPS } from './data.js';
 import { emptyHeroes, ensureHeroes } from './heroes.js';
 import { SPECIES_TO_TROOP, armyCap, spaceOf } from './crew.js';
 import { newSeed } from './rng.js';
-import { newBase, gain } from './base.js';
+import { newBase, gain, setClearLoot } from './base.js';
+import { rollClearDrop } from './shards.js';
+setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';

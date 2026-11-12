@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.3)
+# Fang City: Animal Gangs (playable prototype v0.4)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -14,6 +14,14 @@ shared roster of mixed-species troops (rats, foxes, wolves, snakes, badgers, cro
 and The Den level up. The four gangs — Grey Pack, Iron Claw, Swamp Syndicate and Velvet Den — are the enemy
 factions you fight in Missions.
 
+
+## v0.4
+
+- Currencies: Cash, Rep (star medal), and Ice (premium). Collect bubbles show a cash wad or the Rep medal.
+- Original procedural music and UI/battle SFX, with a mute toggle (starts on the first tap).
+- Unique operators fight 4v4 street battles (action points, half/full cover, hit chance, flanking, overwatch). Home-base troops stay on missions and raids.
+- New players start with Rook the wolf and a guided street lesson. Seven more mixed-species operators unlock with 30 shards (bush clears, mission rewards, Ice crates). Pin a target, a weekly feature, a 10-crate pity, and duplicate shards raise star level (or convert to universal shards at 5★).
+- Mock shop only — no real payments.
 ## The base (Hideout)
 - 40x40 tile isometric map, bigger than the screen: drag to pan, pinch or mouse-wheel to zoom.
 - Starts as an unstructured wasteland: dead grass, cracked concrete lots, broken streets, ruins, trees,

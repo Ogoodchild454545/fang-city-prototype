@@ -11,7 +11,8 @@ import { generateRivalBase, baseToRaidLayout, playerBaseLayout, RAID_W, RAID_H }
 import { aiNextActionFor } from '../js/core/ai.js';
 import { DISTRICTS, TROOPS, TROOP_ORDER, BOSSES, MISSIONS } from '../js/core/data.js';
 import * as T from '../js/core/tactics.js';
-import { HERO_ORDER, HEROES, recruit, canRecruit, grantHero, finishTutorial, matchup } from '../js/core/heroes.js';
+import { HERO_ORDER, HEROES, grantHero, finishTutorial, matchup } from '../js/core/heroes.js';
+import * as SH from '../js/core/shards.js';
 import { tutorialMap, avenueMap } from '../js/core/tmaps.js';
 
 let pass = 0;
@@ -390,15 +391,62 @@ test('a new player starts with Rook only; others are collectable', () => {
   assert.deepEqual(Object.keys(s.heroes.owned), ['rook']);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.equal(s.heroes.tutorialDone, false);
-  assert.equal(canRecruit(s, 'pip').ok, false);
-  assert.equal(canRecruit(s, 'lumen').ok, false); // needs cash
-  s.cash = 5000;
-  assert.ok(recruit(s, 'lumen').ok);
-  assert.ok(s.heroes.owned.lumen);
-  assert.ok(s.heroes.squad.includes('lumen'));
-  finishTutorial(s);
-  assert.ok(s.heroes.owned.pip);
   assert.equal(HERO_ORDER.length, 8);
+  finishTutorial(s);
+  assert.equal(s.heroes.tutorialDone, true);
+  assert.ok(!s.heroes.owned.pip, 'Pip is no longer a free unlock');
+});
+
+test('shards unlock heroes, pin boosts, crates have pity, extras become stars or universal', () => {
+  const s = newGame(T0, 11);
+  const mid = SH.addShards(s, 'lumen', 29);
+  assert.equal(!!s.heroes.owned.lumen, false);
+  assert.equal(s.heroes.shards.lumen, 29);
+  const done = SH.addShards(s, 'lumen', 1);
+  assert.ok(done.unlocked);
+  assert.ok(s.heroes.owned.lumen);
+  assert.equal(s.heroes.owned.lumen.stars, 1);
+  // more shards raise stars
+  SH.addShards(s, 'lumen', 10);
+  assert.equal(s.heroes.owned.lumen.stars, 2);
+  // pin
+  assert.ok(SH.setPin(s, 'pip').ok);
+  assert.equal(s.heroes.pin, 'pip');
+  assert.equal(SH.setPin(s, 'rook').ok, false);
+  // crates + pity: 10 street crates guarantee a drop
+  s.teeth = 10000;
+  let pity = false, opened = 0;
+  for (let i = 0; i < 10; i++) {
+    const r = SH.openCrate(s, 'street', T0);
+    assert.ok(r.ok, r.reason);
+    opened++;
+    if (r.pity) pity = true;
+  }
+  assert.equal(opened, 10);
+  assert.ok(pity, 'tenth crate is a pity grant');
+  assert.equal(SH.pityOf(s, 'street').have, 0);
+  // featured hero is one of the collectable operators
+  assert.ok(HEROES[SH.featuredHero(T0)]);
+  assert.notEqual(SH.featuredHero(T0), 'rook');
+  // max stars convert to universal
+  s.heroes.owned.lumen.stars = 5;
+  s.heroes.owned.lumen.shards = 0;
+  const uni = s.heroes.universal || 0;
+  const conv = SH.addShards(s, 'lumen', 7);
+  assert.equal(conv.converted, 7);
+  assert.equal(s.heroes.universal, uni + 7);
+  const pipBefore = SH.shardCount(s, 'pip');
+  const used = SH.spendUniversal(s, 'pip', 7);
+  assert.ok(used.ok);
+  assert.equal(SH.shardCount(s, 'pip'), pipBefore + 7);
+  // clearing bushes can drop shards (run many times on a copy of rng)
+  let drops = 0;
+  for (let i = 0; i < 40; i++) {
+    const s2 = newGame(T0, 200 + i);
+    const d = SH.rollClearDrop(s2, T0);
+    if (d) drops++;
+  }
+  assert.ok(drops > 0, 'some bush clears drop shards');
 });
 
 test('tactics: cover, hitchance, flanking, overwatch and a tutorial fight', () => {

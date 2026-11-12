@@ -37,6 +37,11 @@ export function render(ctx) {
   </div>
   <div>
     <div class="card" style="margin-top:4px">
+      <div class="row"><div class="grow"><div class="tiny red h">Street fights</div><div class="small">Send up to four unique operators. ${s.heroes.squad.length} in the squad${s.heroes.tutorialDone ? '' : ' · lesson still open'}.</div></div>
+      <div class="col"><button class="btn sm" data-act="nav" data-tab="heroes">Operators</button>
+      ${s.heroes.tutorialDone ? '<button class="btn red sm" data-act="startStreet">Fight</button>' : '<button class="btn gold sm" data-act="startTutorial">Lesson</button>'}</div></div>
+    </div>
+    <div class="card" style="margin-top:4px">
       <div class="row"><div class="grow"><div class="tiny red h">Reputation</div><div class="h" style="font-size:17px">${tier.name} · ${s.rep}</div></div>
       <div class="tiny dim" style="text-align:right">${next ? `${next.min - s.rep} to ${next.name}` : 'Top of the ladder'}</div></div>
       <div class="bar gold" style="margin-top:6px"><i style="width:${next ? ((s.rep - tier.min) / (next.min - tier.min)) * 100 : 100}%"></i></div>

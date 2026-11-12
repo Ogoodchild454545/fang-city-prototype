@@ -230,12 +230,25 @@ export const RIVALS = {
 export const defOf = (id) => HEROES[id] || RIVALS[id];
 
 export function emptyHeroes() {
-  return { owned: { rook: { xp: 0 } }, squad: ['rook'], tutorialDone: false, wins: 0 };
+  return {
+    owned: { rook: { xp: 0, stars: 1, shards: 0 } },
+    squad: ['rook'], tutorialDone: false, wins: 0,
+    shards: {}, universal: 0, pin: null, cratePity: 0, vaultPity: 0, cratesOpened: 0,
+  };
 }
 
 export function ensureHeroes(s) {
   if (!s.heroes || !s.heroes.owned) s.heroes = emptyHeroes();
-  if (!s.heroes.owned.rook) s.heroes.owned.rook = { xp: 0 };
+  if (!s.heroes.owned.rook) s.heroes.owned.rook = { xp: 0, stars: 1, shards: 0 };
+  for (const rec of Object.values(s.heroes.owned)) {
+    rec.xp ||= 0; rec.stars = rec.stars || 1; rec.shards ||= 0;
+  }
+  s.heroes.shards ||= {};
+  s.heroes.universal ||= 0;
+  s.heroes.cratePity ||= 0;
+  s.heroes.vaultPity ||= 0;
+  s.heroes.cratesOpened ||= 0;
+  if (s.heroes.pin === undefined) s.heroes.pin = null;
   if (!Array.isArray(s.heroes.squad) || !s.heroes.squad.length) s.heroes.squad = ['rook'];
   s.heroes.squad = s.heroes.squad.filter((id) => s.heroes.owned[id]).slice(0, 4);
   if (!s.heroes.squad.length) s.heroes.squad = ['rook'];
@@ -259,16 +272,10 @@ export function denLv(s) {
 
 export function unlockHint(s, id) {
   const h = HEROES[id]; if (!h) return 'Unknown';
+  if (id === 'rook') return 'Given in the street lesson';
   if (s.heroes?.owned?.[id]) return 'In the crew';
-  const u = h.unlock || {};
-  if (u.kind === 'start') return 'Starting operator';
-  if (u.kind === 'tutorial') return 'Joins after the street lesson';
-  const bits = [];
-  if (u.den) bits.push(`Den ${u.den}`);
-  if (u.cash) bits.push(`$${u.cash.toLocaleString('en-GB')}`);
-  if (u.influence) bits.push(`${u.influence} Rep`);
-  if (u.teeth) bits.push(`${u.teeth} Ice`);
-  return bits.length ? `Recruit: ${bits.join(' · ')}` : 'Locked';
+  const have = s.heroes?.shards?.[id] || 0;
+  return `${have}/30 shards to unlock`;
 }
 
 export function canRecruit(s, id) {
@@ -299,15 +306,14 @@ export function recruit(s, id) {
 
 export function grantHero(s, id) {
   if (!HEROES[id]) return false;
-  if (!s.heroes.owned[id]) s.heroes.owned[id] = { xp: 0 };
+  if (!s.heroes.owned[id]) s.heroes.owned[id] = { xp: 0, stars: 1, shards: 0 };
   if (s.heroes.squad.length < 4 && !s.heroes.squad.includes(id)) s.heroes.squad.push(id);
   return true;
 }
 
 export function finishTutorial(s) {
   s.heroes.tutorialDone = true;
-  grantHero(s, 'pip');
-  return { pip: true };
+  return { ok: true };
 }
 
 // Aim / damage tweaks when this attacker faces that defender.

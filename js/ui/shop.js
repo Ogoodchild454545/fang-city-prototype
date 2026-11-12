@@ -1,10 +1,35 @@
 // Mock storefront. Shows how monetisation would look; no payment code exists in the prototype.
 import { SHOP } from '../core/data.js';
+import { CRATES, featuredHero, featuredUntil, pityOf, openCrate, formatDrop } from '../core/shards.js';
+import { HEROES } from '../core/heroes.js';
 import * as E from '../core/economy.js';
 import * as M from '../core/meta.js';
 import * as BS from '../core/base.js';
 import * as C from '../core/crew.js';
-import { fmt, money, dur, ico } from './fmt.js';
+import { fmt, money, dur, ico, esc } from './fmt.js';
+
+
+function crateBlock(s, now) {
+  const feat = featuredHero(now);
+  const days = Math.max(1, Math.ceil((featuredUntil(now) - now) / 86400000));
+  const pin = s.heroes?.pin && HEROES[s.heroes.pin];
+  const card = (kind) => {
+    const c = CRATES[kind];
+    const p = pityOf(s, kind);
+    return `<div class="card cratecard">
+      <div class="h">${esc(c.name)}</div>
+      <div class="tiny dim">${esc(c.blurb)}</div>
+      <div class="tiny" style="margin-top:4px">${c.odds.map((o) => `${Math.round(o.p * 100)}% ${esc(o.label)}`).join(' · ')}</div>
+      <div class="tiny gold">Pity ${p.have}/${p.need} · ${esc(c.pity)}</div>
+      <button class="btn gold block" style="margin-top:6px" data-act="openCrate" data-kind="${kind}">Open · ${ico('teeth')} ${c.cost}</button>
+    </div>`;
+  };
+  return `<div class="sect">Operator crates ${ico('teeth')}</div>
+    <div class="card" style="margin-bottom:8px"><div class="tiny gold h">Weekly feature</div>
+      <div class="small"><b>${esc(HEROES[feat].name)}</b> (${esc(HEROES[feat].species)}) drops more often for ${days} more day${days > 1 ? 's' : ''}. ${pin ? `Pinned: ${esc(pin.name)} gets an even bigger boost.` : 'Pin a target on the Operators screen to focus your drops.'}</div></div>
+    <div class="grid2">${card('street')}${card('vault')}</div>
+    <div class="tiny faint" style="margin:6px 0 10px">Paid with Ice you already have (earned or from the mock Ice packs below). No real charge. Duplicate shards raise star level; extras at 5★ become universal shards.</div>`;
+}
 
 export function render(ctx) {
   const s = ctx.state, now = ctx.now();
@@ -20,6 +45,8 @@ export function render(ctx) {
   return `
   <div class="title"><span class="h">Market</span><span class="sub">/ Shop</span></div>
   <div class="proto">PROTOTYPE: no real payments. Tapping a price grants the item instantly so you can feel the economy. Prices are proposals in GBP.</div>
+
+  ${crateBlock(s, now)}
 
   ${starterOwned ? '' : `<div class="card featured"><div class="row">
     <div class="img" style="background-image:url(assets/fox.jpg)"></div>
@@ -57,6 +84,14 @@ export function render(ctx) {
 }
 
 export const actions = {
+  openCrate(ctx, el) {
+    const r = openCrate(ctx.state, el.dataset.kind, ctx.now());
+    if (!r.ok) return ctx.toast(r.reason);
+    const pity = r.pity ? 'Pity hit! ' : '';
+    const text = r.universal && !r.id ? `${pity}+${r.added} universal shards` : (pity + formatDrop(r));
+    ctx.toast(r.unlocked ? `${text} — they joined your operators!` : text);
+    ctx.render();
+  },
   buy(ctx, el) {
     const r = M.mockPurchase(ctx.state, el.dataset.kind, el.dataset.id, ctx.now());
     ctx.toast(r.ok ? `Prototype purchase: ${r.text}` : r.text);

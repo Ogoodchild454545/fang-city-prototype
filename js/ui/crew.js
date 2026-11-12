@@ -44,6 +44,7 @@ function armyTab(ctx) {
       <div class="armyhead">
         <div class="sect" style="margin:0;flex:1">Troops</div>
         <span class="house" title="housing space used / total">🏠 <b data-live="army">${used}</b>/${cap}${q ? `<span class="tiny dim"> +${q} queued</span>` : ''}</span>
+        <button class="btn dim battlebtn" data-act="nav" data-tab="heroes">Operators</button>
         <button class="btn red battlebtn" data-act="goBattle" ${line.length ? '' : 'disabled'}>⚔ Battle</button>
       </div>
       <div class="troops">${troops.length ? troops.map((t) => troopChip(ctx, t, s.army[t])).join('') : '<div class="tiny dim" style="padding:8px">No troops yet. Train some below.</div>'}</div>
@@ -95,8 +96,8 @@ function upgradesTab(ctx) {
 export function render(ctx) {
   const t = ctx.sub.crewTab || 'army';
   return `
-  <div class="tabs crewtabs">${[['army', 'My Crew'], ['upgrades', 'Upgrades']].map(([x, l]) => `<button class="${t === x ? 'on' : ''}" data-act="crewTab" data-t="${x}">${l}</button>`).join('')}</div>
-  ${t === 'army' ? armyTab(ctx) : upgradesTab(ctx)}`;
+  <div class="tabs crewtabs">${[['army', 'My Crew'], ['upgrades', 'Upgrades'], ['ops', 'Operators']].map(([x, l]) => `<button class="${t === x ? 'on' : ''}" data-act="crewTab" data-t="${x}">${l}</button>`).join('')}</div>
+  ${t === 'ops' ? '<div class="tiny dim" style="padding:8px">Opening Operators…</div>' : t === 'army' ? armyTab(ctx) : upgradesTab(ctx)}`;
 }
 
 export function live(ctx, now) {
@@ -147,7 +148,7 @@ function bossModal(ctx, id) {
 const reopen = (ctx, html) => { const el = document.querySelector('.overlay .sheet'); if (el) el.innerHTML = '<button class="x" data-act="closeModal">✕</button>' + html; };
 
 export const actions = {
-  crewTab(ctx, el) { ctx.sub.crewTab = el.dataset.t; ctx.render(); },
+  crewTab(ctx, el) { if (el.dataset.t === 'ops') return ctx.go('heroes'); ctx.sub.crewTab = el.dataset.t; ctx.render(); },
   train(ctx, el, e) {
     e?.stopPropagation?.();
     const t = el.dataset.t;

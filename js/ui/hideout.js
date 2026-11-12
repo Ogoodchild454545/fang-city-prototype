@@ -37,6 +37,7 @@ export function render(ctx) {
       <button class="tapbtn sm" data-act="tap">Shake<br>down<small data-live="tapv">+${money(E.tapValue(s, now))}</small></button>
     </div>
     <div class="hud hud-br">
+      ${!ctx.state.heroes?.tutorialDone ? '<button class="bigbtn gold" data-act="startTutorial"><span class="i">🐺</span>Lesson</button>' : '<button class="bigbtn" data-act="nav" data-tab="heroes"><span class="i">🐺</span>Ops</button>'}
       <button class="bigbtn" data-act="openBuild"><span class="i">🔨</span>Build</button>
       <button class="bigbtn" data-act="nav" data-tab="shop"><span class="i">🧰</span>Shop</button>
     </div>

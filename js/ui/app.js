@@ -16,12 +16,15 @@ import * as Shop from './shop.js';
 import * as Battle from './battle.js';
 import * as Missions from './missions.js';
 import * as Audio from './audio.js';
+import * as Tactics from './tactics.js';
+import * as Heroes from './heroes.js';
+import { formatDrop } from '../core/shards.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
 if (params.has('reset')) storage.clear();
 
-const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle };
+const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes };
 const NAV = [
   ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['missions', '🎯', 'Missions'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
 ];
@@ -67,14 +70,16 @@ function nav() {
 function render() {
   const s = ctx.state;
   if (!s) return;
-  if (s.battle && ctx.tab !== 'battle') ctx.tab = 'battle';
+  if (s.tactics && ctx.tab !== 'tactics') ctx.tab = 'tactics';
+  else if (s.battle && ctx.tab !== 'battle') ctx.tab = 'battle';
   const scr = SCREENS[ctx.tab];
-  const inBattle = ctx.tab === 'battle';
+  const inBattle = ctx.tab === 'battle' || ctx.tab === 'tactics';
   $('#topbar').style.display = inBattle ? 'none' : '';
   $('#nav').style.display = inBattle ? 'none' : '';
   $('#topbar').innerHTML = topbar();
   $('#app').classList.toggle('mode-base', ctx.tab === 'base');
-  $('#app').classList.toggle('mode-battle', inBattle);
+  $('#app').classList.toggle('mode-battle', ctx.tab === 'battle');
+  $('#app').classList.toggle('mode-tactics', ctx.tab === 'tactics');
   $('#nav').innerHTML = nav();
   syncBattleMute();
   const el = $('#screen');
@@ -138,7 +143,7 @@ function handleBaseEvents(ev) {
   if (!ev || !ev.length) return;
   const e = ev[ev.length - 1];
   const name = (BUILDINGS[e.t] || OBSTACLES[e.t]).name;
-  let msg = e.type === 'built' ? `${name} is open for business` : e.type === 'upgraded' ? `${name} upgraded to level ${e.lv}` : `${name} cleared${e.teeth ? `: found ${e.teeth} Ice!` : ''}`;
+  let msg = e.type === 'built' ? `${name} is open for business` : e.type === 'upgraded' ? `${name} upgraded to level ${e.lv}` : `${name} cleared${e.teeth ? `: found ${e.teeth} Ice` : ''}${e.shards ? `${e.teeth ? ' and ' : ': '}${formatDrop(e.shards)}` : e.teeth ? '!' : ''}`;
   if (ev.length > 1) msg += ` (+${ev.length - 1} more done)`;
   toast(msg);
   ctx.save();
@@ -160,7 +165,7 @@ document.getElementById('app').addEventListener('click', (e) => {
   if (!el || el.hasAttribute('disabled')) return;
   const act = el.dataset.act;
   if (act !== 'toggleMute') Audio.play('tap');
-  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act];
+  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act] || Heroes.actions[act];
   if (handler) { handler(ctx, el, e); ctx.save(); }
 });
 
@@ -198,6 +203,14 @@ function startNewGame() {
   M.ensureJobs(ctx.state, ctx.now());
   ctx.save(); render();
   toast('Welcome to the wasteland. Tap BUILD to put up your first Knock-off Stall.');
+  if (!ctx.fast) {
+    modal(`<div class="h" style="font-size:22px">Rook is ready</div>
+      <p class="small">You start with one unique operator — Rook the wolf. A short street lesson will teach you action points, cover and hit chance. Other operators are unlocked with shards from bushes, missions and Ice crates. Home-base troops stay for missions and raids.</p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn red block" data-act="startTutorial">Start the lesson</button>
+        <button class="btn block" data-act="closeModal">Look around first</button>
+      </div>`, { center: true });
+  }
 }
 
 function splash(next) {
@@ -266,7 +279,7 @@ function boot() {
     else if (ctx.state) { const sum = E.applyOffline(ctx.state, ctx.now()); render(); welcomeBack(sum); }
   });
   window.addEventListener('pagehide', () => ctx.save());
-  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (ctx.tab === 'battle' && !ctx.sub.battle?.busy) render(); }, 150); });
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if ((ctx.tab === 'battle' && !ctx.sub.battle?.busy) || ctx.tab === 'tactics') render(); }, 150); });
 }
 
 splash(boot);

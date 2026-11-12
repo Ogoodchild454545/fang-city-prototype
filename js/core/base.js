@@ -244,6 +244,9 @@ export function moveBuilding(state, id, x, y) {
   return { ok: true };
 }
 
+let clearLoot = null;
+export function setClearLoot(fn) { clearLoot = fn; }
+
 export function startClear(state, id, now) {
   const o = state.base.obstacles.find((v) => v.id === id);
   if (!o || o.clr) return { ok: false, reason: 'Already clearing' };
@@ -291,7 +294,8 @@ export function finishTimers(state, now) {
       if (rngNext(state) < d.teeth[0]) teeth = rngInt(state, d.teeth[1], d.teeth[2]);
       state.teeth += teeth;
       state.stats.cleared = (state.stats.cleared || 0) + 1;
-      ev.push({ type: 'cleared', id: o.id, t: o.t, x: o.x, y: o.y, teeth });
+      const shards = clearLoot ? clearLoot(state) : null;
+      ev.push({ type: 'cleared', id: o.id, t: o.t, x: o.x, y: o.y, teeth, shards });
     } else keep.push(o);
   }
   state.base.obstacles = keep;
