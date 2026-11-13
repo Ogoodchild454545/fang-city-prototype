@@ -649,3 +649,9 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .rbtns{margin-top:10px}
 @media (max-width:640px){.result.r2{grid-template-columns:1fr}}
 .tlbl.long{font-size:9px;letter-spacing:0;white-space:normal;text-align:center;line-height:1}
+.tbanner{position:absolute;top:34%;left:0;display:flex;align-items:center;gap:10px;padding:6px 26px 6px 14px;background:linear-gradient(90deg,rgba(30,60,110,.95),rgba(20,30,60,.85) 70%,transparent);border-top:2px solid #6fa8ff;border-bottom:2px solid #6fa8ff;z-index:7;pointer-events:none;animation:tban 1.25s cubic-bezier(.2,.9,.3,1) both}
+.tbanner.foe{background:linear-gradient(90deg,rgba(110,24,22,.95),rgba(60,16,14,.85) 70%,transparent);border-color:var(--red)}
+.tbanner img{width:44px;height:44px;border-radius:8px;object-fit:cover;border:2px solid rgba(255,255,255,.7)}
+.tbanner b{display:block;font:600 22px/1 var(--font);text-transform:uppercase;letter-spacing:.06em;color:#fff}
+.tbanner span{font-size:11px;color:#dfe6f3;text-transform:uppercase;letter-spacing:.08em}
+@keyframes tban{0%{transform:translateX(-110%);opacity:0}16%{transform:translateX(0);opacity:1}78%{transform:translateX(0);opacity:1}100%{transform:translateX(-30%);opacity:0}}

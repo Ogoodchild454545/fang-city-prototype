@@ -874,7 +874,15 @@ async function playEvents(ctx, events) {
         u.shake = Math.max(u.shake, 10);
       }
     }
-    if (ev.typ === 'overwatch' && !ev.target) Audio.play('overwatch');
+    if (ev.typ === 'overwatch' && !ev.target) {
+      Audio.play('overwatch');
+      const ow = b.units.find((x) => x.uid === ev.uid);
+      if (ow) { Actors.playClip(ow, 'ability'); await wait(260); }
+    }
+    if (ev.typ === 'fortify') {
+      const fu = b.units.find((x) => x.uid === ev.uid);
+      if (fu) { Actors.playClip(fu, 'ability'); await wait(260); }
+    }
   }
 }
 
@@ -1132,6 +1140,18 @@ export function render(ctx) {
   const hoverMode = (u.abilityHover && u.abilityHover.mode) || u.mode;
   const tip = trayItems.find((a) => a.id === hoverMode || a.kind === hoverMode) || null;
   const feed = feedHtml(b);
+  // Turn hand-off banner (Marvel Snap / XCOM style). Survives re-renders via a negative animation delay.
+  const nowMs = performance.now();
+  if (actor && u.lastActing !== actor.uid && b.status === 'active') {
+    u.lastActing = actor.uid; u.bannerAt = nowMs;
+    if (!u.bannerTimer) u.bannerTimer = setTimeout(() => { u.bannerTimer = null; if (ctx.tab === 'tactics') ctx.render(); }, 1300);
+  }
+  let banner = '';
+  if (actor && u.bannerAt && nowMs - u.bannerAt < 1250) {
+    const ad = defOf(actor.hero), ac = classOf(ad);
+    const foe = actor.side === 'enemy';
+    banner = `<div class="tbanner ${foe ? 'foe' : ''}" style="animation-delay:-${Math.round(nowMs - u.bannerAt)}ms"><img src="${ad.thumb || ad.portrait}" alt=""><div><b>${esc(ad.name)}</b><span>${foe ? 'Rival turn' : 'Your move'} · ${esc((ac && ac.name) || ad.role)}</span></div></div>`;
+  }
   return `
   <div class="twrap">
     <canvas id="tacv"></canvas>
@@ -1142,6 +1162,7 @@ export function render(ctx) {
       <button class="btn red" data-act="endTacticsTurn" ${canAct ? '' : 'disabled'}>End turn</button>
     </div>
     ${queueHtml(b)}
+    ${banner}
     ${coachHtml ? `<div class="tcoach">${coachHtml}</div>` : ''}
     ${sel ? `
     <div class="tdock">
