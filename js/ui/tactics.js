@@ -628,19 +628,26 @@ function draw(ctx) {
       const pop = enter < 1 ? 1.15 * (1 - Math.pow(1 - enter, 3)) : 1;
       const fade = Math.min(1, (bub.until - now) / 280);
       g.save();
+      // Keep quips legible when the camera is zoomed out: floor the font at ~11 CSS px.
+      const dpr = window.devicePixelRatio || 1;
+      const fs = Math.max(11 * dpr, 8.5 * z);
+      const pad = fs * 0.6;
       g.translate(cx, cy - r - 16 * z);
       g.scale(pop, pop);
       g.globalAlpha = fade;
-      g.font = `${Math.round(8.5 * z)}px Inter, sans-serif`;
+      g.font = `600 ${Math.round(fs)}px Inter, sans-serif`;
       g.textAlign = 'center';
-      const tw = Math.min(130 * z, g.measureText(bub.text).width + 12 * z);
-      const th = 15 * z;
-      g.fillStyle = 'rgba(14,12,10,0.92)';
-      g.beginPath(); g.roundRect(-tw / 2, -th, tw, th, 4 * z); g.fill();
+      const tw = Math.min(240 * dpr, g.measureText(bub.text).width + pad * 2);
+      const th = fs * 1.7;
+      const team = un.side === 'player' ? '#6fa8ff' : '#ff5a48';
+      g.fillStyle = 'rgba(14,12,10,0.94)';
+      g.strokeStyle = team;
+      g.lineWidth = 1.5 * dpr;
+      g.beginPath(); g.roundRect(-tw / 2, -th, tw, th, 5 * dpr); g.fill(); g.stroke();
       g.beginPath();
-      g.moveTo(-3 * z, 0); g.lineTo(3 * z, 0); g.lineTo(0, 5 * z); g.closePath(); g.fill();
+      g.moveTo(-4 * dpr, 0); g.lineTo(4 * dpr, 0); g.lineTo(0, 6 * dpr); g.closePath(); g.fill();
       g.fillStyle = '#f3e7c9';
-      g.fillText(bub.text, 0, -4 * z);
+      g.fillText(bub.text, 0, -th * 0.3, tw - pad);
       g.restore();
     }
     g.restore();
@@ -672,15 +679,17 @@ function draw(ctx) {
     const pop = age < 100 ? 0.5 + 0.9 * (age / 100) : age < 180 ? 1.4 - 0.4 * ((age - 100) / 80) : 1;
     g.save();
     g.globalAlpha = 1 - k * k;
-    const fy = f.y - k * 28 * z;
-    g.translate(f.x, fy);
+    // Floats are stored at the zoom they were spawned at; rescale if a camera pan zoomed since.
+    const rs = f.z0 ? z / f.z0 : 1;
+    const fy = f.y * rs - k * 28 * z;
+    g.translate(f.x * rs, fy);
     g.scale(pop, pop);
-    g.font = `bold ${Math.round(15 * z)}px Oswald, sans-serif`;
+    g.font = `bold ${Math.round((f.crit ? 21 : f.dmg ? 18 : 15) * z)}px Oswald, sans-serif`;
     g.textAlign = 'center';
     g.lineJoin = 'round';
     g.lineWidth = 3 * z;
     g.strokeStyle = 'rgba(10,8,8,0.8)';
-    g.fillStyle = f.heal ? '#8fd18f' : f.miss ? '#d0d0d0' : (f.crit ? '#ffe080' : '#ffd0c8');
+    g.fillStyle = f.heal ? '#8fe08f' : f.miss ? '#d0d0d0' : (f.crit ? '#ffd23a' : '#ff6a52');
     g.strokeText(f.text, 0, 0);
     g.fillText(f.text, 0, 0);
     g.restore();
@@ -875,13 +884,13 @@ async function playEvents(ctx, events) {
           u.hitstop = performance.now() + (ev.crit ? 120 : 80);
           Actors.playClip(def, ev.ko ? 'ko' : 'hit');
           Vfx.spawnSparks(u.fx, tx, ty, ev.crit ? 16 : 10);
-          Vfx.spawnCallout(u.fx, tx, ty - 8 * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
-          u.floats.push({ t: performance.now(), x: tx, y: (tw.y - 22) * zz, text: ev.crit ? `${ev.dmg}!` : `${ev.dmg}`, heal: 0, crit: ev.crit });
+          // Callout word above the head, damage number lower and off to the side so they never overprint.
+          Vfx.spawnCallout(u.fx, tx, ty - 76 * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
+          u.floats.push({ t: performance.now(), x: tx + fac * 18 * zz, y: (tw.y - 40) * zz, z0: zz, text: ev.crit ? `-${ev.dmg}!` : `-${ev.dmg}`, heal: 0, crit: ev.crit, dmg: 1 });
           if (ev.ko) say(u, b, ev.target, 'ko');
           await wait(Math.max(0, u.hitstop - performance.now() + 40));
         } else {
-          Vfx.spawnCallout(u.fx, tx, ty - 8 * zz, 'MISS', 'miss');
-          u.floats.push({ t: performance.now(), x: tx, y: (tw.y - 22) * zz, text: 'Miss', miss: 1 });
+          Vfx.spawnCallout(u.fx, tx, ty - 76 * zz, 'MISS', 'miss');
         }
         await wait(240);
       }
@@ -890,7 +899,7 @@ async function playEvents(ctx, events) {
       const def = b.units.find((x) => x.uid === ev.target);
       if (def) {
         const t = toWorld(def.x, def.y);
-        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1 });
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1, z0: u.cam.z });
         Audio.play('collect');
         await wait(280);
       }
@@ -899,7 +908,7 @@ async function playEvents(ctx, events) {
       const def = b.units.find((x) => x.uid === ev.target);
       if (def) {
         const t = toWorld(def.x, def.y);
-        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1 });
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1, z0: u.cam.z });
         say(u, b, ev.uid, 'revive');
         Actors.playClip(def, 'revive');
         const medic = b.units.find((x) => x.uid === ev.uid);
@@ -933,7 +942,7 @@ async function playEvents(ctx, events) {
       const un = b.units.find((x) => x.uid === ev.uid);
       if (un) {
         const t = toWorld(un.x, un.y);
-        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `${ev.dmg}`, heal: 0 });
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `-${ev.dmg}`, heal: 0, dmg: 1, z0: u.cam.z });
         Actors.playClip(un, un.hp <= 0 ? 'ko' : 'hit');
         if (un.hp <= 0) say(u, b, ev.uid, 'ko');
         u.hitstop = performance.now() + 70;
@@ -1173,7 +1182,7 @@ function feedTone(l) {
 
 export function render(ctx) {
   const b = ctx.state.tactics, u = ui(ctx);
-  if (!b) return `<div class="pad">No fight.</div>`;
+  if (!b) return `<div class="twrap"></div>`;
   if (b.status !== 'active' && !u.closed) queueMicrotask(() => finish(ctx));
   const actor = T.actingUnit(b);
   if (actor && actor.side === 'player' && actor.hp > 0) u.sel = actor.uid;

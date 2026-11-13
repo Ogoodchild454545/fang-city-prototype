@@ -133,12 +133,16 @@ export function panCam(fx, cam, worldX, worldY, cv, opts = {}) {
   const durIn = opts.durIn || 260;
   const hold = opts.hold || 480;
   const durOut = opts.durOut || 420;
+  // If a pan is already running, keep its resting framing as the base; otherwise chained
+  // shot/explosion pans would restore to a half-zoomed camera and creep ever closer.
+  const base = fx.pan ? { x: fx.pan.fromX, y: fx.pan.fromY, z: fx.pan.fromZ } : { x: cam.x, y: cam.y, z: cam.z };
   fx.pan = {
     t0: performance.now(),
     durIn, hold, durOut,
-    fromX: cam.x, fromY: cam.y, fromZ: cam.z,
+    fromX: base.x, fromY: base.y, fromZ: base.z,
+    startX: cam.x, startY: cam.y, startZ: cam.z,
     worldX, worldY,
-    toZ: cam.z * zoom,
+    toZ: base.z * zoom,
     cvW: cv.width || 0,
     cvH: cv.height || 0,
     cy: 0.56,
@@ -160,12 +164,17 @@ export function applyPan(fx, cam) {
     fx.pan = null;
     return;
   }
-  const z = p.fromZ + (p.toZ - p.fromZ) * k;
+  // Ease in from wherever the camera was (may be mid-pan), ease out to the resting framing.
+  const inPhase = elapsed < tHold;
+  const sx = inPhase && p.startX != null ? p.startX : p.fromX;
+  const sy = inPhase && p.startY != null ? p.startY : p.fromY;
+  const sz = inPhase && p.startZ != null ? p.startZ : p.fromZ;
+  const z = sz + (p.toZ - sz) * k;
   const tx = p.cvW * 0.50 - p.worldX * z;
   const ty = p.cvH * p.cy - p.worldY * z;
   cam.z = z;
-  cam.x = p.fromX + (tx - p.fromX) * k;
-  cam.y = p.fromY + (ty - p.fromY) * k;
+  cam.x = sx + (tx - sx) * k;
+  cam.y = sy + (ty - sy) * k;
 }
 
 // Offset to add to cam translation. Does not mutate cam.x/y (so user pans stay put).
