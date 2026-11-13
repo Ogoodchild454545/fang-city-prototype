@@ -248,9 +248,42 @@ function ensureMeta(id, part) {
   else if (part === 'mid' || part === 'tip') { ax = 0.80 * pw - pvtX; ay = 0.80 * ph - pvtY; }
   else { ax = 0.50 * pw - pvtX; ay = 0.88 * ph - pvtY; }
   const axis = Math.atan2(ay, ax);
-  meta[key] = { img: im, pw, ph, pvtX, pvtY, axis, part, id };
+  // Rival art is near-black ink; bake a lifted copy once so it reads on the dark docks.
+  const img = fitOf(id).rim ? liftDark(im) : im;
+  meta[key] = { img, pw, ph, pvtX, pvtY, axis, part, id };
   return meta[key];
 }
+
+// Luminance gamma lift (about 0.52) with a faint warm/red cast: keeps the rivals' dark,
+// gritty look but separates leather, fur and kit from the asphalt. Falls back to the raw image.
+function liftDark(im) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = im.naturalWidth; c.height = im.naturalHeight;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(im, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height);
+    const a = d.data;
+    for (let i = 0; i < a.length; i += 4) {
+      if (!a[i + 3]) continue;
+      const r = a[i] / 255, gg = a[i + 1] / 255, bb = a[i + 2] / 255;
+      const L = 0.3 * r + 0.59 * gg + 0.11 * bb + 1e-4;
+      const L2 = Math.pow(L, 0.52);
+      const k = Math.min(L2 / L, 6);
+      a[i] = Math.min(255, (r * k * 0.7 + L2 * 0.3) * 255 * 1.07);
+      a[i + 1] = Math.min(255, (gg * k * 0.7 + L2 * 0.3) * 255 * 0.98);
+      a[i + 2] = Math.min(255, (bb * k * 0.7 + L2 * 0.3) * 255 * 0.98);
+    }
+    x.putImageData(d, 0, 0);
+    c.naturalWidth = c.width; c.naturalHeight = c.height;
+    return c;
+  } catch (e) {
+    return im;
+  }
+}
+
+const TEAM_RIM = { enemy: 'rgba(255, 80, 60, 0.78)', player: 'rgba(110, 200, 255, 0.85)' };
+let curSide = 'enemy';
 
 function legSpan(fit) {
   const f = fit || {};
@@ -585,7 +618,7 @@ function drawPart(g, id, part, ang, s, weap, kind, opt) {
   if (opt && opt.sx && opt.sx !== 1) g.scale(opt.sx, 1);
   if (fit.rim) {
     g.save();
-    g.shadowColor = fit.rim;
+    g.shadowColor = TEAM_RIM[curSide] || fit.rim;
     g.shadowOffsetX = -1.8 * Math.max(0.7, s);
     g.shadowOffsetY = -1.4 * Math.max(0.7, s);
     g.shadowBlur = 2.4 * Math.max(0.7, s);
@@ -620,6 +653,7 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
   if (!rig || !rigReady(unit.hero)) return null;
   const pose = poseOf(unit, def, anim, now);
   const fit = fitOf(unit.hero);
+  curSide = unit.side === 'player' ? 'player' : 'enemy';
   const flip = (anim.facing || 1) * (rig.imageFacing || def.imageFacing || 1);
   const s = (def.height * z) / 100;
   const weap = rig.weapon;
