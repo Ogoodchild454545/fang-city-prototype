@@ -1,4 +1,4 @@
-// Cutout-style character animation for the four lead operators.
+// Cutout-style character animation for every operator and rival in battle.
 // Approach: painted full-body stamps (idle) plus a lightweight JS rig that
 // tweens squash, anticipation, recoil, walk bounce and falls — the same
 // principles as Spine/cutout animation (interpolation, pose blending, procedural
@@ -9,49 +9,95 @@
 import { defOf } from '../core/heroes.js';
 import { toWorld } from './dockart.js';
 
-export const ACTOR_IDS = ['rook', 'brick', 'lumen', 'vesper'];
-
 const DEG = Math.PI / 180;
 
 export const ACTORS = {
   rook: {
     idle: 'assets/actors/rook-idle.png',
-    height: 78,
-    breath: 2.15,
-    walk: 0.46,
-    origin: [0.48, 0.985],
-    gunTip: [0.84, 0.545],
-    colour: '#6a4a32',
+    height: 78, breath: 2.15, walk: 0.46,
+    origin: [0.48, 0.985], gunTip: [0.84, 0.545], colour: '#6a4a32',
   },
   brick: {
     idle: 'assets/actors/brick-idle.png',
-    height: 70,
-    breath: 2.7,
-    walk: 0.56,
-    origin: [0.50, 0.985],
-    gunTip: [0.90, 0.52],
-    colour: '#c46a28',
+    height: 70, breath: 2.7, walk: 0.56,
+    origin: [0.50, 0.985], gunTip: [0.90, 0.52], colour: '#c46a28',
   },
   lumen: {
     idle: 'assets/actors/lumen-idle.png',
-    height: 82,
-    breath: 1.9,
-    walk: 0.40,
-    origin: [0.46, 0.985],
-    gunTip: [0.92, 0.58],
-    colour: '#c45a28',
+    height: 82, breath: 1.9, walk: 0.40,
+    origin: [0.46, 0.985], gunTip: [0.92, 0.58], colour: '#c45a28',
   },
   vesper: {
     idle: 'assets/actors/vesper-idle.png',
-    height: 76,
-    breath: 2.35,
-    walk: 0.50,
-    origin: [0.42, 0.98],
-    gunTip: [0.22, 0.50],
-    colour: '#1a6a62',
+    height: 76, breath: 2.35, walk: 0.50,
+    origin: [0.42, 0.98], gunTip: [0.22, 0.50], colour: '#1a6a62',
     imageFacing: -1,
   },
+  pip: {
+    idle: 'assets/actors/pip-idle.png',
+    height: 62, breath: 1.7, walk: 0.38,
+    origin: [0.42, 0.985], gunTip: [0.62, 0.48], colour: '#c9a227',
+  },
+  ivory: {
+    idle: 'assets/actors/ivory-idle.png',
+    height: 80, breath: 2.1, walk: 0.44,
+    origin: [0.50, 0.985], gunTip: [0.92, 0.52], colour: '#c8d0d8',
+  },
+  nile: {
+    idle: 'assets/actors/nile-idle.png',
+    height: 76, breath: 2.8, walk: 0.58,
+    origin: [0.40, 0.985], gunTip: [0.12, 0.68], colour: '#3a6a58',
+    imageFacing: -1, melee: 1,
+  },
+  marlow: {
+    idle: 'assets/actors/marlow-idle.png',
+    height: 86, breath: 2.9, walk: 0.62,
+    origin: [0.50, 0.985], gunTip: [0.95, 0.50], colour: '#8a6a3a',
+  },
+  hook: {
+    idle: 'assets/actors/hook-idle.png',
+    height: 78, breath: 2.0, walk: 0.42,
+    origin: [0.50, 0.985], gunTip: [0.78, 0.50], colour: '#1a1a1a',
+  },
+  knack: {
+    idle: 'assets/actors/knack-idle.png',
+    height: 66, breath: 1.8, walk: 0.40,
+    origin: [0.48, 0.985], gunTip: [0.68, 0.48], colour: '#3a3228',
+  },
+  slab: {
+    idle: 'assets/actors/slab-idle.png',
+    height: 72, breath: 2.6, walk: 0.56,
+    origin: [0.50, 0.985], gunTip: [0.92, 0.55], colour: '#222',
+  },
+  rill: {
+    idle: 'assets/actors/rill-idle.png',
+    height: 76, breath: 2.8, walk: 0.58,
+    origin: [0.40, 0.985], gunTip: [0.10, 0.70], colour: '#1a1a18',
+    imageFacing: -1, melee: 1,
+  },
+  pact: {
+    idle: 'assets/actors/pact-idle.png',
+    height: 80, breath: 2.4, walk: 0.50,
+    origin: [0.50, 0.98], gunTip: [0.72, 0.46], colour: '#0a0a0a',
+  },
+  bruno: {
+    idle: 'assets/actors/bruno-idle.png',
+    height: 86, breath: 2.9, walk: 0.62,
+    origin: [0.50, 0.985], gunTip: [0.92, 0.50], colour: '#1a1410',
+  },
+  ash: {
+    idle: 'assets/actors/ash-idle.png',
+    height: 80, breath: 2.2, walk: 0.46,
+    origin: [0.48, 0.985], gunTip: [0.78, 0.55], colour: '#111',
+  },
+  mica: {
+    idle: 'assets/actors/mica-idle.png',
+    height: 80, breath: 1.9, walk: 0.40,
+    origin: [0.46, 0.985], gunTip: [0.98, 0.62], colour: '#141414',
+  },
 };
+
+export const ACTOR_IDS = Object.keys(ACTORS);
 
 const images = {};
 export function hasActor(id) { return !!ACTORS[id]; }
@@ -296,7 +342,7 @@ export function drawActor(g, unit, worldX, worldY, z, now) {
 
   // muzzle flash at the gun tip, in world space
   const tip = gunWorld(def, w, h, pose, footX, footY, z);
-  if (pose.muzzle > 0) drawMuzzle(g, tip.x, tip.y, z, pose.muzzle, pose.facing);
+  if (pose.muzzle > 0 && !def.melee) drawMuzzle(g, tip.x, tip.y, z, pose.muzzle, pose.facing);
 
   // head anchor (for bars, bubbles, floats)
   const head = headWorld(def, w, h, pose, footX, footY);
