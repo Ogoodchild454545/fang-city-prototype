@@ -36,26 +36,74 @@ function fromScreen(u, sx, sy) {
   return { x: Math.round(gx), y: Math.round(gy) };
 }
 
-function fitCam(b, cv) {
+// Screen-space safe rect (device px) that the HUD never covers: top bar + turn-order strip
+// above, battle dock below. Units are framed inside this, never under the chrome.
+function safeRect(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.width, h = cv.height;
+  return { l: 10 * dpr, r: w - 10 * dpr, t: 54 * dpr, b: h - 76 * dpr };
+}
+// World-space box of a unit: feet tile plus head/HP bar above (actors are ~62-84 tall).
+function unitBox(un) {
+  const p = toWorld(un.x, un.y);
+  return { minX: p.x - 30, maxX: p.x + 30, minY: p.y - 112, maxY: p.y + 14 };
+}
+function boxOf(list) {
+  const B = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  for (const un of list) {
+    const q = unitBox(un);
+    B.minX = Math.min(B.minX, q.minX); B.maxX = Math.max(B.maxX, q.maxX);
+    B.minY = Math.min(B.minY, q.minY); B.maxY = Math.max(B.maxY, q.maxY);
+  }
+  return B;
+}
+// Fit every living unit into the safe rect; if that would make operators too small, keep a
+// readable zoom and slide the view so the focus unit (and its nearest foe when it fits) stays
+// fully clear of the HUD.
+function fitCam(b, cv, focus) {
   const us = (b.units || []).filter((un) => un.hp > 0);
   const pts = us.length ? us : [{ x: Math.floor((b.map.w || 12) / 2), y: Math.floor((b.map.h || 10) / 2) }];
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  const pad = 2;
-  for (const un of pts) {
-    for (const [dx, dy] of [[-pad, -pad], [pad, pad], [-pad, pad], [pad, -pad], [0, 0]]) {
-      const p = toWorld(un.x + dx, un.y + dy);
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  const dpr = window.devicePixelRatio || 1;
+  const S = safeRect(cv);
+  const sw = S.r - S.l, sh = S.b - S.t;
+  const B = boxOf(pts);
+  const fitZ = Math.min(sw / (B.maxX - B.minX), sh / (B.maxY - B.minY));
+  const z = Math.max(0.74 * dpr, Math.min(1.45 * dpr, fitZ));
+  let x = (S.l + S.r) / 2 - ((B.minX + B.maxX) / 2) * z;
+  let y = (S.t + S.b) / 2 - ((B.minY + B.maxY) / 2) * z;
+  if (focus && focus.hp > 0) {
+    // Priority: the acting unit, then its whole squad, then its nearest foe.
+    const fits = (Q) => (Q.maxX - Q.minX) * z <= sw && (Q.maxY - Q.minY) * z <= sh;
+    const mates = us.filter((o) => o.side === focus.side);
+    let F = boxOf([focus]);
+    const FS = boxOf(mates.length ? mates : [focus]);
+    if (fits(FS)) F = FS;
+    const foes = us.filter((o) => o.side !== focus.side);
+    if (foes.length) {
+      foes.sort((p, q) => (Math.abs(p.x - focus.x) + Math.abs(p.y - focus.y)) - (Math.abs(q.x - focus.x) + Math.abs(q.y - focus.y)));
+      const F2 = boxOf([...(F === FS ? mates : [focus]), foes[0]]);
+      if (fits(F2)) F = F2;
     }
+    const clamp = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
+    x = clamp(x, S.l - F.minX * z, S.r - F.maxX * z);
+    y = clamp(y, S.t - F.minY * z, S.b - F.maxY * z);
   }
-  let bw = Math.max(TW * 4, maxX - minX);
-  let bh = Math.max(TH * 5, maxY - minY);
-  // Don't zoom out far enough that operators become specks on empty concrete.
-  bw = Math.min(bw, TW * 11);
-  bh = Math.min(bh, TH * 12);
-  const z = Math.max(cv.width / (13 * TW), Math.min(cv.width / (7 * TW), Math.min(cv.width / (bw + TW), cv.height / (bh + TH * 3))));
-  const midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
-  return { x: cv.width / 2 - midX * z, y: cv.height * 0.58 - midY * z, z };
+  return { x, y, z };
+}
+// Smooth camera glide to a new framing (turn hand-offs). Cancelled by a manual drag/zoom.
+function glideTo(u, to, dur = 520) {
+  if (!u.cam) { u.cam = to; return; }
+  u.glide = { t0: performance.now(), dur, from: { ...u.cam }, to };
+}
+function applyGlide(u) {
+  const gl = u.glide;
+  if (!gl || !u.cam) return;
+  const k = Math.min(1, (performance.now() - gl.t0) / gl.dur);
+  const e = k * k * (3 - 2 * k);
+  u.cam.x = gl.from.x + (gl.to.x - gl.from.x) * e;
+  u.cam.y = gl.from.y + (gl.to.y - gl.from.y) * e;
+  u.cam.z = gl.from.z + (gl.to.z - gl.from.z) * e;
+  if (k >= 1) u.glide = null;
 }
 
 function pvpTimerOn(b) {
@@ -368,9 +416,20 @@ function draw(ctx) {
   const w = cv.clientWidth, h = cv.clientHeight;
   if (cv.width !== Math.floor(w * dpr) || cv.height !== Math.floor(h * dpr)) {
     cv.width = Math.floor(w * dpr); cv.height = Math.floor(h * dpr);
-    if (!u.cam) u.cam = fitCam(b, cv);
+    u.cam = fitCam(b, cv, T.actingUnit(b));
+    u.glide = null;
   }
-  if (!u.cam) u.cam = fitCam(b, cv);
+  if (!u.cam) u.cam = fitCam(b, cv, T.actingUnit(b));
+  const fx0 = Vfx.ensure(u);
+  {
+    const act = T.actingUnit(b);
+    if (act && act.hp > 0 && u.camFor !== act.uid && !fx0.pan) {
+      const first = !u.camFor;
+      u.camFor = act.uid;
+      if (!first) glideTo(u, fitCam(b, cv, act));
+    }
+    if (!fx0.pan) applyGlide(u);
+  }
   const cam = u.cam, z = cam.z;
   const now = performance.now();
   let shakeX = 0, shakeY = 0;
@@ -492,15 +551,20 @@ function draw(ctx) {
     }
     // rings for actors (feet/head hint of who is up)
     if (Actors.hasActor(un.hero) && !dead) {
-      g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? 'rgba(143,209,143,0.85)' : 'rgba(224,122,106,0.85)';
+      // XCOM-style team disc under the feet: blue for your crew, red for the rivals.
+      g.fillStyle = un.side === 'player' ? 'rgba(77,143,224,0.22)' : 'rgba(224,64,52,0.26)';
+      g.beginPath(); g.ellipse(sx, sy + 3 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? 'rgba(120,186,255,0.9)' : 'rgba(255,92,72,0.9)';
       g.lineWidth = (acting ? 2.4 : 1.4) * z;
       g.beginPath(); g.ellipse(sx, sy + 3 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.stroke();
     }
     const bw = 22 * z, bh = 3.5 * z;
     const barY = Actors.hasActor(un.hero) ? cy - 8 * z : cy + r + 2 * z;
-    g.fillStyle = 'rgba(0,0,0,0.65)';
-    g.fillRect(cx - bw / 2, barY, bw, bh);
-    g.fillStyle = un.hp / un.maxHp > 0.5 ? '#5dba6a' : un.hp / un.maxHp > 0.25 ? '#e0c15a' : '#d4544a';
+    g.fillStyle = un.side === 'player' ? 'rgba(10,20,34,0.8)' : 'rgba(40,8,6,0.8)';
+    g.fillRect(cx - bw / 2 - z, barY - z, bw + 2 * z, bh + 2 * z);
+    g.fillStyle = un.side === 'player'
+      ? (un.hp / un.maxHp > 0.5 ? '#5dba6a' : un.hp / un.maxHp > 0.25 ? '#e0c15a' : '#d4544a')
+      : (un.hp / un.maxHp > 0.25 ? '#ff5a48' : '#ff9a3a');
     g.fillRect(cx - bw / 2, barY, bw * Math.max(0, un.hp / un.maxHp), bh);
     if (!dead && un.side === 'player' && b.side === 'player' && (acting || (sel && sel.uid === un.uid))) {
       const defn = def || defOf(un.hero);
@@ -678,6 +742,7 @@ function bindCanvas(ctx) {
       const dx = e.clientX - last.x, dy = e.clientY - last.y;
       if (Math.abs(dx) + Math.abs(dy) > 3) {
         last.moved = 1;
+        u.glide = null;
         u.cam.x += dx * (window.devicePixelRatio || 1);
         u.cam.y += dy * (window.devicePixelRatio || 1);
         last.x = e.clientX; last.y = e.clientY;
@@ -708,6 +773,7 @@ function bindCanvas(ctx) {
     const rect = cv.getBoundingClientRect();
     const sx = (e.clientX - rect.left) * dpr, sy = (e.clientY - rect.top) * dpr;
     const before = fromScreen(u, sx, sy);
+    u.glide = null;
     u.cam.z = Math.max(0.45, Math.min(1.8, u.cam.z * (e.deltaY > 0 ? 0.92 : 1.08)));
     const p = toWorld(before.x, before.y);
     u.cam.x = sx - p.x * u.cam.z;
@@ -1054,7 +1120,9 @@ function queueHtml(b) {
     const on = un.uid === b.acting ? 'on' : '';
     const foe = un.side === 'enemy' ? 'foe' : '';
     const dead = un.hp <= 0 ? 'dead' : '';
-    return `<div class="tq ${on} ${foe} ${dead}" title="${esc(d.name)}"><img src="${d.thumb || d.portrait}" alt=""></div>`;
+    const hp = Math.max(0, Math.min(1, un.hp / (un.maxHp || 1)));
+    return `<div class="tq ${on} ${foe} ${dead}" title="${esc(d.name)}"><img src="${d.thumb || d.portrait}" alt="">`
+      + `<i class="tqhp"><i style="width:${Math.round(hp * 100)}%"></i></i>${dead ? '<b class="tqko">KO</b>' : ''}</div>`;
   }).join('')}</div>`;
 }
 

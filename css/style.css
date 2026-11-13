@@ -551,13 +551,19 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .loadscr .armyhead{display:flex;align-items:center;gap:8px}
 .loadscr .armyhead .btn{margin-left:auto;flex:none}
 
-.tqueue{position:absolute;top:max(28px,calc(env(safe-area-inset-top) + 26px));left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:6;pointer-events:none;max-width:86%}
-.tq{width:28px;height:28px;border-radius:50%;border:2px solid #3a332e;overflow:hidden;opacity:.7;background:#1a1614;flex:none}
-.tq img{width:100%;height:100%;object-fit:cover;display:block}
-.tq.on{opacity:1;border-color:#e0c15a;box-shadow:0 0 0 1px #e0c15a;transform:scale(1.12)}
-.tq.foe{border-color:#8a3a32}
-.tq.foe.on{border-color:#e07a6a;box-shadow:0 0 0 1px #e07a6a}
-.tq.dead{filter:grayscale(1);opacity:.4}
+.tqueue{position:absolute;top:max(5px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:5px;z-index:6;pointer-events:none;max-width:46%;padding:3px 7px;background:rgba(10,8,8,.72);border:1px solid rgba(255,255,255,.08);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.45)}
+.tq{position:relative;width:30px;height:30px;border-radius:50%;border:2px solid var(--blue);overflow:hidden;background:#1c2a3a;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+.tq img{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(1.12) contrast(1.05)}
+.tq.foe{border-color:#e0483c;background:#3a1814}
+.tq.foe img{filter:brightness(1.55) contrast(1.08) saturate(1.1)}
+.tq .tqhp{position:absolute;left:3px;right:3px;bottom:2px;height:3px;background:rgba(0,0,0,.75);border-radius:2px;overflow:hidden}
+.tq .tqhp i{display:block;height:100%;background:#7ec8ff}
+.tq.foe .tqhp i{background:#ff6a5a}
+.tq.on{width:36px;height:36px;border:3px solid #ffd257;box-shadow:0 0 0 2px rgba(0,0,0,.7),0 0 10px 2px rgba(255,210,87,.75)}
+.tq.on::after{content:'';position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 2px var(--blue)}
+.tq.foe.on::after{box-shadow:inset 0 0 0 2px #e0483c}
+.tq.dead{filter:grayscale(1);opacity:.45}
+.tq .tqko{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 10px Oswald,sans-serif;color:#fff;background:rgba(120,20,16,.55);letter-spacing:.04em}
 .ttimer{margin-left:auto;font-family:Oswald,sans-serif;font-size:16px;color:#f3e7c9;min-width:2.2em;text-align:right;text-shadow:0 1px 2px #000}
 .ttimer.low{color:#e07a6a}
 .tcup{font-weight:700;color:var(--gold)}
@@ -655,6 +661,6 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .tbanner b{display:block;font:600 22px/1 var(--font);text-transform:uppercase;letter-spacing:.06em;color:#fff}
 .tbanner span{font-size:11px;color:#dfe6f3;text-transform:uppercase;letter-spacing:.08em}
 @keyframes tban{0%{transform:translateX(-110%);opacity:0}16%{transform:translateX(0);opacity:1}78%{transform:translateX(0);opacity:1}100%{transform:translateX(-30%);opacity:0}}
-.tturn{flex:0 1 auto;max-width:34%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(10,8,8,.78);border:1px solid var(--line2);border-radius:999px;padding:3px 12px;font-size:12px}
+.tturn{flex:0 1 auto;max-width:29%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(10,8,8,.78);border:1px solid var(--line2);border-radius:999px;padding:3px 12px;font-size:12px}
 .ttimer{background:rgba(10,8,8,.78);border:1px solid var(--line2);border-radius:999px;padding:2px 10px;min-width:auto}
 .ttimer:empty{display:none}
