@@ -968,6 +968,51 @@ function queueHtml(b) {
   }).join('')}</div>`;
 }
 
+const ICONS = {
+  shot: '<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
+  aimed: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
+  overwatch: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',
+  hunker: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M8 12l3 3 5-6"/>',
+  fortify: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M12 7v10M7 12h10"/>',
+  heal: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 7v10M7 12h10"/>',
+  melee: '<path d="M5 19L17 4M9 20L20 8M3 14L13 3"/>',
+  lunge: '<path d="M4 18L18 4M18 4h-7M18 4v7"/><path d="M4 12l4 4"/>',
+  dash: '<path d="M4 6l6 6-6 6M12 6l6 6-6 6"/>',
+  sprint: '<path d="M3 6l6 6-6 6M10 6l6 6-6 6M17 6l4 6-4 6"/>',
+  breach: '<path d="M12 2l2 6 6-3-3 6 6 2-6 2 3 6-6-3-2 6-2-6-6 3 3-6-6-2 6-2-3-6 6 3z"/>',
+  suppress: '<path d="M3 7h12M3 12h15M3 17h12"/><path d="M17 5l4 2-4 2M19 10l3 2-3 2M17 15l4 2-4 2"/>',
+  venom: '<path d="M12 2c3 5 7 9 7 13a7 7 0 01-14 0c0-4 4-8 7-13z"/><path d="M9 15a3 3 0 003 3"/>',
+};
+function abilityIcon(kind) {
+  const d = ICONS[kind] || ICONS.shot;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
+function apPips(n, max, cls = '') {
+  let h = '';
+  for (let i = 0; i < max; i++) h += `<i class="${i < n ? 'f' : ''}"></i>`;
+  return `<span class="tpips ${cls}">${h}</span>`;
+}
+// Fight feed: newest line on top, older lines fade. Turn-hand-off lines live in the top banner, not here,
+// and consecutive duplicates collapse.
+function feedHtml(b) {
+  const out = [];
+  for (const l of (b.log || [])) {
+    if (/ is up\.$/.test(l)) continue;
+    if (out.length && out[out.length - 1] === l) continue;
+    out.push(l);
+  }
+  const last = out.slice(-3).reverse();
+  if (!last.length) return '';
+  return `<div class="tfeed">${last.map((l, i) => `<div class="tf tf${i} ${feedTone(l)}">${esc(l)}</div>`).join('')}</div>`;
+}
+function feedTone(l) {
+  if (/miss/i.test(l)) return 'miss';
+  if (/KO|knocked|down/i.test(l)) return 'ko';
+  if (/revive|medkit|heal/i.test(l)) return 'heal';
+  if (/hit|damage|explod|boom/i.test(l)) return 'hit';
+  return '';
+}
+
 export function render(ctx) {
   const b = ctx.state.tactics, u = ui(ctx);
   if (!b) return `<div class="pad">No fight.</div>`;
@@ -984,10 +1029,27 @@ export function render(ctx) {
   const cls = def ? classOf(def) : null;
   const perk = def ? speciesPerk(def.species) : null;
   const coachHtml = coach(b, u);
-  const log = (b.log || []).slice(-3).map((l) => esc(l)).join('<br>');
   const actName = actor ? defOf(actor.hero).name : '';
   const turnLbl = actor ? `${actName} is up` : (b.side === 'player' ? 'Your turn' : 'Enemy turn');
   const canAct = b.side === 'player' && actor && actor.side === 'player' && !u.busy;
+  const mine = sel && sel.side === 'player';
+  const trayItems = sel && mine ? [
+    ...abs.map((a) => ({ id: a.id, kind: a.kind, name: a.name, ap: a.ap, text: a.text || '', act: 'tmode' })),
+    ...(sel.medkits ? [{ id: 'medkit', kind: 'heal', name: 'Medkit', ap: 2, text: `Heal yourself or an adjacent ally. ${sel.medkits} left.`, act: 'tmode', count: sel.medkits }] : []),
+    { id: 'hunker', kind: 'hunker', name: 'Hunker', ap: 1, text: 'Brace in cover: harder to hit until your next turn.', act: 'doHunker' },
+  ] : [];
+  const trayBtns = trayItems.map((a) => {
+    const on = u.mode === a.id || u.mode === a.kind || (a.id === 'hunker' && sel.fortify);
+    const why = !canAct ? 'Not this operator\u2019s turn' : (sel.ap < a.ap ? `Needs ${a.ap} AP` : '');
+    return `<button class="tabl ${on ? 'on' : ''} ${why ? 'off' : ''}" data-act="${a.act}" data-mode="${a.id}" data-apcost="${a.ap}" title="${esc(a.name + ' \u2014 ' + a.text + (why ? ' (' + why + ')' : ''))}" ${why ? 'disabled' : ''}>
+      <span class="tico">${abilityIcon(a.kind)}${a.count ? `<em>${a.count}</em>` : ''}</span>
+      <span class="tlbl">${esc(a.name)}</span>
+      ${apPips(a.ap, a.ap)}
+    </button>`;
+  });
+  const hoverMode = (u.abilityHover && u.abilityHover.mode) || u.mode;
+  const tip = trayItems.find((a) => a.id === hoverMode || a.kind === hoverMode) || null;
+  const feed = feedHtml(b);
   return `
   <div class="twrap">
     <canvas id="tacv"></canvas>
@@ -999,21 +1061,22 @@ export function render(ctx) {
     </div>
     ${queueHtml(b)}
     ${coachHtml ? `<div class="tcoach">${coachHtml}</div>` : ''}
-    <div class="tunit">
-      ${sel ? `
+    ${sel ? `
+    <div class="tdock">
+      <div class="thero ${sel.side === 'enemy' ? 'foe' : ''}">
         <img class="tport" src="${def.portrait}" alt="">
         <div class="tinfo">
-          <div class="tn">${esc(def.name)} <span class="tiny dim">${esc((cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
-          <div class="tiny">HP ${sel.hp}/${sel.maxHp} · AP ${sel.ap}/${sel.maxAp} · Move ${sel.move} · Spd ${sel.speed || def.speed}${sel.overwatch ? ' · Overwatch' : ''} · ${ico('ammo')} ${sel.ammo || 0}${sel.medkits ? ` · ${ico('medkits')} ${sel.medkits}` : ''}</div>
-          <div class="tiny dim">${perk ? `${esc(perk.name)}: ${esc(perk.text)}` : (def.passive && def.passive.name ? `${esc(def.passive.name)}: ${esc(def.passive.text)}` : '')}${(sel.ammo || 0) <= 0 ? ' · Out of ammo — adjacent melee only' : ''}</div>
+          <div class="tuname">${esc(def.name)} <span class="tcls">${esc((cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
+          <div class="thp"><i style="width:${Math.max(0, Math.round(100 * sel.hp / sel.maxHp))}%"></i><span>${sel.hp}/${sel.maxHp}</span></div>
+          <div class="tstats">${apPips(sel.ap, sel.maxAp, 'big')}<span>Mv ${sel.move}</span><span>Spd ${sel.speed || def.speed}</span><span>${ico('ammo')} ${sel.ammo || 0}</span>${sel.medkits ? `<span>${ico('medkits')} ${sel.medkits}</span>` : ''}${sel.overwatch ? '<span class="tow">OW</span>' : ''}</div>
         </div>
-        <div class="tabs">
-          ${abs.map((a) => `<button class="tab ${u.mode === a.id || u.mode === a.kind ? 'on' : ''}" data-act="tmode" data-mode="${a.id}" data-apcost="${a.ap}">${esc(a.name)} <span class="tiny">${a.ap} AP</span></button>`).join('')}
-          ${sel.medkits ? `<button class="tab ${u.mode === 'medkit' ? 'on' : ''}" data-act="tmode" data-mode="medkit" data-apcost="2">Medkit 2 AP · ${sel.medkits}</button>` : ''}
-          <button class="tab ${u.mode === 'hunker' ? 'on' : ''}" data-act="doHunker" data-apcost="1">Hunker 1 AP</button>
-        </div>` : ''}
-    </div>
-    <div class="tlog tiny dim">${log}</div>
+      </div>
+      <div class="ttray">
+        ${tip ? `<div class="ttip"><b>${esc(tip.name)}</b> ${esc(tip.text)}</div>` : ''}
+        ${trayBtns.join('')}
+      </div>
+    </div>` : ''}
+    ${feed}
   </div>`;
 }
 

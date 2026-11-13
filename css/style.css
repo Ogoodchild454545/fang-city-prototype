@@ -561,3 +561,48 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .ttimer{margin-left:auto;font-family:Oswald,sans-serif;font-size:16px;color:#f3e7c9;min-width:2.2em;text-align:right;text-shadow:0 1px 2px #000}
 .ttimer.low{color:#e07a6a}
 .tcup{font-weight:700;color:var(--gold)}
+
+/* v0.5.8 battle dock: hero card + ability tray, fading fight feed */
+.tdock{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;gap:10px;padding:6px max(10px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:linear-gradient(transparent,rgba(8,6,6,.86) 38%);z-index:5;pointer-events:none}
+.tdock>*{pointer-events:auto}
+.thero{display:flex;gap:8px;align-items:center;flex:0 1 330px;min-width:0;background:rgba(18,14,13,.92);border:1px solid var(--line2);border-left:3px solid var(--blue);border-radius:10px;padding:5px 8px 5px 5px;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.thero.foe{border-left-color:var(--red)}
+.thero .tport{width:52px;height:52px;border-radius:7px}
+.tuname{font-family:var(--font);font-size:15px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.tcls{font-family:var(--body);font-size:11px;color:var(--dim);text-transform:none;letter-spacing:0}
+.thp{position:relative;height:9px;background:#2a1d1a;border-radius:5px;overflow:hidden;margin:3px 0 4px}
+.thp i{position:absolute;inset:0 auto 0 0;background:linear-gradient(#7fd45f,#3f8f32);border-radius:5px}
+.thp span{position:absolute;right:4px;top:-2px;font:600 9px/13px var(--font);color:#fff;text-shadow:0 1px 1px #000}
+.tstats{display:flex;gap:8px;align-items:center;font-size:11px;color:#d7cec6;white-space:nowrap;overflow:hidden}
+.tstats .ico{width:12px;height:12px}
+.tow{color:var(--gold);font-family:var(--font)}
+.tpips{display:inline-flex;gap:3px}
+.tpips i{width:7px;height:7px;transform:rotate(45deg);border:1px solid #e9c46a;background:transparent}
+.tpips i.f{background:#ffd25e;box-shadow:0 0 4px rgba(255,210,94,.7)}
+.tpips.big i{width:8px;height:8px}
+.ttray{position:relative;display:flex;gap:6px;margin-left:auto;align-items:flex-end}
+.tabl{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;width:78px;padding:6px 4px 5px;background:linear-gradient(#262020,#161212);border:1px solid #4a3d38;border-radius:9px;color:var(--text);font-family:var(--font);cursor:pointer;box-shadow:0 3px 0 #0a0807,0 6px 12px rgba(0,0,0,.45);transition:transform .08s,border-color .12s}
+.tabl:hover:not([disabled]){border-color:var(--gold);transform:translateY(-2px)}
+.tabl:active:not([disabled]){transform:translateY(1px);box-shadow:0 1px 0 #0a0807}
+.tabl.on{border-color:var(--gold);background:linear-gradient(#4a3512,#22180a);box-shadow:0 0 0 1px var(--gold),0 0 14px rgba(224,165,38,.45)}
+.tabl.off{opacity:.42;filter:grayscale(.8);cursor:not-allowed}
+.tico{position:relative;width:24px;height:24px;color:#ffd77a}
+.tico svg{width:24px;height:24px;display:block}
+.tico em{position:absolute;right:-9px;top:-5px;font:600 10px/14px var(--font);font-style:normal;background:var(--red);color:#fff;border-radius:7px;padding:0 4px}
+.tlbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.1}
+.ttip{position:absolute;right:0;bottom:calc(100% + 6px);width:max-content;max-width:300px;background:rgba(10,8,8,.94);border:1px solid var(--gold);border-radius:8px;padding:5px 9px;font-size:12px;line-height:1.3;color:#eadfcf;pointer-events:none}
+.ttip b{font-family:var(--font);text-transform:uppercase;color:var(--gold);font-weight:500;margin-right:4px}
+.tfeed{position:absolute;top:calc(max(6px,env(safe-area-inset-top)) + 32px);left:max(10px,env(safe-area-inset-left));max-width:min(300px,34%);display:flex;flex-direction:column;gap:3px;z-index:4;pointer-events:none}
+.tf{font-size:11px;line-height:1.25;padding:3px 8px;border-radius:6px;background:rgba(10,8,8,.72);border-left:3px solid #6b625d;color:#e6ddd5;animation:tfin .35s ease-out}
+.tf1{opacity:.7;animation:none}.tf2{opacity:.42;animation:none}
+.tf.hit{border-left-color:#e2683c}.tf.miss{border-left-color:#8a9bb0}.tf.ko{border-left-color:var(--red)}.tf.heal{border-left-color:var(--green)}
+@keyframes tfin{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+.tcoach{bottom:96px}
+@media (max-height:400px){
+  .thero{flex-basis:300px}
+  .thero .tport{width:46px;height:46px}
+  .tabl{width:70px;padding:5px 3px 4px}
+  .tico,.tico svg{width:22px;height:22px}
+  .tcoach{bottom:86px}
+}
+@media (max-width:700px){ .tabl{width:60px} .tlbl{font-size:10px} .thero{flex-basis:240px} }
