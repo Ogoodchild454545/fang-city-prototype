@@ -416,8 +416,13 @@ function draw(ctx) {
   const w = cv.clientWidth, h = cv.clientHeight;
   if (cv.width !== Math.floor(w * dpr) || cv.height !== Math.floor(h * dpr)) {
     cv.width = Math.floor(w * dpr); cv.height = Math.floor(h * dpr);
-    u.cam = fitCam(b, cv, T.actingUnit(b));
-    u.glide = null;
+    // Re-renders recreate the canvas at the same size: keep the camera. Only refit when the
+    // viewport really changed (rotation, resize).
+    if (!u.cam || u.camW !== cv.width || u.camH !== cv.height) {
+      u.cam = fitCam(b, cv, T.actingUnit(b));
+      u.glide = null;
+    }
+    u.camW = cv.width; u.camH = cv.height;
   }
   if (!u.cam) u.cam = fitCam(b, cv, T.actingUnit(b));
   const fx0 = Vfx.ensure(u);
@@ -987,7 +992,16 @@ async function enemyTurn(ctx) {
   const b = ctx.state.tactics, u = ui(ctx);
   u.busy = 1;
   let guard = 0;
+  let lastUid = null;
   while (b.status === 'active' && b.side === 'enemy' && guard++ < 40) {
+    // Pacing: when a new rival steps up, refresh the HUD (queue + banner) and give the camera
+    // glide and the banner a beat before they act, so the player can follow whose go it is.
+    const up = T.actingUnit(b);
+    if (up && up.uid !== lastUid) {
+      lastUid = up.uid;
+      if (!ctx.fast) { ctx.render(); await new Promise((r) => setTimeout(r, 620)); }
+      if (u.closed || ctx.state.tactics !== b) return;
+    }
     const act = chooseAction(b, T.think);
     const r = T.apply(b, act);
     if (!r.ok) { T.apply(b, { type: 'endTurn' }); continue; }

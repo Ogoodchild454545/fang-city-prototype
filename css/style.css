@@ -664,3 +664,5 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .tturn{flex:0 1 auto;max-width:29%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(10,8,8,.78);border:1px solid var(--line2);border-radius:999px;padding:3px 12px;font-size:12px}
 .ttimer{background:rgba(10,8,8,.78);border:1px solid var(--line2);border-radius:999px;padding:2px 10px;min-width:auto}
 .ttimer:empty{display:none}
+.tbar [data-act="retreatFight"]{margin-left:auto}
+.tbar .btn[disabled]{opacity:.55}
