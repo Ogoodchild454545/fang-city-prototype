@@ -84,16 +84,16 @@ const FITS = {
     jointArm: '#c8d0d8', jointLeg: '#2a2a32', jointNeck: '#e8e8e8',
   },
   nile: {
-    torsoPivot: [0.50, 0.68], neck: [0.50, 0.12],
-    shL: [0.22, 0.24], shR: [0.78, 0.24],
+    torsoPivot: [0.36, 0.56], neck: [0.36, 0.10],
+    shL: [0.12, 0.24], shR: [0.56, 0.22],
     headPivot: [0.42, 0.80], headMul: 1.02,
     stance: 8.0, hipTuck: -6, thighSx: 1,
     jointArm: '#3a6a58', jointLeg: '#3a3a28', jointNeck: '#4a6a40',
-    weaponGrip: [0.55, 0.28], weaponTip: [0.38, 0.90],
+    weaponGrip: [0.50, 0.42], weaponTip: [0.08, 0.92],
   },
   marlow: {
-    torsoPivot: [0.50, 0.80], neck: [0.50, 0.10],
-    shL: [0.18, 0.28], shR: [0.82, 0.28],
+    torsoPivot: [0.50, 0.82], neck: [0.50, 0.11],
+    shL: [0.22, 0.26], shR: [0.76, 0.26],
     headPivot: [0.50, 0.86], headMul: 0.98,
     stance: 10.0, hipTuck: -5, thighSx: 0.90, thighMul: 1.08, shinMul: 1.10,
     jointArm: '#8a6a3a', jointLeg: '#5a3a20', jointNeck: '#5a3a20',
@@ -105,6 +105,7 @@ const FITS = {
     stance: 7.0, hipTuck: -6, thighSx: 0.95,
     jointArm: '#1a1a1a', jointLeg: '#1a1a1a', jointNeck: '#c45a20',
     weaponGrip: [0.28, 0.62], weaponTip: [0.96, 0.42],
+    rim: 'rgba(130, 190, 220, 0.72)',
   },
   knack: {
     torsoPivot: [0.50, 0.80], neck: [0.50, 0.12],
@@ -113,6 +114,7 @@ const FITS = {
     stance: 6.2, hipTuck: -5, thighSx: 0.95,
     jointArm: '#3a3228', jointLeg: '#2a2a28', jointNeck: '#4a3a30',
     weaponGrip: [0.28, 0.62], weaponTip: [0.96, 0.42],
+    rim: 'rgba(130, 190, 220, 0.72)',
   },
   slab: {
     torsoPivot: [0.50, 0.80], neck: [0.50, 0.12],
@@ -120,22 +122,26 @@ const FITS = {
     headPivot: [0.50, 0.86], headMul: 0.98,
     stance: 9.2, hipTuck: -6, thighSx: 0.82, thighMul: 1.08, shinMul: 1.12,
     jointArm: '#1a1a1a', jointLeg: '#111', jointNeck: '#e8e8e8',
+    rim: 'rgba(130, 190, 220, 0.72)',
   },
   rill: {
-    torsoPivot: [0.50, 0.68], neck: [0.50, 0.12],
-    shL: [0.22, 0.24], shR: [0.78, 0.24],
+    torsoPivot: [0.36, 0.56], neck: [0.38, 0.08],
+    shL: [0.10, 0.26], shR: [0.56, 0.20],
     headPivot: [0.42, 0.80], headMul: 1.0,
     stance: 8.0, hipTuck: -6, thighSx: 1,
     jointArm: '#1a1a18', jointLeg: '#111', jointNeck: '#3a4a30',
-    weaponGrip: [0.55, 0.28], weaponTip: [0.38, 0.90],
+    weaponGrip: [0.48, 0.48], weaponTip: [0.18, 0.90],
+    rim: 'rgba(130, 190, 220, 0.72)',
   },
   pact: {
-    torsoPivot: [0.50, 0.86], neck: [0.50, 0.16],
+    torsoPivot: [0.50, 0.88], neck: [0.50, 0.14],
     shL: [0.22, 0.22], shR: [0.78, 0.22],
     headPivot: [0.50, 0.82], headMul: 1.05,
-    stance: 0, hipTuck: 0, coilLift: 0.80, thighSx: 1,
+    stance: 0, hipTuck: 0, coilLift: 0.90, thighSx: 1,
     jointArm: '#0a0a0a', jointLeg: '#0a0a0a', jointNeck: '#1a1a1a',
     weaponGrip: [0.28, 0.62], weaponTip: [0.96, 0.42],
+    rim: 'rgba(130, 190, 220, 0.72)',
+    coilPivot: [0.50, 0.84],
   },
   bruno: {
     torsoPivot: [0.50, 0.80], neck: [0.50, 0.10],
@@ -143,6 +149,7 @@ const FITS = {
     headPivot: [0.50, 0.86], headMul: 0.98,
     stance: 10.0, hipTuck: -5, thighSx: 0.90, thighMul: 1.08, shinMul: 1.10,
     jointArm: '#1a1410', jointLeg: '#1a1410', jointNeck: '#3a2a18',
+    rim: 'rgba(130, 190, 220, 0.72)',
   },
   ash: {
     torsoPivot: [0.50, 0.68], neck: [0.50, 0.12],
@@ -150,6 +157,7 @@ const FITS = {
     headPivot: [0.50, 0.86], headMul: 1.0,
     stance: 7.5, hipTuck: -6, thighSx: 0.95,
     jointArm: '#111', jointLeg: '#111', jointNeck: '#4a4a50',
+    rim: 'rgba(130, 190, 220, 0.72)',
   },
   mica: {
     torsoPivot: [0.50, 0.66], neck: [0.50, 0.10],
@@ -157,6 +165,7 @@ const FITS = {
     headPivot: [0.50, 0.86], headMul: 1.02,
     stance: 6.5, hipTuck: -8, thighSx: 0.92,
     jointArm: '#141414', jointLeg: '#111', jointNeck: '#c45a28',
+    rim: 'rgba(130, 190, 220, 0.72)',
   },
 };
 
@@ -198,7 +207,7 @@ function pivotsFor(id, part) {
   if (part === 'torso') return fit.torsoPivot || [0.50, 0.80];
   if (part === 'weapon') return weaponGrip(rig.weapon, fit);
   if (part === 'bag') return [0.50, 0.12];
-  if (part === 'coil') return [0.50, 0.90];
+  if (part === 'coil') return fit.coilPivot || [0.50, 0.90];
   if (part === 'mid') return [0.45, 0.18];
   if (part === 'tip') return [0.22, 0.30];
   // Limbs: pivot is well inside the painted cap so the joint stays covered.
@@ -485,12 +494,29 @@ function abilityPose(kind, t, anim) {
   return shootPose(kind, t * 0.7, anim);
 }
 
+function meleeHold(pose, rig) {
+  if (!rig || rig.weapon !== 'melee' || !pose) return pose;
+  // Boarding gaff held forward-up from the near hand, shaft along the forearm.
+  return {
+    ...pose,
+    armR: -74 * DEG,
+    forearmR: -16 * DEG,
+    weapon: 8 * DEG,
+    armL: -28 * DEG,
+    forearmL: -14 * DEG,
+  };
+}
+
 export function poseOf(unit, def, anim, now) {
+
   const rig = RIGS[unit.hero];
   if (!rig) return idlePose('biped', 0, 2);
   const t = anim.t || 0;
   const kind = rig.kind;
-  if (anim.clip === 'walk') return walkPose(kind, t, def.walk);
+  if (anim.clip === 'walk') {
+    const pose = walkPose(kind, t, def.walk);
+    return meleeHold(pose, rig);
+  }
   if (anim.clip === 'shoot') return shootPose(kind, t, anim);
   if (anim.clip === 'melee') return meleePose(kind, t);
   if (anim.clip === 'hit') return hitPose(kind, t);
@@ -498,7 +524,8 @@ export function poseOf(unit, def, anim, now) {
   if (anim.clip === 'ko') return koPose(kind, t, legs);
   if (anim.clip === 'revive') return revivePose(kind, t, legs);
   if (anim.clip === 'ability') return abilityPose(kind, t, anim);
-  return idlePose(kind, (now || 0) / 1000 + (anim.t0 || 0) / 10000, def.breath);
+  const idle = idlePose(kind, (now || 0) / 1000 + (anim.t0 || 0) / 10000, def.breath);
+  return meleeHold(idle, rig);
 }
 
 function alignOf(m) {
@@ -511,9 +538,19 @@ function drawPart(g, id, part, ang, s, weap, kind, opt) {
   const m = ensureMeta(id, part);
   if (!m) return null;
   const sc = partScale(m, part, kind, weap) * s;
+  const fit = fitOf(id);
   g.save();
   g.rotate(ang + alignOf(m));
   if (opt && opt.sx && opt.sx !== 1) g.scale(opt.sx, 1);
+  if (fit.rim) {
+    g.save();
+    g.shadowColor = fit.rim;
+    g.shadowOffsetX = -1.8 * Math.max(0.7, s);
+    g.shadowOffsetY = -1.4 * Math.max(0.7, s);
+    g.shadowBlur = 2.4 * Math.max(0.7, s);
+    g.drawImage(m.img, -m.pvtX * sc, -m.pvtY * sc, m.pw * sc, m.ph * sc);
+    g.restore();
+  }
   g.drawImage(m.img, -m.pvtX * sc, -m.pvtY * sc, m.pw * sc, m.ph * sc);
   g.restore();
   return m;

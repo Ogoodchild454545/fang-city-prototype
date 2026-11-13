@@ -173,6 +173,19 @@ document.getElementById('app').addEventListener('click', (e) => {
   if (el.tagName === 'SELECT') return; // wait for change
   dispatchAct(el, e);
 });
+document.getElementById('app').addEventListener('pointerover', (e) => {
+  const el = e.target.closest('[data-apcost]');
+  if (!el || ctx.tab !== 'tactics' || !ctx.sub.tactics) return;
+  ctx.sub.tactics.abilityHover = { mode: el.dataset.mode || '', ap: +el.dataset.apcost };
+});
+document.getElementById('app').addEventListener('pointerout', (e) => {
+  if (!ctx.sub || !ctx.sub.tactics) return;
+  const el = e.target.closest('[data-apcost]');
+  if (!el) return;
+  const to = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('[data-apcost]');
+  if (to) return;
+  ctx.sub.tactics.abilityHover = null;
+});
 document.getElementById('app').addEventListener('change', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.hasAttribute('disabled')) return;

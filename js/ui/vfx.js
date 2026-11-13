@@ -125,27 +125,47 @@ export function nudgeToward(fx, x, y, strength = 1) {
   fx.nudge = { x, y, t0: now, dur: 520, strength: Math.max(0.4, Math.min(1.4, strength)) };
 }
 
-// Smoothly lerp the camera so a world-buffer point (already * z) sits near frame center.
-export function panCam(fx, cam, wx, wy, cv, dur = 380) {
+// Pan and gently zoom toward a WORLD point (toWorld, not pre-multiplied by z),
+// hold on the action, then ease back to the original camera.
+export function panCam(fx, cam, worldX, worldY, cv, opts = {}) {
   if (!cam || !cv) return;
-  const tx = (cv.width || 0) * 0.50 - wx;
-  const ty = (cv.height || 0) * 0.56 - wy;
+  const zoom = opts.zoom == null ? 1.15 : opts.zoom;
+  const durIn = opts.durIn || 260;
+  const hold = opts.hold || 480;
+  const durOut = opts.durOut || 420;
   fx.pan = {
     t0: performance.now(),
-    dur: Math.max(160, dur),
-    fromX: cam.x, fromY: cam.y,
-    toX: tx, toY: ty,
+    durIn, hold, durOut,
+    fromX: cam.x, fromY: cam.y, fromZ: cam.z,
+    worldX, worldY,
+    toZ: cam.z * zoom,
+    cvW: cv.width || 0,
+    cvH: cv.height || 0,
+    cy: 0.56,
   };
 }
 
 export function applyPan(fx, cam) {
   const p = fx && fx.pan;
   if (!p || !cam) return;
-  const t = (performance.now() - p.t0) / p.dur;
-  const k = t >= 1 ? 1 : t * t * (3 - 2 * t);
-  cam.x = p.fromX + (p.toX - p.fromX) * k;
-  cam.y = p.fromY + (p.toY - p.fromY) * k;
-  if (t >= 1) fx.pan = null;
+  const elapsed = performance.now() - p.t0;
+  const tIn = p.durIn, tHold = tIn + p.hold, tOut = tHold + p.durOut;
+  const ease = (u) => u * u * (3 - 2 * u);
+  let k;
+  if (elapsed < tIn) k = ease(elapsed / tIn);
+  else if (elapsed < tHold) k = 1;
+  else if (elapsed < tOut) k = 1 - ease((elapsed - tHold) / p.durOut);
+  else {
+    cam.x = p.fromX; cam.y = p.fromY; cam.z = p.fromZ;
+    fx.pan = null;
+    return;
+  }
+  const z = p.fromZ + (p.toZ - p.fromZ) * k;
+  const tx = p.cvW * 0.50 - p.worldX * z;
+  const ty = p.cvH * p.cy - p.worldY * z;
+  cam.z = z;
+  cam.x = p.fromX + (tx - p.fromX) * k;
+  cam.y = p.fromY + (ty - p.fromY) * k;
 }
 
 // Offset to add to cam translation. Does not mutate cam.x/y (so user pans stay put).

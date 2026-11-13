@@ -1,7 +1,7 @@
 // Canvas tactics view: docklands yard, pan/zoom, hitchance, cover, speed queue and PvP timer.
 import * as T from '../core/tactics.js';
 import { defOf, classOf, speciesPerk } from '../core/heroes.js';
-import { tile, inB } from '../core/tmaps.js';
+import { tile, inB, DIRS4 } from '../core/tmaps.js';
 import { money, fmt, ico, esc } from './fmt.js';
 import { formatDrop } from '../core/shards.js';
 import { PERKS, rankName, xpToNext } from '../core/progress.js';
@@ -208,21 +208,133 @@ function drawFlankBadge(g, x, y, z) {
   g.restore();
 }
 
-function drawOverwatchCone(g, x, y, z, facing) {
+function drawOverwatchCone(g, x, y, z, facing, now) {
   const fac = facing || 1;
   const ang = fac > 0 ? -0.45 : Math.PI + 0.45;
-  const r = 52 * z;
+  const r = 58 * z;
+  const pulse = 0.5 + 0.5 * Math.sin((now || 0) / 280);
   g.save();
-  g.fillStyle = 'rgba(224, 193, 90, 0.22)';
-  g.strokeStyle = 'rgba(224, 193, 90, 0.65)';
-  g.lineWidth = 1.1 * z;
+  // Dark underlay so the cone reads on blue move tiles and crate tops.
+  g.fillStyle = `rgba(8, 6, 2, ${0.32 + 0.08 * pulse})`;
   g.beginPath();
   g.moveTo(x, y);
-  g.arc(x, y, r, ang - 0.55, ang + 0.55);
+  g.arc(x, y, r, ang - 0.58, ang + 0.58);
+  g.closePath();
+  g.fill();
+  g.fillStyle = `rgba(232, 196, 70, ${0.30 + 0.10 * pulse})`;
+  g.strokeStyle = 'rgba(255, 230, 120, 0.95)';
+  g.lineWidth = 1.8 * z;
+  g.beginPath();
+  g.moveTo(x, y);
+  g.arc(x, y, r, ang - 0.58, ang + 0.58);
   g.closePath();
   g.fill();
   g.stroke();
+  // Inner chevron ticks along the arc for XCOM-style readability.
+  g.strokeStyle = 'rgba(255, 245, 180, 0.85)';
+  g.lineWidth = 1.2 * z;
+  const inner = r * 0.62;
+  for (let i = -2; i <= 2; i++) {
+    const a = ang + i * 0.22;
+    g.beginPath();
+    g.moveTo(x + Math.cos(a) * inner, y + Math.sin(a) * inner);
+    g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    g.stroke();
+  }
   g.restore();
+}
+
+function drawApPips(g, cx, y, z, cur, max, cost) {
+  const n = Math.max(1, max || 1);
+  const r = 2.5 * z, gap = 6.6 * z;
+  const totalW = (n - 1) * gap;
+  for (let i = 0; i < n; i++) {
+    const x = cx - totalW / 2 + i * gap;
+    const filled = i < cur;
+    const spent = cost > 0 && i >= cur - cost && i < cur;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    if (spent) {
+      g.fillStyle = '#e0c15a';
+      g.fill();
+      g.strokeStyle = '#f8e89a';
+      g.lineWidth = 1 * z;
+      g.stroke();
+    } else if (filled) {
+      g.fillStyle = '#d8e8ff';
+      g.fill();
+    } else {
+      g.strokeStyle = '#8a8580';
+      g.lineWidth = 1 * z;
+      g.stroke();
+    }
+  }
+}
+
+function modeApCost(mode, def) {
+  if (!mode) return 0;
+  if (mode === 'aimed') return 3;
+  if (mode === 'hunker' || mode === 'fortify') return 1;
+  if (mode === 'medkit') return 2;
+  if (mode === 'overwatch' || mode === 'dash' || mode === 'sprint') return 2;
+  const a = (def && def.abilities || []).find((x) => x.id === mode || x.kind === mode);
+  return a && a.ap || (mode === 'shot' ? 2 : 0);
+}
+
+function drawDestCover(g, b, x, y, sx, sy, z) {
+  let best = 0;
+  for (const [dx, dy] of DIRS4) {
+    const t = tile(b.map, x + dx, y + dy);
+    if (!t || !t.cover) continue;
+    best = Math.max(best, t.cover);
+    const n = toWorld(x + dx, y + dy);
+    const ex = sx + (n.x * z - sx) * 0.42;
+    const ey = sy + (n.y * z - sy) * 0.42;
+    drawShieldBadge(g, ex, ey, z * 0.92, t.cover);
+  }
+  const label = best >= 2 ? 'FULL' : best === 1 ? 'HALF' : 'OPEN';
+  g.font = `bold ${Math.round(8 * z)}px Inter, sans-serif`;
+  g.textAlign = 'center';
+  const tw = g.measureText(label).width + 8 * z;
+  g.fillStyle = 'rgba(10,8,8,0.78)';
+  g.beginPath(); g.roundRect(sx - tw / 2, sy + 6 * z, tw, 12 * z, 3 * z); g.fill();
+  g.fillStyle = best >= 1 ? '#c8e4ff' : '#a0a0a8';
+  g.fillText(label, sx, sy + 15.5 * z);
+}
+
+function drawChanceBreakdown(g, cx, y, z, prev) {
+  const parts = prev.parts || [];
+  if (!parts.length) return;
+  const lines = parts.filter((p) => p.label !== 'Aim' || parts.length <= 4);
+  const rows = ['Aim ' + (parts[0] && parts[0].val != null ? parts[0].val : '')]
+    .concat(lines.slice(1).map((p) => `${p.val > 0 ? '+' : ''}${p.val} ${p.label}`))
+    .concat([`= ${prev.chance}%`]);
+  // Don't repeat Aim if we already list it
+  const body = lines.map((p, i) => {
+    if (i === 0 && p.label === 'Aim') return `${p.val}  Aim`;
+    const sign = p.val > 0 ? '+' : '';
+    return `${sign}${p.val}  ${p.label}`;
+  });
+  body.push(`=  ${prev.chance}%`);
+  const fs = Math.round(7.5 * z);
+  g.font = `${fs}px Inter, sans-serif`;
+  let maxW = 0;
+  for (const s of body) maxW = Math.max(maxW, g.measureText(s).width);
+  const pad = 5 * z, lh = 10 * z;
+  const w = maxW + pad * 2, h = body.length * lh + pad * 0.6;
+  const x = cx - w / 2, top = y - h;
+  g.fillStyle = 'rgba(8,7,8,0.88)';
+  g.beginPath(); g.roundRect(x, top, w, h, 3 * z); g.fill();
+  g.strokeStyle = 'rgba(240, 193, 90, 0.35)';
+  g.lineWidth = 1;
+  g.stroke();
+  g.textAlign = 'left';
+  body.forEach((s, i) => {
+    const last = i === body.length - 1;
+    g.fillStyle = last ? chanceColor(prev.chance) : s.startsWith('+') ? '#8fd18f' : s.startsWith('-') ? '#e07a6a' : '#f3e7c9';
+    g.font = `${last ? 'bold ' : ''}${fs}px Inter, sans-serif`;
+    g.fillText(s, x + pad, top + pad + (i + 0.75) * lh);
+  });
 }
 
 function drawOverwatchEye(g, x, y, z) {
@@ -301,6 +413,9 @@ function draw(ctx) {
     }
     if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y) {
       hexPoly(g, sx, sy, z, 'rgba(255,220,120,0.16)', '#f0d060');
+      if (!u.hover.uid && reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel.x === c.x && sel.y === c.y)) {
+        drawDestCover(g, b, c.x, c.y, sx, sy, z);
+      }
     }
     if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y && T.isExplosiveAt(b, c.x, c.y)) {
       const prev = T.previewProp(b, sel, c.x, c.y);
@@ -337,7 +452,7 @@ function draw(ctx) {
     Actors.tickAnim(un, now, !!(u.hitstop && now < u.hitstop));
     if (un.overwatch && un.hp > 0) {
       const fac = (Actors.ensureAnim(un).facing) || 1;
-      drawOverwatchCone(g, sx, sy, z, fac);
+      drawOverwatchCone(g, sx, sy, z, fac, now);
     }
     let cx = sx, cy = sy - 10 * z, r = 16 * z;
     g.save();
@@ -382,11 +497,10 @@ function draw(ctx) {
     g.fillRect(cx - bw / 2, barY, bw, bh);
     g.fillStyle = un.hp / un.maxHp > 0.5 ? '#5dba6a' : un.hp / un.maxHp > 0.25 ? '#e0c15a' : '#d4544a';
     g.fillRect(cx - bw / 2, barY, bw * Math.max(0, un.hp / un.maxHp), bh);
-    if (!dead && un.side === 'player' && b.side === 'player' && acting) {
-      g.fillStyle = '#d8e8ff';
-      g.font = `${Math.round(8 * z)}px sans-serif`;
-      g.textAlign = 'center';
-      g.fillText('●'.repeat(un.ap) + '○'.repeat(Math.max(0, un.maxAp - un.ap)), cx, barY + 12 * z);
+    if (!dead && un.side === 'player' && b.side === 'player' && (acting || (sel && sel.uid === un.uid))) {
+      const defn = def || defOf(un.hero);
+      const cost = (u.abilityHover && u.abilityHover.ap) || modeApCost(u.mode, defn);
+      drawApPips(g, cx, barY + 8 * z, z, un.ap, un.maxAp, acting || (sel && sel.uid === un.uid) ? cost : 0);
     }
     if (!dead) {
       g.font = `bold ${Math.round(7.5 * z)}px Inter, sans-serif`;
@@ -422,6 +536,9 @@ function draw(ctx) {
         g.font = `bold ${Math.round(7 * z)}px Inter, sans-serif`;
         g.fillStyle = prev.flanked ? '#f0c040' : prev.cover >= 1 ? '#c8e4ff' : '#a0a0a8';
         g.fillText(cov, cx, ly - 22 * z);
+        if (u.hover && u.hover.uid === un.uid && prev.parts && prev.parts.length) {
+          drawChanceBreakdown(g, cx, ly - 38 * z, z, prev);
+        }
       }
     }
     // speech bubble with pop and a tail
@@ -653,7 +770,12 @@ async function playEvents(ctx, events) {
         Audio.playShoot(att.hero);
         say(u, b, ev.uid, 'shoot');
         const midX = ((a.x + tw.x) / 2) * zz, midY = ((a.y + tw.y) / 2) * zz;
-        Vfx.panCam(Vfx.ensure(u), u.cam, midX, midY, cv, ev.typ === 'overwatch' ? 280 : 360);
+        Vfx.panCam(Vfx.ensure(u), u.cam, (a.x + tw.x) / 2, (a.y + tw.y) / 2, cv, {
+          zoom: ev.crit ? 1.20 : ev.typ === 'overwatch' ? 1.14 : 1.16,
+          durIn: ev.typ === 'overwatch' ? 200 : 260,
+          hold: 500,
+          durOut: 420,
+        });
         Vfx.nudgeToward(Vfx.ensure(u), midX, midY, ev.crit ? 1.2 : 0.9);
         await wait(melee ? 80 : 110);
         const an = Actors.ensureAnim(att);
@@ -713,7 +835,7 @@ async function playEvents(ctx, events) {
         u.booms.push({ x: s.x, y: s.y, until: performance.now() + 420 });
         const p = toWorld(s.x, s.y);
         Vfx.spawnExplosion(fx, p.x * u.cam.z, p.y * u.cam.z, 1.15);
-        Vfx.panCam(fx, u.cam, p.x * u.cam.z, p.y * u.cam.z, cv, 320);
+        Vfx.panCam(fx, u.cam, p.x, p.y, cv, { zoom: 1.20, durIn: 220, hold: 520, durOut: 460 });
         Vfx.nudgeToward(fx, p.x * u.cam.z, p.y * u.cam.z, 1.3);
       }
       Audio.play('explosion');
@@ -886,9 +1008,9 @@ export function render(ctx) {
           <div class="tiny dim">${perk ? `${esc(perk.name)}: ${esc(perk.text)}` : (def.passive && def.passive.name ? `${esc(def.passive.name)}: ${esc(def.passive.text)}` : '')}${(sel.ammo || 0) <= 0 ? ' · Out of ammo — adjacent melee only' : ''}</div>
         </div>
         <div class="tabs">
-          ${abs.map((a) => `<button class="tab ${u.mode === a.id || u.mode === a.kind ? 'on' : ''}" data-act="tmode" data-mode="${a.id}">${esc(a.name)} <span class="tiny">${a.ap} AP</span></button>`).join('')}
-          ${sel.medkits ? `<button class="tab ${u.mode === 'medkit' ? 'on' : ''}" data-act="tmode" data-mode="medkit">Medkit 2 AP · ${sel.medkits}</button>` : ''}
-          <button class="tab ${u.mode === 'hunker' ? 'on' : ''}" data-act="doHunker">Hunker 1 AP</button>
+          ${abs.map((a) => `<button class="tab ${u.mode === a.id || u.mode === a.kind ? 'on' : ''}" data-act="tmode" data-mode="${a.id}" data-apcost="${a.ap}">${esc(a.name)} <span class="tiny">${a.ap} AP</span></button>`).join('')}
+          ${sel.medkits ? `<button class="tab ${u.mode === 'medkit' ? 'on' : ''}" data-act="tmode" data-mode="medkit" data-apcost="2">Medkit 2 AP · ${sel.medkits}</button>` : ''}
+          <button class="tab ${u.mode === 'hunker' ? 'on' : ''}" data-act="doHunker" data-apcost="1">Hunker 1 AP</button>
         </div>` : ''}
     </div>
     <div class="tlog tiny dim">${log}</div>

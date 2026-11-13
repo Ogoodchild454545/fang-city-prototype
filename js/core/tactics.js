@@ -96,42 +96,46 @@ export function previewShot(b, att, def, mode = 'shot') {
   let cover = coverFrom(b, att.x, att.y, def.x, def.y);
   if (melee && (defn.passive?.id === 'jaw') && cover === 1) cover = 0;
   const flanked = cover === 0 && dist > 0;
+  const parts = [];
+  const push = (label, val) => { if (val) parts.push({ label, val }); };
   let chance = defn.aim + (att.aimMod || 0);
-  if (mode === 'aimed') chance += 25;
-  if (mode === 'overwatch' && !(att.perks || []).includes('trigger')) chance -= 15;
-  if (mode === 'suppress') chance += 10;
-  if (mode === 'knife' && flanked) chance += 20;
-  if (cover === 1) chance -= 20;
-  if (cover === 2) chance -= 40;
-  if (flanked) chance += 10;
+  parts.push({ label: 'Aim', val: chance });
+  if (mode === 'aimed') { chance += 25; push('Aimed', +25); }
+  if (mode === 'overwatch' && !(att.perks || []).includes('trigger')) { chance -= 15; push('Overwatch', -15); }
+  if (mode === 'suppress') { chance += 10; push('Suppress', +10); }
+  if (mode === 'knife' && flanked) { chance += 20; push('Knife flank', +20); }
+  if (cover === 1) { chance -= 20; push('Half cover', -20); }
+  if (cover === 2) { chance -= 40; push('Full cover', -40); }
+  if (flanked) { chance += 10; push('Flank', +10); }
   // range falloff / shotgun sweet spot
   if (!melee) {
     const mid = Math.max(2, Math.floor(range * 0.45));
-    if (dist > mid) chance -= 6 * (dist - mid);
-    if (w.typ === 'shotgun' && dist <= 2) chance += 15;
-    if (w.typ === 'shotgun' && dist >= 4) chance -= 10;
+    if (dist > mid) { const v = -6 * (dist - mid); chance += v; push('Range', v); }
+    if (w.typ === 'shotgun' && dist <= 2) { chance += 15; push('Close range', +15); }
+    if (w.typ === 'shotgun' && dist >= 4) { chance -= 10; push('Long shot', -10); }
   }
-  if (!att.moved && (att.perks || []).includes('cool')) chance += 10;
+  if (!att.moved && (att.perks || []).includes('cool')) { chance += 10; push('Cool', +10); }
   if (att.moved && defn.passive?.id === 'cold' && mode === 'aimed') chance -= 0; // crit later, not aim
   const aSp = defn.species, dSp = (tdef && tdef.species) || defOf(def.hero).species;
-  if (aSp === 'Wolf' && (allyNear(b, att, att.x, att.y) || allyNear(b, att, def.x, def.y))) chance += 15;
-  if (aSp === 'Rat' && flanked) chance += 10;
-  if (dSp === 'Rat' && def.moved) chance -= 15;
+  if (aSp === 'Wolf' && (allyNear(b, att, att.x, att.y) || allyNear(b, att, def.x, def.y))) { chance += 15; push('Pack', +15); }
+  if (aSp === 'Rat' && flanked) { chance += 10; push('Sneak', +10); }
+  if (dSp === 'Rat' && def.moved) { chance -= 15; push('Moved rat', -15); }
   const syn = synergiesFor(squadIds(b, att.side));
-  if (syn.some((g) => g.name === 'Pack Bond')) chance += 8;
+  if (syn.some((g) => g.name === 'Pack Bond')) { chance += 8; push('Pack Bond', +8); }
   if (syn.some((g) => g.name === 'Spotter') && att.hero === 'lumen') {
     const pip = b.units.find((u) => u.hero === 'pip' && u.side === att.side && u.hp > 0);
-    if (pip && hasLOS(b, pip.x, pip.y, def.x, def.y)) chance += 12;
+    if (pip && hasLOS(b, pip.x, pip.y, def.x, def.y)) { chance += 12; push('Spotter', +12); }
   }
   const mu = matchup(defn, tdef);
   chance += mu.aim;
+  if (mu.aim) push('Matchup', mu.aim);
   if (def.suppressed) chance += 0; // att is not suppressed
-  if (att.suppressed) chance -= 20;
+  if (att.suppressed) { chance -= 20; push('Suppressed', -20); }
   if (def.fortify) cover = Math.min(2, cover + 1);
   // re-apply cover penalty if fortify raised it after the first calc? already applied pre-fortify.
   if (def.fortify) {
     // add one extra step of penalty if we hadn't already counted the bumped cover
-    if (cover === 1) { /* was 0, now half */ chance -= 20; }
+    if (cover === 1) { chance -= 20; push('Fortify', -20); }
     else if (cover === 2) { /* maybe already full */ }
   }
   chance = Math.max(5, Math.min(95, Math.round(chance)));
@@ -146,7 +150,7 @@ export function previewShot(b, att, def, mode = 'shot') {
   const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : mode === 'overwatch' ? 0 : (defn.abilities.find((a) => a.id === mode)?.ap || 2);
   return {
     ok: true, chance, cover, flanked, dist, melee, dmg: [Math.max(1, d0), Math.max(1, d1)],
-    ap, mode, note: mu.note, los: true,
+    ap, mode, note: mu.note, los: true, parts,
   };
 }
 
