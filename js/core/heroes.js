@@ -199,13 +199,13 @@ export const HEROES = {
   },
   marlow: {
     id: 'marlow', name: 'Marlow', species: 'Bear', role: 'Demolitions',
-    blurb: 'Opens a route through parked cars and anything else in the way.',
+    blurb: 'Flushes crews out from behind cover with lobbed charges and a drum shotgun.',
     portrait: 'assets/heroes/marlow.jpg', thumb: 'assets/heroes/marlow-64.jpg',
     mood: 'heroic',
     hp: 18, ap: 3, move: 3, aim: 60, armor: 1, speed: 4,
     weapon: { name: 'Drum shotgun', dmg: [5, 8], range: 5, typ: 'shotgun' },
     abilities: [
-      { id: 'breach', name: 'Breach', ap: 2, kind: 'breach', range: 1, text: 'Smash an adjacent car, crate or barrier off the map.' },
+      { id: 'breach', name: 'Breach Charge', ap: 2, kind: 'breach', range: 4, text: 'Lob a charge up to 4 tiles: 4 damage to everyone next to it and sets off barrels and vans. Cover is not damaged.' },
       { id: 'blast', name: 'Point Blank', ap: 3, kind: 'shot', text: 'A heavy close shot.' },
     ],
     passive: { id: 'bulk', name: 'Bulk', text: '+4 max HP (already in his sheet).' },
@@ -297,7 +297,7 @@ export const RIVALS = {
     weapon: { name: 'Drum gun', dmg: [5, 7], range: 5, typ: 'shotgun' },
     abilities: [
       { id: 'shot', name: 'Shot', ap: 3, kind: 'shot', text: '' },
-      { id: 'breach', name: 'Breach', ap: 2, kind: 'breach', range: 1, text: '' },
+      { id: 'breach', name: 'Breach Charge', ap: 2, kind: 'breach', range: 4, text: 'Lob a charge: blast damage around the tile. Cover is not damaged.' },
     ],
     classId: 'demo',
     passive: { id: 'bulk', name: 'Bulk', text: '' },
@@ -442,7 +442,7 @@ export const SQUAD_SYNERGY = [
   { need: ['rook', 'ivory'], name: 'Pack Bond', text: 'Two wolves: both gain +8 aim.' },
   { need: ['lumen', 'pip'], name: 'Spotter', text: 'If Pip has line of sight to Lumen\'s target, she gains +12 aim.' },
   { need: ['brick', 'vesper'], name: 'Field Guard', text: 'If Brick is next to Vesper, she takes 1 less damage.' },
-  { need: ['nile', 'marlow'], name: 'Breach Pair', text: 'Marlow\'s Breach refunds 1 AP if Nile is in the fight.' },
+  { need: ['nile', 'marlow'], name: 'Breach Pair', text: 'Marlow\'s Breach Charge refunds 1 AP if Nile is in the fight.' },
 ];
 
 export function synergiesFor(ids) {

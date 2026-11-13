@@ -648,3 +648,4 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .result.r2 .xprow{padding:3px 0}
 .rbtns{margin-top:10px}
 @media (max-width:640px){.result.r2{grid-template-columns:1fr}}
+.tlbl.long{font-size:9px;letter-spacing:0;white-space:normal;text-align:center;line-height:1}

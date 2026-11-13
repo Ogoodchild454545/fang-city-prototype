@@ -417,7 +417,12 @@ function draw(ctx) {
         drawDestCover(g, b, c.x, c.y, sx, sy, z);
       }
     }
-    if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y && T.isExplosiveAt(b, c.x, c.y)) {
+    if (sel && u.mode === 'breach' && sel.side === 'player') {
+      const cp = T.previewCharge(b, sel, c.x, c.y);
+      if (cp.ok) hexPoly(g, sx, sy, z, 'rgba(255,140,40,0.20)', 'rgba(255,170,70,0.85)');
+      if (cp.ok && u.hover && u.hover.x === c.x && u.hover.y === c.y) Dock.drawBlastPreview(g, sx, sy, z, cp.radius);
+    }
+    if (u.mode !== 'breach' && sel && u.hover && u.hover.x === c.x && u.hover.y === c.y && T.isExplosiveAt(b, c.x, c.y)) {
       const prev = T.previewProp(b, sel, c.x, c.y);
       if (prev && prev.ok) Dock.drawBlastPreview(g, sx, sy, z, prev.radius || 1);
     }
@@ -517,7 +522,17 @@ function draw(ctx) {
     if (un.overwatch && un.hp > 0) {
       drawOverwatchEye(g, cx, barY - 8 * z, z);
     }
-    if (sel && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
+    if (sel && u.mode === 'breach' && u.hover && un.hp > 0 && Math.abs(un.x - u.hover.x) + Math.abs(un.y - u.hover.y) <= T.CHARGE.radius && T.previewCharge(b, sel, u.hover.x, u.hover.y).ok) {
+      // Into-the-Breach style damage preview on everyone in the blast, friend or foe.
+      const txt = `-${T.CHARGE.dmg}`;
+      g.font = `600 ${Math.round(12 * z)}px Oswald, sans-serif`;
+      const tw = g.measureText(txt).width + 8 * z;
+      g.fillStyle = un.side === 'player' ? 'rgba(201,48,44,.95)' : 'rgba(255,140,40,.95)';
+      g.beginPath(); g.roundRect(cx - tw / 2, barY - 26 * z, tw, 15 * z, 3 * z); g.fill();
+      g.fillStyle = '#fff'; g.textAlign = 'center';
+      g.fillText(txt, cx, barY - 14.5 * z); g.textAlign = 'left';
+    }
+    if (sel && u.mode !== 'breach' && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
       const prev = T.previewShot(b, sel, un, u.mode === 'aimed' ? 'aimed' : u.mode === 'melee' || u.mode === 'knife' || u.mode === 'roll' ? u.mode : u.mode === 'venom' ? 'venom' : u.mode === 'suppress' ? 'suppress' : 'shot');
       if (prev && prev.ok) {
         const label = `${prev.chance}%`;
@@ -715,6 +730,10 @@ function clickTile(ctx, x, y) {
       return doAct(ctx, { type: typ, uid: sel.uid, target: t.uid });
     }
   }
+  if (u.mode === 'breach') {
+    const cp = T.previewCharge(b, sel, x, y);
+    if (cp.ok) return doAct(ctx, { type: 'breach', uid: sel.uid, x, y });
+  }
   if (occ && occ.side === 'player' && occ.uid !== sel.uid) return;
   if (occ && occ.side === 'enemy') {
     const mode = u.mode || 'shot';
@@ -722,9 +741,6 @@ function clickTile(ctx, x, y) {
   }
   if (T.isExplosiveAt(b, x, y)) {
     return doAct(ctx, { type: 'shootProp', uid: sel.uid, x, y, mode: 'shot' });
-  }
-  if (sel && u.mode === 'breach') {
-    return doAct(ctx, { type: 'breach', uid: sel.uid, x, y });
   }
   if (sel && T.walkable(b, x, y, sel.uid)) {
     return doAct(ctx, { type: 'move', uid: sel.uid, x, y });
@@ -825,6 +841,12 @@ async function playEvents(ctx, events) {
         Audio.play('collect');
         await wait(280);
       }
+    }
+    if (ev.typ === 'throw') {
+      const th = b.units.find((x) => x.uid === ev.uid);
+      if (th) Actors.playClip(th, 'ability');
+      u.mode = null;
+      await wait(320);
     }
     if (ev.typ === 'boom') {
       u.shake = 14;
@@ -1103,7 +1125,7 @@ export function render(ctx) {
     const why = !canAct ? 'Not this operator\u2019s turn' : (sel.ap < a.ap ? `Needs ${a.ap} AP` : '');
     return `<button class="tabl ${on ? 'on' : ''} ${why ? 'off' : ''}" data-act="${a.act}" data-mode="${a.id}" data-apcost="${a.ap}" title="${esc(a.name + ' \u2014 ' + a.text + (why ? ' (' + why + ')' : ''))}" ${why ? 'disabled' : ''}>
       <span class="tico">${abilityIcon(a.kind)}${a.count ? `<em>${a.count}</em>` : ''}</span>
-      <span class="tlbl">${esc(a.name)}</span>
+      <span class="tlbl ${a.name.length > 10 ? 'long' : ''}">${esc(a.name)}</span>
       ${apPips(a.ap, a.ap)}
     </button>`;
   });

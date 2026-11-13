@@ -440,23 +440,24 @@ export function apply(b, action) {
   }
 
   if (action.type === 'breach') {
-    return { ok: false, reason: 'Cover cannot be destroyed' };
-    const { x, y } = action;
-    if (MANH(u.x, u.y, x, y) !== 1) return { ok: false, reason: 'Must be adjacent' };
-    const t = tile(b.map, x, y);
-    if (!t || !t.decor) return { ok: false, reason: 'Nothing to breach' };
-    if (!spend(u, 2)) return { ok: false, reason: 'Not enough AP' };
-    t.decor = ''; t.block = 0; t.cover = 0;
-    // if a two-tile car, clear the partner
-    for (const [dx, dy] of DIRS4) {
-      const n = tile(b.map, x + dx, y + dy);
-      if (n && (n.decor === 'car' || n.decor === 'car2')) { n.decor = ''; n.block = 0; n.cover = 0; }
-    }
+    // Breach Charge: a thrown blast. Hurts operators around the tile and sets off barrels / vans,
+    // but cover never changes (cover is not destructible; wrecks keep their cover).
+    const prev = previewCharge(b, u, action.x, action.y);
+    if (!prev.ok) return { ok: false, reason: prev.reason };
+    if (!spend(u, prev.ap)) return { ok: false, reason: 'Not enough AP' };
     u.acted = 1;
+    const { x, y } = action;
+    const events = [{ typ: 'throw', uid: u.uid, x, y }];
+    log(b, `${nameOf(u)} throws a breach charge.`);
+    b._chargeBonus = (u.gear === 'charges') ? 1 : 0;
+    const seen = new Set();
+    events.push({ typ: 'boom', x, y, radius: CHARGE.radius, dmg: CHARGE.dmg, spots: [{ x, y }] });
+    blastUnits(b, [{ x, y }], CHARGE.radius, CHARGE.dmg + b._chargeBonus, events);
+    if (b.status === 'active') chainFrom(b, [{ x, y }], CHARGE.radius, events, seen);
+    b._chargeBonus = 0;
     const syn = synergiesFor(squadIds(b, u.side));
     if (syn.some((g) => g.name === 'Breach Pair') && u.hero === 'marlow') u.ap = Math.min(u.maxAp, u.ap + 1);
-    log(b, `${nameOf(u)} breaches the cover.`);
-    return { ok: true, events: [{ typ: 'breach', uid: u.uid, x, y }], status: b.status };
+    return { ok: true, events, status: b.status };
   }
 
   if (action.type === 'heal' || action.type === 'patch') {
@@ -697,7 +698,26 @@ function explodeTile(b, x, y, events, seen) {
   }
   log(b, `A ${t.decor === 'barrel' || t.decor === 'barrelWreck' ? 'barrel' : 'van'} explodes!`);
   events.push({ typ: 'boom', x, y, radius, dmg, spots });
-  const centers = spots;
+  blastUnits(b, spots, radius, dmg, events);
+  if (b.status !== 'active') return;
+  chainFrom(b, spots, radius, events, seen);
+}
+
+export const CHARGE = { range: 4, radius: 1, dmg: 4, ap: 2 };
+
+export function previewCharge(b, u, x, y) {
+  if (!u || u.hp <= 0) return { ok: false, reason: 'No thrower' };
+  const has = (defOf(u.hero).abilities || []).some((a) => a.kind === 'breach');
+  if (!has) return { ok: false, reason: 'No charges' };
+  const t = tile(b.map, x, y);
+  if (!t) return { ok: false, reason: 'Off the map' };
+  const dist = MANH(u.x, u.y, x, y);
+  if (dist < 1 || dist > CHARGE.range) return { ok: false, reason: 'Out of throw range', dist };
+  if (t.block && !t.explosive) return { ok: false, reason: 'Throw onto open ground', dist };
+  return { ok: true, dist, radius: CHARGE.radius, dmg: CHARGE.dmg, ap: CHARGE.ap, x, y };
+}
+
+function blastUnits(b, centers, radius, dmg, events) {
   for (const u of b.units) {
     if (u.hp <= 0) continue;
     const dist = Math.min(...centers.map((s) => MANH(u.x, u.y, s.x, s.y)));
@@ -717,8 +737,10 @@ function explodeTile(b, x, y, events, seen) {
     if (u.hp <= 0) { u.ko = 1; }
   }
   checkEnd(b);
-  // chain nearby unexploded barrels / vans
-  if (b.status !== 'active') return;
+}
+
+// chain nearby unexploded barrels / vans
+function chainFrom(b, centers, radius, events, seen) {
   for (let yy = 0; yy < b.map.h; yy++) {
     for (let xx = 0; xx < b.map.w; xx++) {
       const n = tile(b.map, xx, yy);

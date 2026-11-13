@@ -695,9 +695,27 @@ test('docklands: speed queue, explosive barrels, medkit revive, cover is not des
   const again = T.previewProp(b, shooter, 5, 12, 'shot');
   assert.equal(again.ok, false);
 
-  // Marlow cannot breach cover away
+  // Breach Charge never removes cover: only operators with the ability can throw, and the crate stays.
   const br = T.apply(b, { type: 'breach', uid: shooter.uid, x: 12, y: 9 });
   assert.equal(br.ok, false);
+  {
+    const crate = tile(b.map, 12, 9);
+    const cov0 = crate.cover, dec0 = crate.decor, blk0 = crate.block;
+    const tb = T.startBattle({ map: b.map, player: ['marlow'], enemy: ['knack'], seed: 5, label: 'Charge', kind: 'street',
+      loadout: { recs: { marlow: { stars: 1, lv: 1, perks: [], gear: null } }, ammo: { marlow: 4 }, medkits: {} } });
+    const mar = tb.units.find((x) => x.hero === 'marlow');
+    const foe = tb.units.find((x) => x.side === 'enemy');
+    mar.x = 12; mar.y = 11; foe.x = 13; foe.y = 9; mar.ap = 3; tb.acting = mar.uid; tb.side = 'player';
+    const hp0 = foe.hp;
+    const pv = T.previewCharge(tb, mar, 12, 9);
+    const target = pv.ok ? { x: 12, y: 9 } : { x: 13, y: 10 };
+    const ch = T.apply(tb, { type: 'breach', uid: mar.uid, ...target });
+    assert.ok(ch.ok, ch.reason);
+    assert.ok(foe.hp < hp0, 'charge blast damages nearby foes');
+    const c2 = tile(tb.map, 12, 9);
+    assert.equal(c2.cover, cov0, 'cover unchanged after a charge');
+    assert.equal(c2.decor, dec0); assert.equal(c2.block, blk0);
+  }
 
   // Revive: KO vesper, have her next to rook with a medkit
   const rook = b.units.find((u) => u.hero === 'rook');
