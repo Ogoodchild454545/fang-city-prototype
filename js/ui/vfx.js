@@ -60,51 +60,50 @@ export function spawnSparks(fx, x, y, n = 10) {
 
 export function spawnExplosion(fx, x, y, scale = 1) {
   const now = performance.now();
-  fx.bits.push({ typ: 'flash', x, y, t0: now, life: 420, scale });
-  // smoke puffs
-  for (let i = 0; i < 8; i++) {
+  // Bright fireball core first; smoke is staggered so the flash reads.
+  fx.bits.push({ typ: 'flash', x, y, t0: now, life: 380, scale });
+  fx.bits.push({ typ: 'flash', x, y, t0: now, life: 160, scale: scale * 0.55, core: 1 });
+  for (let i = 0; i < 10; i++) {
     const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
-    const sp = 0.3 + Math.random() * 0.9;
+    const sp = 0.25 + Math.random() * 0.7;
     fx.bits.push({
       typ: 'smoke',
       x: x + (Math.random() - 0.5) * 10 * scale,
       y: y + (Math.random() - 0.5) * 6 * scale,
       vx: Math.cos(a) * sp * scale,
-      vy: -0.4 * scale - Math.random() * 0.7,
+      vy: -0.35 * scale - Math.random() * 0.6,
       r: (6 + Math.random() * 8) * scale,
-      grow: 18 * scale,
-      t0: now + i * 18,
-      life: 700 + Math.random() * 400,
+      grow: 20 * scale,
+      t0: now + 70 + i * 22,
+      life: 780 + Math.random() * 400,
     });
   }
-  // debris
-  for (let i = 0; i < 12; i++) {
-    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6;
-    const sp = 1.4 + Math.random() * 3.4;
+  for (let i = 0; i < 18; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.8;
+    const sp = 2.0 + Math.random() * 4.2;
     fx.bits.push({
       typ: 'debris',
       x, y,
       vx: Math.cos(a) * sp * scale,
-      vy: Math.sin(a) * sp * scale - 1.5,
+      vy: Math.sin(a) * sp * scale - 2.2,
       rot: Math.random() * Math.PI,
-      rv: (Math.random() - 0.5) * 0.4,
+      rv: (Math.random() - 0.5) * 0.5,
       t0: now,
-      life: 550 + Math.random() * 350,
-      w: (2 + Math.random() * 4) * scale,
-      h: (1.5 + Math.random() * 3) * scale,
+      life: 650 + Math.random() * 400,
+      w: (3 + Math.random() * 6) * scale,
+      h: (2 + Math.random() * 4) * scale,
       tone: Math.random(),
     });
   }
-  // embers
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 12; i++) {
     const a = Math.random() * Math.PI * 2;
     fx.bits.push({
       typ: 'ember',
       x, y,
-      vx: Math.cos(a) * (0.4 + Math.random()) * scale,
-      vy: -0.8 - Math.random() * 1.6,
+      vx: Math.cos(a) * (0.6 + Math.random() * 1.4) * scale,
+      vy: -1.2 - Math.random() * 2.2,
       t0: now,
-      life: 400 + Math.random() * 300,
+      life: 480 + Math.random() * 320,
     });
   }
 }
@@ -229,14 +228,22 @@ export function draw(g, fx, z) {
       g.restore();
     } else if (b.typ === 'flash') {
       const k = 1 - u;
-      const rad = (20 + (1 - k) * 40) * z * (b.scale || 1);
+      const punch = b.core ? (1 - u) * (1 - u) : k;
+      const rad = ((b.core ? 16 : 28) + (1 - k) * (b.core ? 22 : 52)) * z * (b.scale || 1);
       g.save();
       g.globalCompositeOperation = 'lighter';
-      const grd = g.createRadialGradient(b.x, b.y, 2, b.x, b.y, rad);
-      grd.addColorStop(0, `rgba(255,245,200,${1.0 * k})`);
-      grd.addColorStop(0.35, `rgba(255,140,40,${0.7 * k})`);
-      grd.addColorStop(0.7, `rgba(160,40,10,${0.35 * k})`);
-      grd.addColorStop(1, 'rgba(40,10,0,0)');
+      const grd = g.createRadialGradient(b.x, b.y, 1, b.x, b.y, rad);
+      if (b.core) {
+        grd.addColorStop(0, `rgba(255,255,230,${1.0 * punch})`);
+        grd.addColorStop(0.25, `rgba(255,230,80,${0.95 * punch})`);
+        grd.addColorStop(0.6, `rgba(255,140,20,${0.7 * punch})`);
+        grd.addColorStop(1, 'rgba(255,60,0,0)');
+      } else {
+        grd.addColorStop(0, `rgba(255,250,200,${0.95 * k})`);
+        grd.addColorStop(0.25, `rgba(255,190,40,${0.85 * k})`);
+        grd.addColorStop(0.55, `rgba(255,90,16,${0.55 * k})`);
+        grd.addColorStop(1, 'rgba(80,10,0,0)');
+      }
       g.fillStyle = grd;
       g.beginPath(); g.arc(b.x, b.y, rad, 0, Math.PI * 2); g.fill();
       g.restore();
@@ -255,8 +262,10 @@ export function draw(g, fx, z) {
       g.rotate(b.rot);
       g.globalAlpha = 1 - u * u;
       const t = b.tone;
-      g.fillStyle = t < 0.4 ? '#5a4330' : t < 0.7 ? '#8a6a40' : '#3a332c';
+      g.fillStyle = t < 0.25 ? '#c4a060' : t < 0.5 ? '#8a5a30' : t < 0.75 ? '#5a3a22' : '#d08040';
       g.fillRect(-b.w * z * 0.5, -b.h * z * 0.5, b.w * z, b.h * z);
+      g.fillStyle = 'rgba(255,200,80,0.35)';
+      g.fillRect(-b.w * z * 0.5, -b.h * z * 0.5, b.w * z * 0.35, b.h * z);
       g.restore();
     } else if (b.typ === 'ember') {
       const fade = 1 - u;

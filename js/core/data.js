@@ -1,6 +1,6 @@
 // Static game definitions. Pure data: safe to share between client and a future server.
 
-export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.5.4' };
+export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.5.5' };
 
 export const SPECIES = {
   wolf:   { name: 'Wolf',      gang: 'grey',  img: 'assets/wolf.jpg',   base: { muscle: 55, aim: 60, nerve: 62 }, trait: 'pack',  traitName: 'Pack Tactics', traitDesc: '+15% damage when next to an ally' },

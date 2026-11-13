@@ -295,7 +295,26 @@ function drawVan(g, t, sx, sy, z, wreck) {
     g.closePath(); g.fill();
     g.fillStyle = t.hue === 'grey' ? '#2a2c30' : '#c0a030';
     g.fillRect((tl[0] + tn[0]) / 2 - 4 * z, (tl[1] + tn[1]) / 2 + 2 * z, 8 * z, 2 * z);
-  } else {
+  }
+  // Bumper bars (front cab and rear)
+  g.fillStyle = wreck ? '#1a1410' : '#2a2a28';
+  g.fillRect(gr[0] - 3 * z, gr[1] - 3 * z, 7 * z, 3 * z);
+  g.fillRect(gl[0] - 4 * z, gl[1] - 3 * z, 7 * z, 3 * z);
+  // Wheels + arches on the visible south/west faces
+  const wheel = (x, y) => {
+    g.fillStyle = '#141414';
+    g.beginPath(); g.ellipse(x, y, 4.2 * z, 2.6 * z, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#3a3a3a';
+    g.beginPath(); g.ellipse(x, y, 2.2 * z, 1.3 * z, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = wreck ? '#2a1c14' : '#1a1a1a';
+    g.lineWidth = 1.6 * z;
+    g.beginPath();
+    g.ellipse(x, y - 2.4 * z, 5.2 * z, 2.4 * z, 0, Math.PI, 0, true);
+    g.stroke();
+  };
+  wheel((gl[0] + gb[0]) / 2 - 2 * z, (gl[1] + gb[1]) / 2 + 1 * z);
+  wheel((gb[0] + gr[0]) / 2 + 2 * z, (gb[1] + gr[1]) / 2 + 1 * z);
+  if (wreck) {
     // scorch + ember
     g.fillStyle = 'rgba(20,10,6,0.55)';
     poly(g, [tn, tr, tb, tl], 'rgba(20,10,6,0.4)', null);
@@ -371,12 +390,50 @@ function drawCrate(g, sx, sy, z) {
   const H = 10 * z;
   const pal = { left: '#8a6234', right: '#6a4a24', top: '#c49a5a', edge: '#3d2a14' };
   const p = isoBox(g, sx, sy, z, H, pal);
-  g.strokeStyle = 'rgba(60,30,10,0.5)';
+  g.strokeStyle = 'rgba(50,28,10,0.55)';
   g.lineWidth = 1 * z;
+  // Wood slats on the left and right faces
+  const slat = (a, b, n) => {
+    for (let i = 1; i <= n; i++) {
+      const t = i / (n + 1);
+      g.beginPath();
+      g.moveTo(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t);
+      const ox = p.tb[0] - a[0], oy = p.tb[1] - a[1];
+      // project toward the bottom corner of that face
+      g.lineTo(a[0] + (b[0] - a[0]) * t + (p.gb[0] - a[0]) * 0.15, a[1] + (b[1] - a[1]) * t + 6 * z);
+      g.stroke();
+    }
+  };
+  // horizontal boards on left face (tl-tb-gb-gl)
+  for (let i = 1; i <= 3; i++) {
+    const t = i / 4;
+    const y0 = p.tl[1] + (p.gl[1] - p.tl[1]) * t;
+    const y1 = p.tb[1] + (p.gb[1] - p.tb[1]) * t;
+    g.beginPath();
+    g.moveTo(p.tl[0] + (p.gl[0] - p.tl[0]) * t, y0);
+    g.lineTo(p.tb[0] + (p.gb[0] - p.tb[0]) * t, y1);
+    g.stroke();
+  }
+  for (let i = 1; i <= 3; i++) {
+    const t = i / 4;
+    g.beginPath();
+    g.moveTo(p.tr[0] + (p.gr[0] - p.tr[0]) * t, p.tr[1] + (p.gr[1] - p.tr[1]) * t);
+    g.lineTo(p.tb[0] + (p.gb[0] - p.tb[0]) * t, p.tb[1] + (p.gb[1] - p.tb[1]) * t);
+    g.stroke();
+  }
+  // lid boards
   g.beginPath();
-  g.moveTo((p.tl[0] + p.tr[0]) / 2, (p.tl[1] + p.tr[1]) / 2);
-  g.lineTo((p.tb[0]), p.tb[1]);
+  g.moveTo((p.tl[0] + p.tt[0]) / 2, (p.tl[1] + p.tt[1]) / 2);
+  g.lineTo((p.tb[0] + p.tr[0]) / 2, (p.tb[1] + p.tr[1]) / 2);
   g.stroke();
+  // corner brackets
+  g.strokeStyle = 'rgba(40,28,16,0.7)';
+  g.lineWidth = 1.3 * z;
+  const br = (x, y, dx, dy) => {
+    g.beginPath(); g.moveTo(x, y + dy); g.lineTo(x, y); g.lineTo(x + dx, y); g.stroke();
+  };
+  br(p.tb[0], p.tb[1], 3 * z, 3 * z);
+  br(p.tl[0], p.tl[1], 3 * z, 3 * z);
 }
 
 function drawDesk(g, sx, sy, z) {
@@ -395,18 +452,22 @@ function drawBarrel(g, sx, sy, z, wreck) {
     : { left: '#8a2e18', right: '#5e1c10', top: '#c44a28', edge: '#2a0c08' };
   const p = isoBox(g, sx, sy * 1, z, H, pal);
   if (!wreck) {
-    g.strokeStyle = 'rgba(255,200,160,0.3)';
-    g.lineWidth = 1.2 * z;
-    g.beginPath();
-    g.moveTo(p.tl[0] + 2 * z, p.tl[1] + 5 * z);
-    g.lineTo(p.tr[0] - 2 * z, p.tr[1] + 5 * z);
-    g.stroke();
-    // hazard hoop
-    g.strokeStyle = '#e0c15a';
-    g.beginPath();
-    g.moveTo(p.tl[0] + 2 * z, p.tl[1] + 8 * z);
-    g.lineTo(p.tr[0] - 2 * z, p.tr[1] + 8 * z);
-    g.stroke();
+    // Horizontal ribs / hoops around the drum
+    const hoops = [
+      [0.22, 'rgba(40,12,8,0.7)'],
+      [0.42, '#e0c15a'],
+      [0.62, 'rgba(40,12,8,0.7)'],
+      [0.80, 'rgba(255,200,160,0.28)'],
+    ];
+    for (const [t, col] of hoops) {
+      g.strokeStyle = col;
+      g.lineWidth = (col === '#e0c15a' ? 1.6 : 1.3) * z;
+      g.beginPath();
+      g.moveTo(p.tl[0] + (p.gl[0] - p.tl[0]) * t + 1 * z, p.tl[1] + (p.gl[1] - p.tl[1]) * t);
+      g.lineTo(p.tb[0] + (p.gb[0] - p.tb[0]) * t, p.tb[1] + (p.gb[1] - p.tb[1]) * t);
+      g.lineTo(p.tr[0] + (p.gr[0] - p.tr[0]) * t - 1 * z, p.tr[1] + (p.gr[1] - p.tr[1]) * t);
+      g.stroke();
+    }
   }
 }
 
