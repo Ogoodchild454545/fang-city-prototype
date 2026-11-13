@@ -412,13 +412,21 @@ function meleePose(kind, t) {
 }
 
 function hitPose(kind, t) {
+  // Impact snap back, knees give, then a damped wobble back to ready (reads as weight, not a slide).
   const idle = idlePose(kind, 0, 2);
-  const punch = Math.exp(-t * 7) * (1 - Math.min(1, t / 0.36));
+  const k = Math.min(1, t / 0.36);
+  const punch = Math.exp(-t * 7) * (1 - k);
+  const wob = Math.sin(t * 34) * Math.exp(-t * 9) * (1 - k);
   return {
     ...idle,
-    hipX: -6 * punch, hipRot: 10 * DEG * punch,
-    torso: 12 * DEG * punch, head: 8 * DEG * punch,
+    hipX: -6 * punch, hipY: idle.hipY + 3.2 * punch, hipRot: 10 * DEG * punch,
+    torso: 14 * DEG * punch + 3 * DEG * wob, head: 12 * DEG * punch - 6 * DEG * wob,
     armR: idle.armR + 20 * DEG * punch, armL: idle.armL - 15 * DEG * punch,
+    forearmR: idle.forearmR + 10 * DEG * punch,
+    weapon: idle.weapon + 14 * DEG * punch,
+    thighR: idle.thighR + 14 * DEG * punch, shinR: idle.shinR + 18 * DEG * punch,
+    thighL: idle.thighL + 10 * DEG * punch, shinL: idle.shinL + 14 * DEG * punch,
+    coil: idle.coil + 14 * DEG * punch, mid: idle.mid - 10 * DEG * wob, tip: idle.tip + 16 * DEG * wob,
   };
 }
 
@@ -482,7 +490,7 @@ function revivePose(kind, t, legs) {
   return lerpPose(crouch, stand, easeOut((k - 0.6) / 0.4));
 }
 
-function abilityPose(kind, t, anim) {
+function abilityPose(kind, t, anim, hero) {
   if (kind === 'snake') {
     const idle = idlePose(kind, 0, 2);
     const bow = { ...idle, torso: 16 * DEG, head: 10 * DEG, hipY: 3, armR: 20 * DEG, armL: 20 * DEG };
@@ -490,6 +498,39 @@ function abilityPose(kind, t, anim) {
     if (t < 0.22) return lerpPose(idle, bow, easeOut(t / 0.22));
     if (t < 0.5) return lerpPose(bow, rise, easeInOut((t - 0.22) / 0.28));
     return lerpPose(rise, idle, easeInOut((t - 0.5) / 0.2));
+  }
+  const idle = idlePose(kind, 0, 2);
+  if (hero === 'brick') {
+    // Tank brace (Fortify / Hunker): drop the hips, plant wide, gun across the chest, hold, rise.
+    const brace = {
+      ...idle,
+      hipY: 9, hipX: 1, hipRot: 4 * DEG, torso: 14 * DEG, head: 6 * DEG,
+      thighR: 34 * DEG, shinR: 40 * DEG, thighL: -30 * DEG, shinL: 44 * DEG,
+      armR: -30 * DEG, forearmR: -78 * DEG, armL: -10 * DEG, forearmL: -96 * DEG,
+      weapon: -48 * DEG,
+    };
+    if (t < 0.16) return lerpPose(idle, brace, easeOut(t / 0.16));
+    if (t < 0.5) {
+      const thud = Math.exp(-(t - 0.16) * 18) * 2.2;
+      return { ...brace, hipY: brace.hipY + thud };
+    }
+    return lerpPose(brace, idle, easeInOut(Math.min(1, (t - 0.5) / 0.2)));
+  }
+  if (hero === 'lumen') {
+    // Aimed Shot: settle, long steady breath on the scope, one clean shot, slow follow-through.
+    const steady = shootPose(kind, 0.159, null);
+    const still = { ...steady, torso: steady.torso - 2 * DEG, head: steady.head - 3 * DEG, hipY: (steady.hipY || 0) + 0.6 };
+    if (t < 0.12) return lerpPose(idle, still, easeOut(t / 0.12));
+    if (t < 0.36) return still;
+    return shootPose(kind, 0.16 + (t - 0.36) * 1.1, anim);
+  }
+  if (hero === 'rook') {
+    // Overwatch: shoulder the carbine and sweep the lane left-right before locking on.
+    const aim = shootPose(kind, 0.159, null);
+    const k = Math.min(1, t / 0.7);
+    if (t < 0.14) return lerpPose(idle, aim, easeOut(t / 0.14));
+    const sweep = Math.sin((k - 0.2) * Math.PI * 2.2) * (1 - k);
+    return { ...aim, torso: aim.torso + 6 * DEG * sweep, head: aim.head + 8 * DEG * sweep, weapon: aim.weapon + 4 * DEG * sweep, hipX: (aim.hipX || 0) + 1.5 * sweep };
   }
   return shootPose(kind, t * 0.7, anim);
 }
@@ -523,7 +564,7 @@ export function poseOf(unit, def, anim, now) {
   const legs = legSpan(fitOf(unit.hero));
   if (anim.clip === 'ko') return koPose(kind, t, legs);
   if (anim.clip === 'revive') return revivePose(kind, t, legs);
-  if (anim.clip === 'ability') return abilityPose(kind, t, anim);
+  if (anim.clip === 'ability') return abilityPose(kind, t, anim, unit.hero);
   const idle = idlePose(kind, (now || 0) / 1000 + (anim.t0 || 0) / 10000, def.breath);
   return meleeHold(idle, rig);
 }
