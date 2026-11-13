@@ -127,8 +127,8 @@ export function docklandsMap() {
   // Crates / pallets — half cover, not destructible. (12,9) is Hook's tutorial cover from the west.
   for (const [x, y] of [[11, 7], [12, 9], [8, 10], [15, 10], [12, 12]]) put(m, x, y, 'crate', 1);
 
-  // Explosive barrels — half cover, can be shot to explode, wreck keeps half cover.
-  for (const [x, y] of [[19, 3], [17, 7], [5, 12], [11, 14]]) put(m, x, y, 'barrel', 1, { explosive: 1 });
+  // Explosive barrels — half cover, can be shot to explode, wreck keeps half cover. (17,8) and (10,12) sit beside vans so a shot can set off a chain.
+  for (const [x, y] of [[19, 3], [17, 7], [17, 8], [5, 12], [10, 12], [11, 14]]) put(m, x, y, 'barrel', 1, { explosive: 1 });
 
   // Lamp posts: scenery, no cover, do not block.
   for (const [x, y] of [[8, 3], [16, 10]]) put(m, x, y, 'lamp', 0, { block: 0 });

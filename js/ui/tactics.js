@@ -935,8 +935,16 @@ async function playEvents(ctx, events) {
         Vfx.panCam(fx, u.cam, p.x, p.y, cv, { zoom: 1.20, durIn: 220, hold: 520, durOut: 460 });
         Vfx.nudgeToward(fx, p.x * u.cam.z, p.y * u.cam.z, 1.3);
       }
+      // Chain reactions get a counter so a barrel-into-van cascade reads as one big payoff.
+      const nowB = performance.now();
+      u.chainN = (u.lastBoom && nowB - u.lastBoom < 1200) ? (u.chainN || 1) + 1 : 1;
+      u.lastBoom = nowB;
+      if (u.chainN > 1) {
+        const p0 = toWorld(spots[0].x, spots[0].y);
+        Vfx.spawnCallout(fx, p0.x * u.cam.z, (p0.y - 70) * u.cam.z, `CHAIN ×${u.chainN}`, 'crit');
+      }
       Audio.play('explosion');
-      await wait(280);
+      await wait(u.chainN > 1 ? 380 : 280);
     }
     if (ev.typ === 'boomhit') {
       const un = b.units.find((x) => x.uid === ev.uid);
