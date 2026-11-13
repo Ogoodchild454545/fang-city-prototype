@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.5)
+# Fang City: Animal Gangs (playable prototype v0.5.9)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,15 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.5.9 (docklands readability)
+
+- Rivals read on the dark docks: their near-black art gets a baked shadow lift plus a red team rim, so leather, fur and kit separate from the asphalt while keeping the rival look. Blue/red team discs under the feet, team-tinted HP bars (rivals' bars are red).
+- Camera framing fits the 844x390 landscape view: units are kept inside a HUD-safe area (below the top bar and turn strip, above the dock). Priority is the acting unit, then its whole squad, then the nearest foe. The camera glides to each new operator. Chained shot/explosion pans no longer creep the zoom in.
+- Turn-order strip: brighter portraits on a dark pill, blue rings for your crew and red for rivals, HP slivers, KO tags, and a larger gold-glow current unit. It sits in the top bar between the turn label and the timer.
+- Hit feedback: HIT/CRIT/MISS callout above the head, a separate red damage number to the side (crits larger and gold), and floats follow camera zoom. Quip bubbles are bigger, team-bordered and readable when zoomed out.
+- Explosions: barrels now sit beside the east and south-west vans, so one shot can chain (van → barrel → barrel) with a CHAIN ×N callout and a beat between blasts.
+- Rival turns pause briefly on each hand-off so the banner and camera glide can be read. Retreat and End turn stay pinned right when there is no timer.
 
 ## v0.5.8 (battle polish)
 
