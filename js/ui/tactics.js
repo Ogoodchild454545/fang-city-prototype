@@ -7,7 +7,7 @@ import { formatDrop } from '../core/shards.js';
 import { PERKS, rankName, xpToNext } from '../core/progress.js';
 import * as Audio from './audio.js';
 import * as Dock from './dockart.js';
-import { chooseAction, opponentLabel } from '../core/pvp.js';
+import { chooseAction, opponentLabel, leagueOf } from '../core/pvp.js';
 import * as Actors from './actors.js';
 import * as Vfx from './vfx.js';
 
@@ -889,27 +889,87 @@ function finish(ctx) {
   const u = ui(ctx);
   if (u.closed) return;
   u.closed = 1;
-  const res = T.resolveTactics(ctx.state, ctx.state.tactics);
+  const fight = ctx.state.tactics;
+  const squad = fight ? fight.units.filter((x) => x.side === 'player').map((x) => ({ hero: x.hero, hp: x.hp, kills: x.kills || 0 })) : [];
+  const res = T.resolveTactics(ctx.state, fight);
   ctx.save();
   ctx.sub.tactics = null;
   if (!res) { ctx.go('city'); return; }
-  const extra = res.shardDrop
-    ? `<p class="small gold">${res.tutorial ? 'You picked up a lead after the lesson. ' : ''}${esc(formatDrop(res.shardDrop))}. Collect 30 shards to unlock an operator.</p>`
-    : '';
   if (res.win) Audio.play('win'); else Audio.play('lose');
-  ctx.modal(`<div class="result ${res.win ? 'win' : 'loss'} ${res.highStakes ? 'hstakes' : ''}">
-    <div class="h dim">${esc(res.label)}</div>
-    <div class="big">${res.win ? 'Victory' : 'Defeat'}</div>
-    ${res.win ? `<div class="rewards"><span>${money(res.cash)}</span>${res.influence ? `<span>${ico('influence')} ${fmt(res.influence)} Rep</span>` : ''}${res.trophies ? `<span class="gold">+${res.trophies} trophies</span>` : ''}</div>` : `<p class="small dim">Think about cover and flanks, then try again.${res.trophies ? ` ${res.trophies} trophies.` : ''}</p>`}
-    ${res.trophiesNow != null ? `<p class="small dim">${res.league ? esc(res.league.name) + ' · ' : ''}${res.trophiesNow} trophies${res.opponent ? ' · vs ' + esc(res.opponent.name) : ''}</p>` : ''}
-    ${extra}
-    ${xpBlock(res)}
-    <div class="row" style="margin-top:10px">
-      <button class="btn block" data-act="closeModal" data-then="heroes">Operators</button>
-      <button class="btn red block" data-act="closeModal">${res.kind === 'tutorial' ? 'Back to the hideout' : 'Back to the city'}</button>
-    </div>
-  </div>`, { center: true, backdrop: false, onClose: () => ctx.go(ctx.sub.afterBattle || (res.kind === 'tutorial' ? 'base' : 'city')) });
+  const el = ctx.modal(resultHtml(res, squad), { center: true, backdrop: false, cls: 'resultov', onClose: () => ctx.go(ctx.sub.afterBattle || (res.kind === 'tutorial' ? 'base' : 'city')) });
+  if (el) animateResult(el);
   ctx.sub.afterBattle = null;
+}
+
+// End-of-fight screen: landscape two-column card. Left: banner + squad with MVP and KO states.
+// Right: reward tiles (Cash, Rep, trophies, shards) that count up, then the league bar.
+function resultHtml(res, squad) {
+  const mvp = squad.length ? squad.reduce((a, x) => (x.kills > a.kills || (x.kills === a.kills && x.hp > a.hp) ? x : a), squad[0]) : null;
+  const sq = squad.map((x) => {
+    const d = defOf(x.hero);
+    const tag = x === mvp && res.win && x.kills ? '<em class="mvp">MVP</em>' : (x.hp <= 0 ? '<em class="ko">KO</em>' : '');
+    return `<div class="rsq ${x.hp <= 0 ? 'down' : ''} ${x === mvp && res.win && x.kills ? 'star' : ''}"><img src="${d.thumb || d.portrait}" alt=""><b>${esc(d.name)}</b><span>${x.kills ? x.kills + ' KO' : (x.hp > 0 ? 'Standing' : 'Down')}</span>${tag}</div>`;
+  }).join('');
+  const quipHero = mvp && defOf(mvp.hero);
+  const qset = quipHero && quipHero.quips && (res.win ? (quipHero.quips.win || quipHero.quips.shoot) : (quipHero.quips.ko || quipHero.quips.hit));
+  const quip = qset && qset.length ? `<div class="rquip">“${esc(qset[0])}” <span>— ${esc(quipHero.name)}</span></div>` : '';
+  const tiles = [];
+  if (res.cash) tiles.push(`<div class="rt cash">${ico('cash')}<b data-count="${res.cash}">0</b><span>Cash</span></div>`);
+  if (res.influence) tiles.push(`<div class="rt rep">${ico('influence')}<b data-count="${res.influence}">0</b><span>Rep</span></div>`);
+  if (res.trophies) tiles.push(`<div class="rt troph ${res.trophies < 0 ? 'neg' : ''}"><i class="trico">🏆</i><b data-count="${res.trophies}" data-sign="1">0</b><span>Trophies</span></div>`);
+  if (res.shardDrop && res.shardDrop.added) {
+    const sd = res.shardDrop, d = sd.id ? defOf(sd.id) : null;
+    tiles.push(`<div class="rt shard">${d ? `<img src="${d.thumb || d.portrait}" alt="">` : '<i class="trico">◆</i>'}<b data-count="${sd.added}" data-sign="1">0</b><span>${esc(sd.name)} shards${sd.unlocked ? ' · UNLOCKED' : ''}</span></div>`);
+  }
+  let league = '';
+  if (res.trophiesNow != null) {
+    const lg = leagueOf(res.trophiesNow);
+    const before = Math.max(0, res.trophiesNow - (res.trophies || 0));
+    const lgBefore = leagueOf(before);
+    const span = lg.next ? lg.next.min - lg.min : 1;
+    const pct = (t) => lg.next ? Math.max(0, Math.min(100, ((t - lg.min) / span) * 100)) : 100;
+    const moved = lgBefore.id !== lg.id ? `<div class="rlgup ${lg.idx > lgBefore.idx ? 'up' : 'down'}">${lg.idx > lgBefore.idx ? 'PROMOTED' : 'RELEGATED'} · ${esc(lg.name)}</div>` : '';
+    league = `<div class="rleague">${moved}
+      <div class="rlgrow"><b>${esc(lg.name)}</b><span>${res.trophiesNow} 🏆${lg.next ? ` · ${lg.next.min - res.trophiesNow} to ${esc(lg.next.name)}` : ' · top league'}</span></div>
+      <div class="rlgbar"><i style="width:${pct(lgBefore.id === lg.id ? before : lg.min)}%" data-to="${pct(res.trophiesNow)}"></i></div>
+      ${res.opponent ? `<div class="tiny dim">vs ${esc(res.opponent.name)}</div>` : ''}</div>`;
+  }
+  const lossTip = !res.win ? '<p class="small dim">Use cover, flank for better hit chances, and keep the medic close to revive.</p>' : '';
+  return `<div class="result r2 ${res.win ? 'win' : 'loss'} ${res.highStakes ? 'hstakes' : ''}">
+    <div class="rleft">
+      <div class="h dim rlabel">${esc(res.label)}</div>
+      <div class="big">${res.win ? 'Victory' : 'Defeat'}</div>
+      <div class="rsquad">${sq}</div>
+      ${quip}
+      <div class="row rbtns">
+        <button class="btn block" data-act="closeModal" data-then="heroes">Operators</button>
+        <button class="btn red block" data-act="closeModal">${res.kind === 'tutorial' ? 'Back to the hideout' : 'Continue'}</button>
+      </div>
+    </div>
+    <div class="rright">
+      ${tiles.length ? `<div class="rtiles">${tiles.join('')}</div>` : ''}
+      ${lossTip}
+      ${league}
+      ${res.tutorial && res.shardDrop ? '<p class="small gold">Collect 30 shards to unlock an operator.</p>' : ''}
+      ${xpBlock(res)}
+    </div>
+  </div>`;
+}
+
+function animateResult(root) {
+  const nums = [...root.querySelectorAll('[data-count]')];
+  const t0 = performance.now(), dur = 900;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    for (const n of nums) {
+      const v = Math.round(+n.dataset.count * e);
+      n.textContent = (n.dataset.sign && v > 0 ? '+' : '') + fmt(v);
+    }
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  const bar = root.querySelector('.rlgbar i[data-to]');
+  if (bar) setTimeout(() => { bar.style.width = bar.dataset.to + '%'; }, 450);
 }
 
 function xpBlock(res) {
