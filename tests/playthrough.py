@@ -159,6 +159,10 @@ async def main():
         await page.wait_for_selector('#basecv')
         await page.wait_for_timeout(900)
         await ev(page, "window.__game.fast = true")
+        # The first-run "Rook is ready" intro modal blocks the map; look around first.
+        if await page.locator('.overlay [data-act="closeModal"].btn').count():
+            await page.locator('.overlay [data-act="closeModal"].btn').first.click()
+            await page.wait_for_timeout(200)
         await shot(page, '03-base-start')
 
         # ---- pan (drag), wheel zoom, pinch zoom
@@ -477,7 +481,7 @@ async def main():
             await shot(page, '31-migrated-save')
             m = await ev(page, "(()=>{const s=window.__game.state; return {v:s.v, cash:s.cash, teeth:s.teeth, army:s.army, rail:s.districts.rail.owner, base:s.base.buildings.length, old:!!localStorage.getItem('fangcity.save.v1'), crew:s.crew}})()")
             print('migrated', m)
-            assert m['v'] == 3 and m['rail'] == 'player' and not m['old'] and not m['crew'] and sum((m['army'] or {}).values()) > 0, 'migration failed'
+            assert m['v'] >= 3 and m['rail'] == 'player' and not m['old'] and not m['crew'] and sum((m['army'] or {}).values()) > 0, 'migration failed'
         await browser.close()
     if errors:
         print('ERRORS:'); [print(' ', e) for e in errors]; sys.exit(1)
