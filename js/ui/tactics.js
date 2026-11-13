@@ -154,6 +154,99 @@ function chanceColor(c) {
   return '#e07a6a';
 }
 
+
+function drawShieldBadge(g, x, y, z, cover) {
+  const s = 6.5 * z;
+  g.save();
+  g.translate(x, y);
+  const path = () => {
+    g.beginPath();
+    g.moveTo(0, -s);
+    g.lineTo(s * 0.72, -s * 0.32);
+    g.lineTo(s * 0.60, s * 0.28);
+    g.lineTo(0, s);
+    g.lineTo(-s * 0.60, s * 0.28);
+    g.lineTo(-s * 0.72, -s * 0.32);
+    g.closePath();
+  };
+  path();
+  g.fillStyle = 'rgba(12,12,16,0.78)';
+  g.fill();
+  if (cover >= 2) {
+    path();
+    g.fillStyle = 'rgba(90, 168, 230, 0.95)';
+    g.fill();
+  } else if (cover === 1) {
+    g.save();
+    g.beginPath();
+    g.rect(-s * 1.1, -s * 1.2, s * 1.1, s * 2.4);
+    g.clip();
+    path();
+    g.fillStyle = 'rgba(90, 168, 230, 0.95)';
+    g.fill();
+    g.restore();
+  }
+  path();
+  g.strokeStyle = cover >= 1 ? '#d4ecff' : '#6a6a72';
+  g.lineWidth = 1.15 * z;
+  g.stroke();
+  g.restore();
+}
+
+function drawFlankBadge(g, x, y, z) {
+  const s = 4.8 * z;
+  g.save();
+  g.translate(x, y);
+  g.strokeStyle = '#f0c040';
+  g.lineWidth = 1.7 * z;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.beginPath();
+  g.moveTo(-s, -s); g.lineTo(0, 0); g.lineTo(-s, s);
+  g.moveTo(-s * 0.15, -s); g.lineTo(s * 0.85, 0); g.lineTo(-s * 0.15, s);
+  g.stroke();
+  g.restore();
+}
+
+function drawOverwatchCone(g, x, y, z, facing) {
+  const fac = facing || 1;
+  const ang = fac > 0 ? -0.45 : Math.PI + 0.45;
+  const r = 52 * z;
+  g.save();
+  g.fillStyle = 'rgba(224, 193, 90, 0.22)';
+  g.strokeStyle = 'rgba(224, 193, 90, 0.65)';
+  g.lineWidth = 1.1 * z;
+  g.beginPath();
+  g.moveTo(x, y);
+  g.arc(x, y, r, ang - 0.55, ang + 0.55);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.restore();
+}
+
+function drawOverwatchEye(g, x, y, z) {
+  const s = 5.5 * z;
+  g.save();
+  g.translate(x, y);
+  g.fillStyle = 'rgba(12,10,8,0.72)';
+  g.beginPath(); g.ellipse(0, 0, s * 1.35, s * 0.95, 0, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#e0c15a';
+  g.lineWidth = 1.15 * z;
+  g.beginPath();
+  g.moveTo(-s * 1.15, 0);
+  g.quadraticCurveTo(0, -s * 0.85, s * 1.15, 0);
+  g.quadraticCurveTo(0, s * 0.85, -s * 1.15, 0);
+  g.closePath();
+  g.stroke();
+  g.fillStyle = '#e0c15a';
+  g.beginPath(); g.arc(0, 0, s * 0.38, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#1a1208';
+  g.beginPath(); g.arc(0, 0, s * 0.16, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+
+
 function draw(ctx) {
   const b = ctx.state.tactics, u = ui(ctx);
   const cv = document.getElementById('tacv');
@@ -183,6 +276,7 @@ function draw(ctx) {
   const dt = Math.min(0.05, Math.max(0, (now - (u.lastFx || now)) / 1000));
   u.lastFx = now;
   Vfx.tick(fx, dt);
+  Vfx.applyPan(fx, cam);
   const nudge = Vfx.nudgeOffset(fx, cam, cv);
   g.save();
   g.translate(cam.x + shakeX + nudge.x, cam.y + shakeY + nudge.y);
@@ -241,6 +335,10 @@ function draw(ctx) {
     const acting = actor && actor.uid === un.uid;
     const def = defOf(un.hero);
     Actors.tickAnim(un, now, !!(u.hitstop && now < u.hitstop));
+    if (un.overwatch && un.hp > 0) {
+      const fac = (Actors.ensureAnim(un).facing) || 1;
+      drawOverwatchCone(g, sx, sy, z, fac);
+    }
     let cx = sx, cy = sy - 10 * z, r = 16 * z;
     g.save();
     if (Actors.hasActor(un.hero)) {
@@ -302,11 +400,8 @@ function draw(ctx) {
       g.fillStyle = (un.ammo || 0) > 0 ? '#f3e7c9' : '#e07a6a';
       g.fillText(ammoTxt, ax + 3 * z, ay);
     }
-    if (un.overwatch) {
-      g.fillStyle = '#e0c15a';
-      g.font = `bold ${Math.round(9 * z)}px sans-serif`;
-      g.textAlign = 'center';
-      g.fillText('OW', cx, barY - 6 * z);
+    if (un.overwatch && un.hp > 0) {
+      drawOverwatchEye(g, cx, barY - 8 * z, z);
     }
     if (sel && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
       const prev = T.previewShot(b, sel, un, u.mode === 'aimed' ? 'aimed' : u.mode === 'melee' || u.mode === 'knife' || u.mode === 'roll' ? u.mode : u.mode === 'venom' ? 'venom' : u.mode === 'suppress' ? 'suppress' : 'shot');
@@ -320,10 +415,13 @@ function draw(ctx) {
         g.beginPath(); g.roundRect(cx - tw / 2, ly - 11 * z, tw, 14 * z, 4 * z); g.fill();
         g.fillStyle = chanceColor(prev.chance);
         g.fillText(label, cx, ly);
-        const cov = T.coverLabel(prev.cover) + (prev.flanked ? ' · Flank' : '');
-        g.font = `${Math.round(7.5 * z)}px Inter, sans-serif`;
-        g.fillStyle = '#f3e7c9';
-        g.fillText(cov, cx, ly - 12 * z);
+        const badgeY = ly - 16 * z;
+        drawShieldBadge(g, cx - tw / 2 - 8 * z, badgeY, z, prev.cover);
+        if (prev.flanked) drawFlankBadge(g, cx + tw / 2 + 8 * z, badgeY, z);
+        const cov = prev.flanked ? 'FLANK' : prev.cover >= 2 ? 'FULL' : prev.cover === 1 ? 'HALF' : 'OPEN';
+        g.font = `bold ${Math.round(7 * z)}px Inter, sans-serif`;
+        g.fillStyle = prev.flanked ? '#f0c040' : prev.cover >= 1 ? '#c8e4ff' : '#a0a0a8';
+        g.fillText(cov, cx, ly - 22 * z);
       }
     }
     // speech bubble with pop and a tail
@@ -420,6 +518,7 @@ function loop(ctx) {
     const A = pts[i], B = pts[i + 1];
     a.x = A.x + (B.x - A.x) * frac;
     a.y = A.y + (B.y - A.y) * frac;
+    if (a.stepI !== i) { a.stepI = i; Audio.play('footstep'); }
     if (t >= 1) u.pathAnim = null;
   }
   if (b && !u.busy) syncTimer(u, b);
@@ -547,9 +646,15 @@ async function playEvents(ctx, events) {
         u.flash = { uid: def.uid, until: performance.now() + 220, muzzle: !melee };
         Actors.faceToward(att, att.x, att.y, def.x, def.y);
         Actors.playClip(att, melee ? 'melee' : 'shoot');
-        Audio.play('shoot');
+        if (ev.typ === 'overwatch' && ev.target) {
+          Vfx.spawnCallout(Vfx.ensure(u), a.x * zz, (a.y - 30) * zz, 'OVERWATCH', 'overwatch');
+          Audio.play('overwatch');
+        }
+        Audio.playShoot(att.hero);
         say(u, b, ev.uid, 'shoot');
-        Vfx.nudgeToward(Vfx.ensure(u), ((a.x + tw.x) / 2) * zz, ((a.y + tw.y) / 2) * zz, ev.crit ? 1.2 : 0.9);
+        const midX = ((a.x + tw.x) / 2) * zz, midY = ((a.y + tw.y) / 2) * zz;
+        Vfx.panCam(Vfx.ensure(u), u.cam, midX, midY, cv, ev.typ === 'overwatch' ? 280 : 360);
+        Vfx.nudgeToward(Vfx.ensure(u), midX, midY, ev.crit ? 1.2 : 0.9);
         await wait(melee ? 80 : 110);
         const an = Actors.ensureAnim(att);
         const gx = an.gunX != null ? an.gunX : (a.x * zz);
@@ -608,9 +713,10 @@ async function playEvents(ctx, events) {
         u.booms.push({ x: s.x, y: s.y, until: performance.now() + 420 });
         const p = toWorld(s.x, s.y);
         Vfx.spawnExplosion(fx, p.x * u.cam.z, p.y * u.cam.z, 1.15);
+        Vfx.panCam(fx, u.cam, p.x * u.cam.z, p.y * u.cam.z, cv, 320);
         Vfx.nudgeToward(fx, p.x * u.cam.z, p.y * u.cam.z, 1.3);
       }
-      Audio.play('hit');
+      Audio.play('explosion');
       await wait(280);
     }
     if (ev.typ === 'boomhit') {

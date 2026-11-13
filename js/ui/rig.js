@@ -1,4 +1,4 @@
-// Layered cutout rig for the four lead operators.
+// Layered cutout rig for every operator and rival.
 // Parts are isolated PNGs parented into a bone tree. Every child pivot is
 // tucked inside its parent (joint caps + overlap) so rotation never opens a gap.
 const DEG = Math.PI / 180;
@@ -7,6 +7,7 @@ const JOINT_TUCK = 0.22; // child starts this fraction back along the parent bon
 
 const BIPED_PARTS = ['head','torso','armR','forearmR','armL','forearmL','thighR','shinR','thighL','shinL','weapon'];
 const SNAKE_PARTS = ['head','torso','armR','forearmR','armL','forearmL','coil','mid','tip','weapon','bag'];
+const SNAKE_CORE  = ['head','torso','armR','forearmR','armL','forearmL','coil','weapon'];
 
 // Bone lengths in rig-units. Assembled biped is ~100 units tall (feet to ear).
 const RU = {
@@ -17,9 +18,21 @@ const RU = {
 
 export const RIGS = {
   rook:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 78 },
-  brick:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 70 },
+  brick:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 74 },
   lumen:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 82 },
   vesper: { kind: 'snake', parts: SNAKE_PARTS, weapon: 'pistol', height: 76, imageFacing: -1 },
+  pip:    { kind: 'biped', parts: BIPED_PARTS, weapon: 'pistolR', height: 62, imageFacing: 1 },
+  ivory:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'shotgun', height: 80, imageFacing: 1 },
+  nile:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'melee', height: 76, imageFacing: 1 },
+  marlow: { kind: 'biped', parts: BIPED_PARTS, weapon: 'shotgun', height: 86, imageFacing: 1 },
+  hook:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'pistolR', height: 78, imageFacing: 1 },
+  knack:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'pistolR', height: 66, imageFacing: 1 },
+  slab:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 72, imageFacing: 1 },
+  rill:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'melee', height: 76, imageFacing: 1 },
+  pact:   { kind: 'snake', parts: SNAKE_CORE, weapon: 'pistolR', height: 80, imageFacing: 1 },
+  bruno:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'shotgun', height: 86, imageFacing: 1 },
+  ash:    { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 80, imageFacing: 1 },
+  mica:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 80, imageFacing: 1 },
 };
 
 // Per-hero pivot UVs measured from the part sheets, plus stance / scale tweaks.
@@ -44,15 +57,106 @@ const FITS = {
     torsoPivot: [0.50, 0.82], neck: [0.50, 0.09],
     shL: [0.20, 0.30], shR: [0.80, 0.30],
     headPivot: [0.50, 0.86], headMul: 0.98,
-    stance: 9.5, hipTuck: -5, thighSx: 0.72,
+    stance: 9.0, hipTuck: -6, thighSx: 0.82,
+    thighMul: 1.14, shinMul: 1.20,
     jointArm: '#c46a28', jointLeg: '#7a5a38', jointNeck: '#f0e8dc',
   },
   vesper: {
-    torsoPivot: [0.50, 0.86], neck: [0.50, 0.18],
+    torsoPivot: [0.50, 0.86], neck: [0.50, 0.24],
     shL: [0.22, 0.24], shR: [0.78, 0.24],
-    headPivot: [0.48, 0.54], headMul: 1.55,
-    stance: 0, hipTuck: 0, coilLift: 0.82, thighSx: 1,
+    headPivot: [0.48, 0.60], headMul: 1.27,
+    stance: 0, hipTuck: 0, coilLift: 0.78, thighSx: 1,
     jointArm: '#1a6a62', jointLeg: '#3a8a62', jointNeck: '#3a8a62',
+  },
+  pip: {
+    torsoPivot: [0.50, 0.80], neck: [0.50, 0.12],
+    shL: [0.20, 0.28], shR: [0.80, 0.28],
+    headPivot: [0.50, 0.86], headMul: 1.04,
+    stance: 6.0, hipTuck: -5, thighSx: 0.95,
+    jointArm: '#c9a227', jointLeg: '#2a2a32', jointNeck: '#8a6a50',
+    weaponGrip: [0.28, 0.62], weaponTip: [0.96, 0.42],
+  },
+  ivory: {
+    torsoPivot: [0.50, 0.70], neck: [0.50, 0.12],
+    shL: [0.20, 0.26], shR: [0.80, 0.26],
+    headPivot: [0.50, 0.86], headMul: 1.0,
+    stance: 7.5, hipTuck: -6, thighSx: 0.95,
+    jointArm: '#c8d0d8', jointLeg: '#2a2a32', jointNeck: '#e8e8e8',
+  },
+  nile: {
+    torsoPivot: [0.50, 0.68], neck: [0.50, 0.12],
+    shL: [0.22, 0.24], shR: [0.78, 0.24],
+    headPivot: [0.42, 0.80], headMul: 1.02,
+    stance: 8.0, hipTuck: -6, thighSx: 1,
+    jointArm: '#3a6a58', jointLeg: '#3a3a28', jointNeck: '#4a6a40',
+    weaponGrip: [0.55, 0.28], weaponTip: [0.38, 0.90],
+  },
+  marlow: {
+    torsoPivot: [0.50, 0.80], neck: [0.50, 0.10],
+    shL: [0.18, 0.28], shR: [0.82, 0.28],
+    headPivot: [0.50, 0.86], headMul: 0.98,
+    stance: 10.0, hipTuck: -5, thighSx: 0.90, thighMul: 1.08, shinMul: 1.10,
+    jointArm: '#8a6a3a', jointLeg: '#5a3a20', jointNeck: '#5a3a20',
+  },
+  hook: {
+    torsoPivot: [0.50, 0.80], neck: [0.50, 0.14],
+    shL: [0.20, 0.24], shR: [0.80, 0.24],
+    headPivot: [0.50, 0.78], headMul: 1.02,
+    stance: 7.0, hipTuck: -6, thighSx: 0.95,
+    jointArm: '#1a1a1a', jointLeg: '#1a1a1a', jointNeck: '#c45a20',
+    weaponGrip: [0.28, 0.62], weaponTip: [0.96, 0.42],
+  },
+  knack: {
+    torsoPivot: [0.50, 0.80], neck: [0.50, 0.12],
+    shL: [0.20, 0.28], shR: [0.80, 0.28],
+    headPivot: [0.50, 0.86], headMul: 1.02,
+    stance: 6.2, hipTuck: -5, thighSx: 0.95,
+    jointArm: '#3a3228', jointLeg: '#2a2a28', jointNeck: '#4a3a30',
+    weaponGrip: [0.28, 0.62], weaponTip: [0.96, 0.42],
+  },
+  slab: {
+    torsoPivot: [0.50, 0.80], neck: [0.50, 0.12],
+    shL: [0.20, 0.28], shR: [0.80, 0.28],
+    headPivot: [0.50, 0.86], headMul: 0.98,
+    stance: 9.2, hipTuck: -6, thighSx: 0.82, thighMul: 1.08, shinMul: 1.12,
+    jointArm: '#1a1a1a', jointLeg: '#111', jointNeck: '#e8e8e8',
+  },
+  rill: {
+    torsoPivot: [0.50, 0.68], neck: [0.50, 0.12],
+    shL: [0.22, 0.24], shR: [0.78, 0.24],
+    headPivot: [0.42, 0.80], headMul: 1.0,
+    stance: 8.0, hipTuck: -6, thighSx: 1,
+    jointArm: '#1a1a18', jointLeg: '#111', jointNeck: '#3a4a30',
+    weaponGrip: [0.55, 0.28], weaponTip: [0.38, 0.90],
+  },
+  pact: {
+    torsoPivot: [0.50, 0.86], neck: [0.50, 0.16],
+    shL: [0.22, 0.22], shR: [0.78, 0.22],
+    headPivot: [0.50, 0.82], headMul: 1.05,
+    stance: 0, hipTuck: 0, coilLift: 0.80, thighSx: 1,
+    jointArm: '#0a0a0a', jointLeg: '#0a0a0a', jointNeck: '#1a1a1a',
+    weaponGrip: [0.28, 0.62], weaponTip: [0.96, 0.42],
+  },
+  bruno: {
+    torsoPivot: [0.50, 0.80], neck: [0.50, 0.10],
+    shL: [0.18, 0.28], shR: [0.82, 0.28],
+    headPivot: [0.50, 0.86], headMul: 0.98,
+    stance: 10.0, hipTuck: -5, thighSx: 0.90, thighMul: 1.08, shinMul: 1.10,
+    jointArm: '#1a1410', jointLeg: '#1a1410', jointNeck: '#3a2a18',
+  },
+  ash: {
+    torsoPivot: [0.50, 0.68], neck: [0.50, 0.12],
+    shL: [0.20, 0.24], shR: [0.80, 0.24],
+    headPivot: [0.50, 0.86], headMul: 1.0,
+    stance: 7.5, hipTuck: -6, thighSx: 0.95,
+    jointArm: '#111', jointLeg: '#111', jointNeck: '#4a4a50',
+  },
+  mica: {
+    torsoPivot: [0.50, 0.66], neck: [0.50, 0.10],
+    shL: [0.22, 0.22], shR: [0.78, 0.22],
+    headPivot: [0.50, 0.86], headMul: 1.02,
+    stance: 6.5, hipTuck: -8, thighSx: 0.92,
+    jointArm: '#141414', jointLeg: '#111', jointNeck: '#c45a28',
   },
 };
 
@@ -92,7 +196,7 @@ function pivotsFor(id, part) {
   const rig = RIGS[id];
   if (part === 'head') return fit.headPivot || [0.50, 0.86];
   if (part === 'torso') return fit.torsoPivot || [0.50, 0.80];
-  if (part === 'weapon') return weaponGrip(rig.weapon);
+  if (part === 'weapon') return weaponGrip(rig.weapon, fit);
   if (part === 'bag') return [0.50, 0.12];
   if (part === 'coil') return [0.50, 0.90];
   if (part === 'mid') return [0.45, 0.18];
@@ -101,11 +205,19 @@ function pivotsFor(id, part) {
   return [0.50, 0.20];
 }
 
-function weaponGrip(kind) {
-  return kind === 'pistol' ? [0.62, 0.62] : [0.30, 0.58];
+function weaponGrip(kind, fit) {
+  if (fit && fit.weaponGrip) return fit.weaponGrip;
+  if (kind === 'pistol') return [0.62, 0.62];
+  if (kind === 'pistolR') return [0.28, 0.62];
+  if (kind === 'melee') return [0.52, 0.28];
+  return [0.30, 0.58];
 }
-function weaponTip(kind) {
-  return kind === 'pistol' ? [0.08, 0.42] : [0.97, 0.42];
+function weaponTip(kind, fit) {
+  if (fit && fit.weaponTip) return fit.weaponTip;
+  if (kind === 'pistol') return [0.08, 0.42];
+  if (kind === 'pistolR') return [0.96, 0.42];
+  if (kind === 'melee') return [0.42, 0.92];
+  return [0.97, 0.42];
 }
 
 function ensureMeta(id, part) {
@@ -121,7 +233,7 @@ function ensureMeta(id, part) {
   if (part === 'head') { ax = 0.5 * pw - pvtX; ay = 0.10 * ph - pvtY; }
   else if (part === 'torso') { ax = 0.5 * pw - pvtX; ay = (fitOf(id).neck[1]) * ph - pvtY; }
   else if (part === 'weapon') {
-    const tip = weaponTip(rig.weapon);
+    const tip = weaponTip(rig.weapon, fitOf(id));
     ax = tip[0] * pw - pvtX; ay = tip[1] * ph - pvtY;
   } else if (part === 'coil') { ax = 0.50 * pw - pvtX; ay = 0.12 * ph - pvtY; }
   else if (part === 'mid' || part === 'tip') { ax = 0.80 * pw - pvtX; ay = 0.80 * ph - pvtY; }
@@ -131,14 +243,20 @@ function ensureMeta(id, part) {
   return meta[key];
 }
 
-function boneLen(part, kind, weap) {
-  if (part === 'thighR' || part === 'thighL') return RU.thigh;
-  if (part === 'shinR' || part === 'shinL') return RU.shin;
+function legSpan(fit) {
+  const f = fit || {};
+  return RU.thigh * (f.thighMul || 1) + RU.shin * (f.shinMul || 1);
+}
+
+function boneLen(part, kind, weap, fit) {
+  const f = fit || {};
+  if (part === 'thighR' || part === 'thighL') return RU.thigh * (f.thighMul || 1);
+  if (part === 'shinR' || part === 'shinL') return RU.shin * (f.shinMul || 1);
   if (part === 'armR' || part === 'armL') return RU.arm;
   if (part === 'forearmR' || part === 'forearmL') return RU.forearm;
   if (part === 'torso') return RU.torso;
   if (part === 'head') return RU.head;
-  if (part === 'weapon') return weap === 'pistol' ? RU.pistol : RU.rifle;
+  if (part === 'weapon') return (weap === 'pistol' || weap === 'pistolR') ? RU.pistol : weap === 'melee' ? 32 : RU.rifle;
   if (part === 'coil') return RU.coil;
   if (part === 'mid') return RU.mid;
   if (part === 'tip') return RU.tip;
@@ -147,7 +265,7 @@ function boneLen(part, kind, weap) {
 
 function partScale(m, part, kind, weap) {
   const fit = fitOf(m.id);
-  const target = boneLen(part, kind, weap);
+  const target = boneLen(part, kind, weap, fit);
   if (part === 'torso') {
     const pix = Math.max(8, Math.abs((fit.neck[1] - fit.torsoPivot[1]) * m.ph));
     return target / pix;
@@ -156,9 +274,10 @@ function partScale(m, part, kind, weap) {
     const pix = Math.max(8, Math.abs((0.10 - (fit.headPivot[1])) * m.ph));
     return (target * (fit.headMul || 1)) / pix;
   }
-  const dx = (part === 'weapon' ? (weap === 'pistol' ? 0.08 : 0.97) * m.pw : 0.50 * m.pw) - m.pvtX;
+  const tip = weaponTip(weap, fit);
+  const dx = (part === 'weapon' ? tip[0] * m.pw : 0.50 * m.pw) - m.pvtX;
   const dy = (part === 'coil'
-    ? 0.12 * m.ph : part === 'weapon' ? 0.42 * m.ph : 0.88 * m.ph) - m.pvtY;
+    ? 0.12 * m.ph : part === 'weapon' ? tip[1] * m.ph : 0.88 * m.ph) - m.pvtY;
   const pix = Math.max(8, Math.hypot(dx, dy));
   return target / pix;
 }
@@ -294,9 +413,9 @@ function hitPose(kind, t) {
   };
 }
 
-function koPose(kind, t) {
+function koPose(kind, t, legs) {
   const idle = idlePose(kind, 0, 2);
-  const ground = RU.thigh + RU.shin; // hipY that plants the hip on the tile
+  const ground = legs != null ? legs : (RU.thigh + RU.shin);
   const buckle = {
     ...idle,
     hipY: 24, hipRot: 10 * DEG, hipX: -2,
@@ -326,9 +445,9 @@ function koPose(kind, t) {
   return lerpPose(fall, settle, easeOut((k - 0.72) / 0.28));
 }
 
-function revivePose(kind, t) {
-  const down = koPose(kind, 1);
-  const ground = RU.thigh + RU.shin;
+function revivePose(kind, t, legs) {
+  const down = koPose(kind, 1, legs);
+  const ground = legs != null ? legs : (RU.thigh + RU.shin);
   const push = {
     ...down,
     hipY: ground - 16, hipRot: 48 * DEG, hipX: -8,
@@ -375,8 +494,9 @@ export function poseOf(unit, def, anim, now) {
   if (anim.clip === 'shoot') return shootPose(kind, t, anim);
   if (anim.clip === 'melee') return meleePose(kind, t);
   if (anim.clip === 'hit') return hitPose(kind, t);
-  if (anim.clip === 'ko') return koPose(kind, t);
-  if (anim.clip === 'revive') return revivePose(kind, t);
+  const legs = legSpan(fitOf(unit.hero));
+  if (anim.clip === 'ko') return koPose(kind, t, legs);
+  if (anim.clip === 'revive') return revivePose(kind, t, legs);
   if (anim.clip === 'ability') return abilityPose(kind, t, anim);
   return idlePose(kind, (now || 0) / 1000 + (anim.t0 || 0) / 10000, def.breath);
 }
@@ -444,7 +564,8 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
   g.scale(flip, 1);
 
   // Darker contact shadow, widening if the body is down.
-  const down = Math.max(0, (pose.hipY || 0) / (RU.thigh + RU.shin));
+  const legs = legSpan(fit);
+  const down = Math.max(0, (pose.hipY || 0) / legs);
   g.save();
   g.fillStyle = 'rgba(0,0,0,0.55)';
   g.beginPath();
@@ -452,7 +573,7 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
   g.fill();
   g.restore();
 
-  const hipY = kind === 'snake' ? (pose.hipY || 0) : -(RU.thigh + RU.shin) + pose.hipY;
+  const hipY = kind === 'snake' ? (pose.hipY || 0) : -legs + pose.hipY;
   g.translate(pose.hipX, hipY);
   g.rotate(pose.hipRot || 0);
 
@@ -463,7 +584,7 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
     jointCap(g, col, capR);
     g.rotate(uAng);
     drawPart(g, unit.hero, upper, 0, s, weap, kind, { sx });
-    g.translate(0, boneLen(upper, kind, weap) * s * tuck);
+    g.translate(0, boneLen(upper, kind, weap, fit) * s * tuck);
     jointCap(g, col, capR * 0.85);
     g.rotate(lAng);
     drawPart(g, unit.hero, lower, 0, s, weap, kind, { sx });
@@ -539,7 +660,7 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
   {
     const wm = ensureMeta(unit.hero, 'weapon');
     if (wm) {
-      const tip = weaponTip(weap);
+      const tip = weaponTip(weap, fit);
       const sc = partScale(wm, 'weapon', kind, weap) * s;
       const align = alignOf(wm);
       const lx = (tip[0] * wm.pw - wm.pvtX) * sc;

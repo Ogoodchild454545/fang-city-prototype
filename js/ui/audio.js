@@ -114,15 +114,44 @@ const SFX = {
     noiseBurst(t, 0.08, 0.18, 200, 1200);
     osc('sawtooth', 90, t, 0.16, 0.12, sfxGain, 0.002, 50);
   },
-  shoot() {
+  shoot() { SFX.rifle(); },
+  rifle() {
     const t = ctx().currentTime;
-    noiseBurst(t, 0.09, 0.28, 800, 4000);
-    osc('square', 220, t, 0.06, 0.1, sfxGain, 0.001, 80);
+    noiseBurst(t, 0.07, 0.34, 1400, 7000);
+    osc('square', 260, t, 0.05, 0.12, sfxGain, 0.001, 90);
+    noiseBurst(t + 0.015, 0.10, 0.14, 400, 2200);
+  },
+  pistol() {
+    const t = ctx().currentTime;
+    noiseBurst(t, 0.045, 0.30, 1800, 8000);
+    osc('square', 420, t, 0.032, 0.10, sfxGain, 0.001, 150);
+  },
+  shotgun() {
+    const t = ctx().currentTime;
+    noiseBurst(t, 0.14, 0.42, 350, 4500);
+    osc('sawtooth', 110, t, 0.08, 0.16, sfxGain, 0.001, 48);
+    noiseBurst(t + 0.03, 0.10, 0.22, 600, 2800);
+  },
+  melee() {
+    const t = ctx().currentTime;
+    noiseBurst(t, 0.06, 0.18, 200, 1800);
+    osc('triangle', 280, t, 0.08, 0.12, sfxGain, 0.001, 90);
+  },
+  explosion() {
+    const t = ctx().currentTime;
+    noiseBurst(t, 0.38, 0.48, 40, 900);
+    osc('sine', 70, t, 0.30, 0.32, sfxGain, 0.002, 28);
+    noiseBurst(t + 0.04, 0.22, 0.22, 180, 2000);
+  },
+  footstep() {
+    const t = ctx().currentTime;
+    noiseBurst(t, 0.05, 0.08, 70, 650);
+    osc('sine', 85, t, 0.055, 0.035, sfxGain, 0.006, 55);
   },
   hit() {
     const t = ctx().currentTime;
-    osc('triangle', 160, t, 0.1, 0.2, sfxGain, 0.001, 70);
-    noiseBurst(t, 0.07, 0.16, 200, 900);
+    osc('triangle', 150, t, 0.1, 0.22, sfxGain, 0.001, 65);
+    noiseBurst(t, 0.08, 0.20, 180, 1100);
   },
   move() {
     const t = ctx().currentTime;
@@ -151,6 +180,18 @@ export function play(name) {
   if (!c || c.state !== 'running') return;
   const fn = SFX[name];
   if (fn) fn();
+}
+
+const WEAPON_SFX = {
+  rook: 'rifle', ash: 'rifle', lumen: 'rifle', mica: 'rifle',
+  brick: 'rifle', slab: 'rifle',
+  vesper: 'pistol', pact: 'pistol', pip: 'pistol', knack: 'pistol', hook: 'pistol',
+  ivory: 'shotgun', marlow: 'shotgun', bruno: 'shotgun',
+  nile: 'melee', rill: 'melee',
+};
+
+export function playShoot(hero) {
+  play(WEAPON_SFX[hero] || 'rifle');
 }
 
 // A looping dusk groove in A minor: soft kick, hat, bass, and a sparse piano figure.

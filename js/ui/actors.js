@@ -20,7 +20,7 @@ export const ACTORS = {
   },
   brick: {
     idle: 'assets/actors/brick-idle.png',
-    height: 70, breath: 2.7, walk: 0.56,
+    height: 74, breath: 2.7, walk: 0.56,
     origin: [0.50, 0.985], gunTip: [0.90, 0.52], colour: '#c46a28',
   },
   lumen: {

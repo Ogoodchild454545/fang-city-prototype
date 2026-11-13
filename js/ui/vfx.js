@@ -62,7 +62,7 @@ export function spawnExplosion(fx, x, y, scale = 1) {
   const now = performance.now();
   // Bright fireball core first; smoke is staggered so the flash reads.
   fx.bits.push({ typ: 'flash', x, y, t0: now, life: 380, scale });
-  fx.bits.push({ typ: 'flash', x, y, t0: now, life: 160, scale: scale * 0.55, core: 1 });
+  fx.bits.push({ typ: 'flash', x, y, t0: now, life: 220, scale: scale * 0.62, core: 1 });
   for (let i = 0; i < 10; i++) {
     const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
     const sp = 0.25 + Math.random() * 0.7;
@@ -74,7 +74,7 @@ export function spawnExplosion(fx, x, y, scale = 1) {
       vy: -0.35 * scale - Math.random() * 0.6,
       r: (6 + Math.random() * 8) * scale,
       grow: 20 * scale,
-      t0: now + 70 + i * 22,
+      t0: now + 130 + i * 24,
       life: 780 + Math.random() * 400,
     });
   }
@@ -115,7 +115,7 @@ export function spawnCallout(fx, x, y, text, kind = 'hit') {
     text,
     kind, // hit | miss | crit
     t0: performance.now(),
-    life: kind === 'crit' ? 900 : 750,
+    life: kind === 'crit' || kind === 'overwatch' ? 980 : 750,
   });
 }
 
@@ -123,6 +123,29 @@ export function spawnCallout(fx, x, y, text, kind = 'hit') {
 export function nudgeToward(fx, x, y, strength = 1) {
   const now = performance.now();
   fx.nudge = { x, y, t0: now, dur: 520, strength: Math.max(0.4, Math.min(1.4, strength)) };
+}
+
+// Smoothly lerp the camera so a world-buffer point (already * z) sits near frame center.
+export function panCam(fx, cam, wx, wy, cv, dur = 380) {
+  if (!cam || !cv) return;
+  const tx = (cv.width || 0) * 0.50 - wx;
+  const ty = (cv.height || 0) * 0.56 - wy;
+  fx.pan = {
+    t0: performance.now(),
+    dur: Math.max(160, dur),
+    fromX: cam.x, fromY: cam.y,
+    toX: tx, toY: ty,
+  };
+}
+
+export function applyPan(fx, cam) {
+  const p = fx && fx.pan;
+  if (!p || !cam) return;
+  const t = (performance.now() - p.t0) / p.dur;
+  const k = t >= 1 ? 1 : t * t * (3 - 2 * t);
+  cam.x = p.fromX + (p.toX - p.fromX) * k;
+  cam.y = p.fromY + (p.toY - p.fromY) * k;
+  if (t >= 1) fx.pan = null;
 }
 
 // Offset to add to cam translation. Does not mutate cam.x/y (so user pans stay put).
@@ -282,13 +305,13 @@ export function draw(g, fx, z) {
       g.translate(b.x, b.y - 18 * z * u);
       g.scale(pop, pop);
       g.globalAlpha = fade;
-      const fontPx = Math.round((b.kind === 'crit' ? 16 : 13) * z);
+      const fontPx = Math.round((b.kind === 'crit' || b.kind === 'overwatch' ? 16 : 13) * z);
       g.font = `bold ${fontPx}px Oswald, Impact, sans-serif`;
       g.textAlign = 'center';
       g.lineJoin = 'round';
       g.lineWidth = 3.2 * z;
       g.strokeStyle = 'rgba(8,6,6,0.85)';
-      g.fillStyle = b.kind === 'miss' ? '#c8d0d8' : b.kind === 'crit' ? '#ffe27a' : '#f4f0e4';
+      g.fillStyle = b.kind === 'miss' ? '#c8d0d8' : b.kind === 'crit' ? '#ffe27a' : b.kind === 'overwatch' ? '#e0c15a' : '#f4f0e4';
       g.strokeText(b.text, 0, 0);
       g.fillText(b.text, 0, 0);
       g.restore();
