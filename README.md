@@ -31,6 +31,14 @@ factions you fight in Missions.
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
 
+## v0.5.8 (battle polish)
+
+- Battle dock: hero card (HP bar, AP pips, move/speed/ammo) plus an icon ability tray with AP-cost pips, greyed-out states when you can't afford an ability, and a tooltip. Fits 844x390 landscape without clipping.
+- Fight feed: the last three events, newest first, fading out and colour-coded (hit, miss, KO, heal). The "X is up" hand-offs now show as a slide-in turn banner.
+- End screen: Victory/Defeat with the squad (MVP and KO tags), a quip, counting Cash/Rep/trophy/shard tiles, and a league bar showing promotion or relegation.
+- Marlow and Bruno's Breach is now a thrown **Breach Charge** (4 tiles, radius 1, 4 damage, sets off barrels and vans). Cover is never destroyed; wrecks keep their cover. Range, blast and damage previews are shown on the map.
+- Lead rigs: weightier hit react, Brick braces for Hunker/Fortify, Lumen holds a steady aimed shot, Rook sweeps on Overwatch.
+
 ## The base (Hideout)
 - 40x40 tile isometric map, bigger than the screen: drag to pan, pinch or mouse-wheel to zoom.
 - Starts as an unstructured wasteland: dead grass, cracked concrete lots, broken streets, ruins, trees,
