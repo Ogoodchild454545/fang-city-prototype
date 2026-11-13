@@ -8,6 +8,7 @@
 // short frame-style effects on top of the rig.
 import { defOf } from '../core/heroes.js';
 import { toWorld } from './dockart.js';
+import * as Rig from './rig.js';
 
 const DEG = Math.PI / 180;
 
@@ -110,6 +111,7 @@ export function preloadActors() {
     im.src = src;
     images[src] = im;
   }
+  Rig.preloadRigs();
 }
 
 function imgOf(def) { return images[def.idle]; }
@@ -281,8 +283,16 @@ function poseOf(unit, now) {
 export function drawActor(g, unit, worldX, worldY, z, now) {
   const def = ACTORS[unit.hero];
   if (!def) return null;
-  const im = imgOf(def);
   const a = ensureAnim(unit);
+  if (Rig.hasRig(unit.hero) && Rig.rigReady(unit.hero)) {
+    const anchors = Rig.drawRig(g, unit, def, a, worldX, worldY, z, now);
+    if (anchors) {
+      a.gunX = anchors.gunX; a.gunY = anchors.gunY;
+      a.headX = anchors.headX; a.headY = anchors.headY;
+    }
+    return anchors;
+  }
+  const im = imgOf(def);
   const pose = poseOf(unit, now);
   const h = def.height * z;
   const w = im && im.naturalWidth ? h * (im.naturalWidth / im.naturalHeight) : h * 0.42;
@@ -346,6 +356,8 @@ export function drawActor(g, unit, worldX, worldY, z, now) {
 
   // head anchor (for bars, bubbles, floats)
   const head = headWorld(def, w, h, pose, footX, footY);
+  a.gunX = tip.x; a.gunY = tip.y;
+  a.headX = head.x; a.headY = head.y;
   return { headX: head.x, headY: head.y, footX, footY, gunX: tip.x, gunY: tip.y, z, w, h };
 }
 

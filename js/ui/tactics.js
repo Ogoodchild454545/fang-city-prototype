@@ -9,6 +9,7 @@ import * as Audio from './audio.js';
 import * as Dock from './dockart.js';
 import { chooseAction, opponentLabel } from '../core/pvp.js';
 import * as Actors from './actors.js';
+import * as Vfx from './vfx.js';
 
 const TW = Dock.TW, TH = Dock.TH;
 const portraits = {};
@@ -22,6 +23,7 @@ function ui(ctx) {
     sel: null, mode: 'shot', cam: null, dirty: 1, hover: null, busy: 0,
     floats: [], shake: 0, flash: null, pathAnim: null,
     bubbles: [], deadline: 0, timerUid: null, booms: [],
+    fx: Vfx.create(), lastFx: performance.now(),
   });
 }
 
@@ -177,8 +179,13 @@ function draw(ctx) {
   g.clearRect(0, 0, cv.width, cv.height);
   Dock.drawSky(g, cv.width, cv.height);
 
+  const fx = Vfx.ensure(u);
+  const dt = Math.min(0.05, Math.max(0, (now - (u.lastFx || now)) / 1000));
+  u.lastFx = now;
+  Vfx.tick(fx, dt);
+  const nudge = Vfx.nudgeOffset(fx, cam, cv);
   g.save();
-  g.translate(cam.x + shakeX, cam.y + shakeY);
+  g.translate(cam.x + shakeX + nudge.x, cam.y + shakeY + nudge.y);
 
   const actor = T.actingUnit(b);
   const sel = (actor && actor.side === 'player' && actor.hp > 0)
@@ -345,13 +352,7 @@ function draw(ctx) {
     g.restore();
   }
 
-  if (u.flash && u.flash.muzzle && now < u.flash.until) {
-    const a = u.flash;
-    g.fillStyle = 'rgba(255,230,140,0.9)';
-    g.beginPath(); g.arc(a.mx, a.my, 7 * z, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(255,180,60,0.8)'; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(a.ax, a.ay); g.lineTo(a.tx, a.ty); g.stroke();
-  }
+  Vfx.draw(g, fx, z);
 
   // boom flashes
   u.booms = (u.booms || []).filter((bm) => now < bm.until);
@@ -540,29 +541,38 @@ async function playEvents(ctx, events) {
       const att = b.units.find((x) => x.uid === ev.uid);
       const def = b.units.find((x) => x.uid === ev.target);
       if (att && def && cv) {
-        const a = toWorld(att.x, att.y), t = toWorld(def.x, def.y);
+        const a = toWorld(att.x, att.y), tw = toWorld(def.x, def.y);
         const zz = u.cam.z;
-        u.flash = {
-          uid: def.uid, until: performance.now() + 220, muzzle: true,
-          ax: a.x * zz, ay: (a.y - 10) * zz,
-          tx: t.x * zz, ty: (t.y - 10) * zz,
-          mx: (a.x + (t.x - a.x) * 0.15) * zz,
-          my: (a.y + (t.y - a.y) * 0.15 - 10) * zz,
-        };
+        const melee = ev.mode === 'melee' || ev.mode === 'knife' || ev.mode === 'lunge' || ev.mode === 'roll';
+        u.flash = { uid: def.uid, until: performance.now() + 220, muzzle: !melee };
         Actors.faceToward(att, att.x, att.y, def.x, def.y);
-        Actors.playClip(att, ev.mode === 'melee' || ev.mode === 'knife' || ev.mode === 'lunge' || ev.mode === 'roll' ? 'melee' : 'shoot');
+        Actors.playClip(att, melee ? 'melee' : 'shoot');
         Audio.play('shoot');
         say(u, b, ev.uid, 'shoot');
-        await wait(120);
+        Vfx.nudgeToward(Vfx.ensure(u), ((a.x + tw.x) / 2) * zz, ((a.y + tw.y) / 2) * zz, ev.crit ? 1.2 : 0.9);
+        await wait(melee ? 80 : 110);
+        const an = Actors.ensureAnim(att);
+        const gx = an.gunX != null ? an.gunX : (a.x * zz);
+        const gy = an.gunY != null ? an.gunY : ((a.y - 16) * zz);
+        const tx = tw.x * zz, ty = (tw.y - 14) * zz;
+        const fac = an.facing || 1;
+        if (!melee) {
+          Vfx.spawnTracer(u.fx, gx, gy, ev.hit ? tx : tx + fac * 18 * zz, ev.hit ? ty : ty - 8 * zz, { miss: !ev.hit });
+          Vfx.spawnCasings(u.fx, gx, gy, fac, ev.mode === 'aimed' ? 1 : 1);
+        }
+        await wait(melee ? 60 : 90);
         if (ev.hit) {
           u.shake = ev.crit ? 11 : 7; Audio.play('hit');
           u.hitstop = performance.now() + (ev.crit ? 120 : 80);
           Actors.playClip(def, ev.ko ? 'ko' : 'hit');
-          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 22) * zz, text: ev.crit ? `${ev.dmg}!` : `${ev.dmg}`, heal: 0, crit: ev.crit });
+          Vfx.spawnSparks(u.fx, tx, ty, ev.crit ? 16 : 10);
+          Vfx.spawnCallout(u.fx, tx, ty - 8 * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
+          u.floats.push({ t: performance.now(), x: tx, y: (tw.y - 22) * zz, text: ev.crit ? `${ev.dmg}!` : `${ev.dmg}`, heal: 0, crit: ev.crit });
           if (ev.ko) say(u, b, ev.target, 'ko');
           await wait(Math.max(0, u.hitstop - performance.now() + 40));
         } else {
-          u.floats.push({ t: performance.now(), x: t.x * zz, y: (t.y - 22) * zz, text: 'Miss', miss: 1 });
+          Vfx.spawnCallout(u.fx, tx, ty - 8 * zz, 'MISS', 'miss');
+          u.floats.push({ t: performance.now(), x: tx, y: (tw.y - 22) * zz, text: 'Miss', miss: 1 });
         }
         await wait(240);
       }
@@ -590,12 +600,18 @@ async function playEvents(ctx, events) {
       }
     }
     if (ev.typ === 'boom') {
-      u.shake = 12;
+      u.shake = 14;
       u.booms = u.booms || [];
       const spots = ev.spots || [{ x: ev.x, y: ev.y }];
-      for (const s of spots) u.booms.push({ x: s.x, y: s.y, until: performance.now() + 420 });
+      const fx = Vfx.ensure(u);
+      for (const s of spots) {
+        u.booms.push({ x: s.x, y: s.y, until: performance.now() + 420 });
+        const p = toWorld(s.x, s.y);
+        Vfx.spawnExplosion(fx, p.x * u.cam.z, p.y * u.cam.z, 1.15);
+        Vfx.nudgeToward(fx, p.x * u.cam.z, p.y * u.cam.z, 1.3);
+      }
       Audio.play('hit');
-      await wait(200);
+      await wait(280);
     }
     if (ev.typ === 'boomhit') {
       const un = b.units.find((x) => x.uid === ev.uid);
