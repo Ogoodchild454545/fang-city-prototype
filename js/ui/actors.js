@@ -280,9 +280,30 @@ function poseOf(unit, now) {
   return { rot, ox, oy, sx, sy, recoil, facing: a.facing, muzzle: a.muzzle, flash: a.flash, imageFacing: def.imageFacing || 1 };
 }
 
+// In-world heights (world px) against the yard art. The `height` values above are the
+// painted reference sizes; on the map a 1.8 m wolf or fox stands 21 px — about 0.7 of a
+// door (31 px) and half a full room wall (40 px). Bigger species a little taller, rats shorter.
+// See docs/unit-scale.md.
+const SPECIES_H = { Wolf: 21, Fox: 21, Badger: 22, Bear: 25, Croc: 24, Snake: 21, Rat: 16 };
+function worldHeight(id) {
+  let sp = '';
+  try { sp = (defOf(id) || {}).species || ''; } catch (e) { sp = ''; }
+  return SPECIES_H[sp] || 21;
+}
+let UNIT_SCALE = 1;
+export function setUnitScale(k) { UNIT_SCALE = k; SCALED.clear(); }
+export function unitScale() { return UNIT_SCALE; }
+const SCALED = new Map();
+function scaledDef(id) {
+  let d = SCALED.get(id);
+  if (!d) { d = { ...ACTORS[id], height: worldHeight(id) * UNIT_SCALE, refHeight: ACTORS[id].height }; SCALED.set(id, d); }
+  return d;
+}
+if (typeof window !== 'undefined') window.__setUnitScale = (k) => setUnitScale(k);
+
 export function drawActor(g, unit, worldX, worldY, z, now) {
-  const def = ACTORS[unit.hero];
-  if (!def) return null;
+  if (!ACTORS[unit.hero]) return null;
+  const def = scaledDef(unit.hero);
   const a = ensureAnim(unit);
   if (Rig.hasRig(unit.hero) && Rig.rigReady(unit.hero)) {
     const anchors = Rig.drawRig(g, unit, def, a, worldX, worldY, z, now);
@@ -408,7 +429,7 @@ function drawMuzzle(g, x, y, z, amt, facing) {
 }
 
 export function actorHeight(id) {
-  return (ACTORS[id] && ACTORS[id].height) || 28;
+  return (ACTORS[id] ? worldHeight(id) : 21) * UNIT_SCALE;
 }
 
 function hexRgba(hex, a) {

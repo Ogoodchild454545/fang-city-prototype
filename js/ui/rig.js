@@ -314,14 +314,39 @@ function partScale(m, part, kind, weap) {
   }
   if (part === 'head') {
     const pix = Math.max(8, Math.abs((0.10 - (fit.headPivot[1])) * m.ph));
-    return (target * (fit.headMul || 1)) / pix;
+    return (target * (fit.headMul || 1) * HEAD_BOOST) / pix;
   }
   const tip = weaponTip(weap, fit);
   const dx = (part === 'weapon' ? tip[0] * m.pw : 0.50 * m.pw) - m.pvtX;
   const dy = (part === 'coil'
     ? 0.12 * m.ph : part === 'weapon' ? tip[1] * m.ph : 0.88 * m.ph) - m.pvtY;
   const pix = Math.max(8, Math.hypot(dx, dy));
-  return target / pix;
+  return (part === 'weapon' ? target * WEAPON_BOOST : target) / pix;
+}
+
+// Small units read better with a slightly big head and weapon (a common small-sprite trick).
+const HEAD_BOOST = 1.14, WEAPON_BOOST = 1.1;
+
+// Pre-downscaled copies of a part (halving steps with high-quality smoothing). Drawing a
+// 250 px part at 15 px every frame shimmers; drawing from the nearest larger level does not.
+function mipFor(m, want) {
+  if (!m.mips) {
+    m.mips = [m.img];
+    let src = m.img, w = m.pw, h = m.ph;
+    try {
+      while (w > 24 && h > 24) {
+        w = Math.max(1, Math.round(w / 2)); h = Math.max(1, Math.round(h / 2));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const x = c.getContext('2d');
+        x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+        x.drawImage(src, 0, 0, w, h);
+        m.mips.push(c); src = c;
+      }
+    } catch (e) { /* keep full size only */ }
+  }
+  let best = m.mips[0];
+  for (const lv of m.mips) { if (lv.width >= want * 1.15) best = lv; else break; }
+  return best;
 }
 
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -616,16 +641,21 @@ function drawPart(g, id, part, ang, s, weap, kind, opt) {
   g.save();
   g.rotate(ang + alignOf(m));
   if (opt && opt.sx && opt.sx !== 1) g.scale(opt.sx, 1);
-  if (fit.rim) {
+  const T = typeof g.getTransform === 'function' ? g.getTransform() : null;
+  const k = T ? Math.hypot(T.a, T.b) : 1;
+  const src = mipFor(m, m.pw * sc * k);
+  {
+    // Team rim on every unit: at 21 px a dark trouser leg vanishes into the asphalt otherwise.
     g.save();
     g.shadowColor = TEAM_RIM[curSide] || fit.rim;
-    g.shadowOffsetX = -1.8 * Math.max(0.7, s);
-    g.shadowOffsetY = -1.4 * Math.max(0.7, s);
-    g.shadowBlur = 2.4 * Math.max(0.7, s);
-    g.drawImage(m.img, -m.pvtX * sc, -m.pvtY * sc, m.pw * sc, m.ph * sc);
+    const rk = Math.max(0.55, Math.min(1.2, s));
+    g.shadowOffsetX = -1.2 * rk;
+    g.shadowOffsetY = -1.0 * rk;
+    g.shadowBlur = 1.6 * rk;
+    g.drawImage(src, -m.pvtX * sc, -m.pvtY * sc, m.pw * sc, m.ph * sc);
     g.restore();
   }
-  g.drawImage(m.img, -m.pvtX * sc, -m.pvtY * sc, m.pw * sc, m.ph * sc);
+  g.drawImage(src, -m.pvtX * sc, -m.pvtY * sc, m.pw * sc, m.ph * sc);
   g.restore();
   return m;
 }
@@ -681,12 +711,13 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
   g.save();
   g.fillStyle = 'rgba(0,0,0,0.55)';
   g.beginPath();
-  g.ellipse((pose.hipX || 0) * 0.35, 2 * z, (14 + down * 10) * z, (5.5 + down * 2) * z, 0, 0, Math.PI * 2);
+  g.ellipse((pose.hipX || 0) * 0.35 * s, 1.5 * s, (18 + down * 13) * s, (7 + down * 2.6) * s, 0, 0, Math.PI * 2);
   g.fill();
   g.restore();
 
   const hipY = kind === 'snake' ? (pose.hipY || 0) : -legs + pose.hipY;
-  g.translate(pose.hipX, hipY);
+  // pose offsets are in rig units (assembled body = 100); scale them with the body
+  g.translate((pose.hipX || 0) * s, hipY * s);
   g.rotate(pose.hipRot || 0);
 
   const tuck = 1 - JOINT_TUCK;
@@ -794,7 +825,7 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
     g.globalAlpha = Math.min(1, anim.flash) * 0.55;
     g.fillStyle = 'rgba(255,220,180,0.8)';
     g.beginPath();
-    g.ellipse(footX, footY - def.height * z * 0.45, 10 * z, def.height * z * 0.4, 0, 0, Math.PI * 2);
+    g.ellipse(footX, footY - def.height * z * 0.45, def.height * z * 0.2, def.height * z * 0.4, 0, 0, Math.PI * 2);
     g.fill();
     g.restore();
   }
@@ -805,14 +836,14 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
     g.globalCompositeOperation = 'lighter';
     g.fillStyle = hexRgba(def.colour, 0.18 * (1 - k));
     g.beginPath();
-    g.arc(footX, footY - def.height * z * 0.45, (14 + 18 * k) * z, 0, Math.PI * 2);
+    g.arc(footX, footY - def.height * z * 0.45, (0.3 + 0.35 * k) * def.height * z, 0, Math.PI * 2);
     g.fill();
     g.restore();
   }
 
   const muz = Math.max(anim.muzzle || 0, pose.muzzle || 0);
   if (muz > 0.05 && !def.melee) {
-    drawMuzzle(g, anchors.gunX, anchors.gunY, z, muz, anim.facing || 1);
+    drawMuzzle(g, anchors.gunX, anchors.gunY, z * Math.max(0.55, Math.min(1, def.height / 40)), muz, anim.facing || 1);
   }
 
   anchors.muzzle = muz;

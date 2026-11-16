@@ -36,6 +36,26 @@ function fromScreen(u, sx, sy) {
   return { x: Math.round(gx), y: Math.round(gy) };
 }
 
+// Tap target for units: the whole floor tile (58x29 world px, far larger than the 21 px body)
+// plus the body itself, so tapping a head that overlaps the tile behind still picks the unit.
+function pickAt(u, b, sx, sy) {
+  const base = fromScreen(u, sx, sy);
+  if (!b || T.unitAt(b, base.x, base.y)) return base;
+  const cam = u.cam, z = cam.z;
+  const mx = (sx - cam.x) / z, my = (sy - cam.y) / z;
+  let best = null, bd = 1e9;
+  for (const un of b.units) {
+    if (un.hp <= 0) continue;
+    const p = toWorld(un.x, un.y);
+    const h = Actors.actorHeight(un.hero) + 12;
+    if (mx > p.x - 14 && mx < p.x + 14 && my > p.y - h && my < p.y + 4) {
+      const d = Math.abs(mx - p.x) + Math.abs(my - (p.y - h / 2));
+      if (d < bd) { bd = d; best = { x: un.x, y: un.y }; }
+    }
+  }
+  return best || base;
+}
+
 // Screen-space safe rect (device px) that the HUD never covers: top bar + turn-order strip
 // above, battle dock below. Units are framed inside this, never under the chrome.
 function safeRect(cv) {
@@ -43,10 +63,10 @@ function safeRect(cv) {
   const w = cv.width, h = cv.height;
   return { l: 10 * dpr, r: w - 10 * dpr, t: 54 * dpr, b: h - 76 * dpr };
 }
-// World-space box of a unit: feet tile plus head/HP bar above (actors are ~62-84 tall).
+// World-space box of a unit: feet tile plus head/HP bar above (actors are ~16-25 tall).
 function unitBox(un) {
   const p = toWorld(un.x, un.y);
-  return { minX: p.x - 30, maxX: p.x + 30, minY: p.y - 112, maxY: p.y + 14 };
+  return { minX: p.x - 30, maxX: p.x + 30, minY: p.y - 58, maxY: p.y + 16 };
 }
 function boxOf(list) {
   const B = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
@@ -68,7 +88,7 @@ function fitCam(b, cv, focus) {
   const sw = S.r - S.l, sh = S.b - S.t;
   const B = boxOf(pts);
   const fitZ = Math.min(sw / (B.maxX - B.minX), sh / (B.maxY - B.minY));
-  const z = Math.max(0.74 * dpr, Math.min(1.45 * dpr, fitZ));
+  const z = Math.max(1.2 * dpr, Math.min(1.55 * dpr, fitZ));
   let x = (S.l + S.r) / 2 - ((B.minX + B.maxX) / 2) * z;
   let y = (S.t + S.b) / 2 - ((B.minY + B.maxY) / 2) * z;
   if (focus && focus.hp > 0) {
@@ -577,14 +597,14 @@ function draw(ctx) {
     // rings for actors (feet/head hint of who is up)
     if (Actors.hasActor(un.hero) && !dead) {
       // XCOM-style team disc under the feet: blue for your crew, red for the rivals.
-      g.fillStyle = un.side === 'player' ? 'rgba(77,143,224,0.22)' : 'rgba(224,64,52,0.26)';
-      g.beginPath(); g.ellipse(sx, sy + 3 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = un.side === 'player' ? 'rgba(77,143,224,0.24)' : 'rgba(224,64,52,0.28)';
+      g.beginPath(); g.ellipse(sx, sy, 10 * z, 4.4 * z, 0, 0, Math.PI * 2); g.fill();
       g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? 'rgba(120,186,255,0.9)' : 'rgba(255,92,72,0.9)';
-      g.lineWidth = (acting ? 2.4 : 1.4) * z;
-      g.beginPath(); g.ellipse(sx, sy + 3 * z, 12 * z, 5 * z, 0, 0, Math.PI * 2); g.stroke();
+      g.lineWidth = (acting ? 2 : 1.2) * z;
+      g.beginPath(); g.ellipse(sx, sy, 10 * z, 4.4 * z, 0, 0, Math.PI * 2); g.stroke();
     }
-    const bw = 22 * z, bh = 3.5 * z;
-    const barY = Actors.hasActor(un.hero) ? cy - 8 * z : cy + r + 2 * z;
+    const bw = 17 * z, bh = 2.6 * z;
+    const barY = Actors.hasActor(un.hero) ? cy - 9 * z : cy + r + 2 * z;
     g.fillStyle = un.side === 'player' ? 'rgba(10,20,34,0.8)' : 'rgba(40,8,6,0.8)';
     g.fillRect(cx - bw / 2 - z, barY - z, bw + 2 * z, bh + 2 * z);
     g.fillStyle = un.side === 'player'
@@ -597,16 +617,16 @@ function draw(ctx) {
       drawApPips(g, cx, barY + 8 * z, z, un.ap, un.maxAp, acting || (sel && sel.uid === un.uid) ? cost : 0);
     }
     if (!dead) {
-      g.font = `bold ${Math.round(7.5 * z)}px Inter, sans-serif`;
+      g.font = `bold ${Math.round(5.4 * z)}px Inter, sans-serif`;
       g.textAlign = 'left';
       const ammoTxt = (un.ammo || 0) > 0 ? String(un.ammo) : '×';
-      const aw = g.measureText(ammoTxt).width + 6 * z;
-      const ax = cx + (Actors.hasActor(un.hero) ? 10 * z : r - 2 * z);
+      const aw = g.measureText(ammoTxt).width + 4.4 * z;
+      const ax = cx + (Actors.hasActor(un.hero) ? 9.5 * z : r - 2 * z);
       const ay = barY + 10 * z;
       g.fillStyle = (un.ammo || 0) > 0 ? 'rgba(20,24,16,0.85)' : 'rgba(60,18,14,0.9)';
-      g.beginPath(); g.roundRect(ax, ay - 8 * z, aw, 10 * z, 2 * z); g.fill();
+      g.beginPath(); g.roundRect(ax, ay - 6 * z, aw, 7.4 * z, 1.6 * z); g.fill();
       g.fillStyle = (un.ammo || 0) > 0 ? '#f3e7c9' : '#e07a6a';
-      g.fillText(ammoTxt, ax + 3 * z, ay);
+      g.fillText(ammoTxt, ax + 2.2 * z, ay);
     }
     if (un.overwatch && un.hp > 0) {
       drawOverwatchEye(g, cx, barY - 8 * z, z);
@@ -785,9 +805,9 @@ function bindCanvas(ctx) {
     }
     const rect = cv.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    const p = fromScreen(u, (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr);
     const b = ctx.state.tactics;
     if (!b) return;
+    const p = pickAt(u, b, (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr);
     const occ = T.unitAt(b, p.x, p.y);
     u.hover = occ ? { x: p.x, y: p.y, uid: occ.uid } : { x: p.x, y: p.y };
   });
@@ -797,7 +817,7 @@ function bindCanvas(ctx) {
     if (was.moved) return;
     const rect = cv.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    const p = fromScreen(u, (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr);
+    const p = pickAt(u, ctx.state.tactics, (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr);
     clickTile(ctx, p.x, p.y);
   };
   cv.addEventListener('pointerup', up);
