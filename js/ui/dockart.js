@@ -4,15 +4,15 @@
 import * as Yard from './yard.js';
 import { TW, TH, toWorld } from './yard.js';
 export { TW, TH, toWorld };
-export { drawYard, drawBackdrop, drawScenery, sceneryOf, prepMap, isTall, drawVignette, CUT } from './yard.js';
+export { drawYard, drawBackdrop, drawScenery, sceneryOf, prepMap, isTall, canCut, drawVignette, drawWeather, CUT } from './yard.js';
 
-export function drawSky(g, w, h) { Yard.drawNightSky(g, w, h); }
+export function drawSky(g, w, h, m) { Yard.drawNightSky(g, w, h, m); }
 
 export function isPairedWest(t) {
-  return t && (t.decor === 'van' || t.decor === 'wreck' || t.decor === 'car');
+  return t && (t.decor === 'van' || t.decor === 'wreck' || t.decor === 'car' || (!!t.partner && !t.sub && t.decor !== 'van2'));
 }
 export function skipPairedEast(t) {
-  return t && (t.decor === 'van2' || t.decor === 'wreck2' || t.decor === 'car2');
+  return t && (t.decor === 'van2' || t.decor === 'wreck2' || t.decor === 'car2' || !!t.sub);
 }
 
 export function propHeight(t) { return Yard.propHeight(t); }

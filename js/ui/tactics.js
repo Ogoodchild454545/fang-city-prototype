@@ -337,11 +337,24 @@ function covers(px, py, H, fx, fy, bodyH) {
   return Math.min(1, rise / Math.max(8, bodyH));
 }
 function runKey(t, x, y) { return t.decor === 'container' && t.run ? `r${t.run.id}` : `t${x},${y}`; }
+// The far tile of a two-tile prop (van, parked car, wagon...) is drawn by its anchor, but it still hides units.
+function partTiles(m) {
+  const out = [];
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+    const t = m.tiles[y][x];
+    if (!Dock.skipPairedEast(t) || !t.partner) continue;
+    const a = m.tiles[t.partner.y] && m.tiles[t.partner.y][t.partner.x];
+    if (a) out.push({ x, y, a, ax: t.partner.x, ay: t.partner.y });
+  }
+  return out;
+}
 function occlusionPass(u, b, sprites, sel, actor, now) {
   const st = u.occ || (u.occ = { cut: new Map(), fa: new Map(), xa: new Map(), last: now });
   const dt = Math.min(100, Math.max(0, now - st.last)); st.last = now;
   const props = [];
-  for (const sp of sprites) if (sp.typ === 'prop') { const H = occH(sp.t); if (H) props.push({ x: sp.x, y: sp.y, t: sp.t, H, key: runKey(sp.t, sp.x, sp.y) }); }
+  for (const sp of sprites) if (sp.typ === 'prop') { const H = occH(sp.t); if (H) props.push({ x: sp.x, y: sp.y, fx: sp.x, fy: sp.y, t: sp.t, H, key: runKey(sp.t, sp.x, sp.y) }); }
+  if (!st.parts || st.partsMap !== b.map) { st.parts = partTiles(b.map); st.partsMap = b.map; }
+  for (const q of st.parts) { const H = occH(q.a); if (H) props.push({ x: q.x, y: q.y, fx: q.ax, fy: q.ay, t: q.a, H, key: runKey(q.a, q.ax, q.ay), part: 1 }); }
   const units = sprites.filter((sp) => sp.typ === 'unit' && (sp.un.hp > 0 || sp.un.ko));
   // 1) cut points
   const pts = [];
@@ -355,7 +368,7 @@ function occlusionPass(u, b, sprites, sel, actor, now) {
   if (sel && u.hover) add(u.hover.x, u.hover.y, 12);
   const hit = new Set();
   for (const pr of props) {
-    if (pr.t.decor !== 'container') continue;
+    if (!Dock.canCut(pr.t)) continue;
     for (const q of pts) if (covers(pr.x, pr.y, pr.H, q.x, q.y, q.h) > 0.25) { hit.add(pr.key); break; }
   }
   for (const k of hit) { const c = st.cut.get(k) || { k: 0, t: 0 }; c.t = now; st.cut.set(k, c); }
@@ -378,7 +391,7 @@ function occlusionPass(u, b, sprites, sel, actor, now) {
       if (!c) continue;
       const ck = cutOf(pr);
       if (ck > 0.5) continue; // cut to a stub: no longer hides anyone
-      fadeT.set(`${pr.x},${pr.y}`, 0.4);
+      fadeT.set(`${pr.fx},${pr.fy}`, 0.4);
       hidden = Math.max(hidden, c);
     }
     const prev = st.xa.get(s2.un.uid) || 0;
@@ -388,6 +401,7 @@ function occlusionPass(u, b, sprites, sel, actor, now) {
     if (v > 0) xray.push({ un: s2.un, x: s2.x, y: s2.y, a: v });
   }
   for (const pr of props) {
+    if (pr.part) continue;
     const k = `${pr.x},${pr.y}`;
     const tg = fadeT.get(k) || 1;
     const prev = st.fa.has(k) ? st.fa.get(k) : 1;
@@ -396,7 +410,7 @@ function occlusionPass(u, b, sprites, sel, actor, now) {
   }
   return {
     alpha: (x, y) => st.fa.get(`${x},${y}`) ?? 1,
-    cut: (t) => { if (t.decor !== 'container') return 0; const pr = props.find((p) => p.t === t); return pr ? cutOf(pr) : 0; },
+    cut: (t) => { if (!Dock.canCut(t)) return 0; const pr = props.find((p) => p.t === t); return pr ? cutOf(pr) : 0; },
     xray,
   };
 }
@@ -677,7 +691,7 @@ function draw(ctx) {
   }
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, cv.width, cv.height);
-  Dock.drawSky(g, cv.width, cv.height);
+  Dock.drawSky(g, cv.width, cv.height, b.map);
 
   const fx = Vfx.ensure(u);
   const dt = Math.min(0.05, Math.max(0, (now - (u.lastFx || now)) / 1000));
@@ -915,6 +929,7 @@ function draw(ctx) {
     g.restore();
   }
   g.restore();
+  Dock.drawWeather(g, cv.width, cv.height, b.map, now);
   Dock.drawVignette(g, cv.width, cv.height);
 
   // live PvP countdown in the HUD chip

@@ -21,6 +21,9 @@ import * as MF from '../js/core/mapfmt.js';
 import { DOCKLANDS } from '../js/core/maps/docklands.js';
 import { legacyDocklandsMap } from './fixtures/docklands-legacy.js';
 import { pickDeploys } from '../js/core/tmaps.js';
+import * as CAT from '../js/core/catalog.js';
+import { BUILTIN_MAPS, BUILTIN_BY_ID } from '../js/core/maps/index.js';
+import * as CM from '../js/core/custommaps.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -943,6 +946,106 @@ test('custom map: practice battle spends nothing and spawns in the zone', () => 
   assert.ok(r.practice);
   assert.equal(s.ammo, ammo);
   assert.equal(s.res ? JSON.stringify(s.res) : '', cash);
+});
+
+test('catalogue: every prop is well formed and every location has its own pack', () => {
+  const ids = new Set();
+  const chars = new Set();
+  for (const p of CAT.CATALOG) {
+    assert.ok(p.id && !ids.has(p.id), `unique id ${p.id}`); ids.add(p.id);
+    assert.ok(p.name && CAT.CATS[p.cat], `${p.id} name + category`);
+    assert.ok([1, 2].includes(p.size), `${p.id} footprint`);
+    assert.ok([0, 1, 2].includes(p.cover), `${p.id} cover none/half/full`);
+    assert.ok(typeof p.h === 'number' && p.h > 0 && p.h <= 60, `${p.id} height`);
+    assert.ok(['land', 'water', 'any'].includes(p.water));
+    for (const t of p.themes) assert.ok(t === 'all' || CAT.THEMES[t], `${p.id} theme ${t}`);
+    if (p.explosive) assert.ok(p.blast > 0 && p.dmg > 0, `${p.id} blast + damage`);
+    if (p.wreck && p.wreck !== 'barrelWreck') assert.ok(CAT.PROP[p.wreck] && CAT.PROP[p.wreck].hidden, `${p.id} wreck exists`);
+    for (const c of [p.ch, p.chLow].filter(Boolean)) { assert.ok(!chars.has(c), `layer char ${c} unique`); chars.add(c); }
+  }
+  for (const th of CAT.THEME_IDS) {
+    const own = CAT.paletteFor(th).own.filter((p) => !p.themes.includes('all'));
+    assert.ok(own.length >= 10, `${th} has its own props (${own.length})`);
+    assert.ok(CAT.groundFor(th).includes(CAT.THEMES[th].ground), `${th} base ground is paintable`);
+    assert.ok(CAT.GROUND[CAT.THEMES[th].ground]);
+  }
+  // legacy layer chars keep their meaning
+  for (const [c, id] of Object.entries({ x: 'crate', b: 'barrel', f: 'burn', B: 'barrier', l: 'lamp', n: 'fence', W: 'wall', D: 'door', k: 'desk', h: 'shelf' })) assert.equal(CAT.PROP[id].ch, c);
+});
+
+test('map format: v1 maps migrate to v2 (Docklands location) without changing the battle map', () => {
+  const v1 = JSON.parse(JSON.stringify(DOCKLANDS));
+  v1.version = 1; delete v1.theme; delete v1.env;
+  const j = MF.normalizeMapJson(v1);
+  assert.equal(j.version, 2); assert.equal(j.theme, 'docklands');
+  assert.ok(CAT.ENV_TIMES.includes(j.env.time) && CAT.ENV_WEATHER.includes(j.env.weather));
+  assert.equal(tileSig(MF.mapFromJson(v1)), tileSig(MF.mapFromJson(DOCKLANDS)));
+  // unknown object kinds and bad env values are dropped / defaulted
+  const odd = MF.normalizeMapJson({ ...v1, objects: [...v1.objects, { k: 'ufo', x: 1, y: 1 }], env: { time: 'noon', weather: 'snow' } });
+  assert.ok(!odd.objects.some((o) => o.k === 'ufo'));
+  assert.equal(odd.env.time, 'dusk');
+});
+
+test('built-in maps: 1–2 per location, all valid, round-trip, reachable from Loadout and editor', () => {
+  assert.ok(BUILTIN_MAPS.length >= 9);
+  for (const th of CAT.THEME_IDS) {
+    const n = BUILTIN_MAPS.filter((j) => j.theme === th).length;
+    assert.ok(n >= 1 && n <= 2, `${th}: ${n} maps`);
+  }
+  for (const j of BUILTIN_MAPS) {
+    const v = MF.validateMap(j);
+    assert.ok(v.ok, `${j.id}: ${v.errors.join('; ')}`);
+    assert.equal(v.stats.sealed || 0, 0, `${j.id} sealed tiles`);
+    const m = MF.mapFromJson(j);
+    assert.equal(m.theme, j.theme);
+    const j1 = MF.mapToJson(m, { id: j.id, name: j.name });
+    const sig = (o) => JSON.stringify([...o].map((x) => [x.k, x.x, x.y, x.dir || '', x.hue || '', x.len || 0]).sort());
+    for (const k of ['ground', 'props', 'spawn']) assert.deepEqual(j1[k], j[k], `${j.id} ${k}`);
+    assert.equal(sig(j1.objects), sig(j.objects), `${j.id} objects`);
+    assert.equal(CM.getMap(j.id), BUILTIN_BY_ID[j.id]);
+    if (j.id !== 'docklands') assert.ok(CM.battleMapFor(j.id), `${j.id} loads for battle`);
+    // flat maps: nothing on them is destructible cover; explosives exist somewhere on most maps
+    for (const row of m.tiles) for (const t of row) assert.ok(!t.destructible);
+  }
+  assert.ok(BUILTIN_MAPS.filter((j) => MF.mapFromJson(j).tiles.flat().some((t) => t.explosive)).length >= 6, 'explosives (barrels, cars, tanks, stills)');
+});
+
+test('generic explosives: a parked car blows up, hurts nearby units and leaves a burnt-out wreck', () => {
+  const s = newGame(T0, 31);
+  const j = MF.blankMapJson('small', 'Car', 'velvet'); j.id = 'map-car';
+  const [w] = MF.MAP_SIZES.small;
+  for (let y = 2; y < 6; y++) { const a = j.spawn[y].split(''); a[1] = 'P'; a[w - 2] = 'E'; j.spawn[y] = a.join(''); }
+  j.objects = [{ k: 'sedan', x: 6, y: 8, dir: 'E', hue: 'red' }];
+  const b = T.startCustom(s, j, 3);
+  const A = b.map.tiles[8][6], Bt = b.map.tiles[8][7];
+  assert.equal(A.decor, 'sedan'); assert.equal(A.explosive, 1); assert.equal(A.cover, 2); assert.ok(Bt.sub && Bt.block);
+  const shooter = b.units.find((u) => u.side === 'player');
+  const foe = b.units.find((u) => u.side === 'enemy');
+  b.acting = shooter.uid; b.side = 'player'; shooter.ap = 4; shooter.ammo = 4; shooter.x = 6; shooter.y = 4;
+  foe.x = 8; foe.y = 9;
+  const hp0 = foe.hp;
+  const r = T.apply(b, { type: 'shootProp', uid: shooter.uid, x: 7, y: 8, mode: 'shot' });
+  assert.ok(r.ok, r.reason);
+  assert.ok(foe.hp < hp0, 'blast radius 2 reaches the foe');
+  assert.equal(b.map.tiles[8][6].decor, 'sedanWreck');
+  assert.equal(b.map.tiles[8][6].explosive, 0);
+  assert.equal(b.map.tiles[8][6].cover, 2, 'wreck keeps its cover');
+});
+
+test('built-in maps: AI-vs-AI fights finish on every location (no deadlocks)', () => {
+  for (const j of BUILTIN_MAPS) {
+    for (const seed of [2, 7, 11]) {
+      const players = ['rook', 'brick', 'lumen', 'vesper'], enemies = ['knack', 'rill', 'pact', 'bruno'];
+      const recs = {}, ammo = {};
+      for (const id of players) { recs[id] = { stars: 1, lv: 3, perks: [], gear: null }; ammo[id] = 8; }
+      const b = T.startBattle({ map: MF.mapFromJson(j), player: players, enemy: enemies, seed, label: 'x', kind: 'street', loadout: { recs, ammo, medkits: {} }, pvp: false });
+      for (const u of b.units) u.ammo = 8;
+      T.autoplay(b, 3000);
+      assert.ok(b.status === 'win' || b.status === 'loss', `${j.id} seed ${seed} ended (${b.status}, round ${b.round || b.turn})`);
+      const rounds = b.round || b.turn;
+      assert.ok(rounds <= 30, `${j.id} seed ${seed} took ${rounds} rounds`);
+    }
+  }
 });
 
 console.log(`\n${pass} tests passed`);

@@ -1,7 +1,8 @@
 // Player-made battle maps, kept in localStorage separately from the game save (so a save reset
 // never deletes them). Pure functions over a Storage-like object for tests.
 import { normalizeMapJson, mapFromJson, validateMap } from './mapfmt.js';
-import { DOCKLANDS } from './maps/docklands.js';
+import { BUILTIN_BY_ID } from './maps/index.js';
+export { BUILTIN_MAPS, isBuiltinId } from './maps/index.js';
 
 export const MAPS_KEY = 'fangcity.maps.v1';
 const store = (ls) => ls || (typeof localStorage !== 'undefined' ? localStorage : null);
@@ -15,7 +16,7 @@ export function listMaps(ls) {
   } catch { return []; }
 }
 export function getMap(id, ls) {
-  if (id === 'docklands') return DOCKLANDS;
+  if (BUILTIN_BY_ID[id]) return BUILTIN_BY_ID[id];
   return listMaps(ls).find((j) => j.id === id) || null;
 }
 export function saveMap(json, ls) {
@@ -33,7 +34,7 @@ export function deleteMap(id, ls) {
   delete all[id];
   st.setItem(MAPS_KEY, JSON.stringify(all));
 }
-// Battle-ready map for an id ('docklands' or a saved map). Falls back to Docklands if missing or invalid.
+// Battle-ready map for an id (a built-in or a saved map). Null for the classic Docklands yard (the game's own) or if missing/invalid.
 export function battleMapFor(id, ls) {
   const j = id && id !== 'docklands' ? getMap(id, ls) : null;
   if (j && validateMap(j).ok) return mapFromJson(j);

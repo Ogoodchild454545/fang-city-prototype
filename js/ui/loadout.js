@@ -7,7 +7,8 @@ import { rankName } from '../core/progress.js';
 import { fmt, ico, esc } from './fmt.js';
 import * as BS from '../core/base.js';
 import * as Audio from './audio.js';
-import { listMaps, battleMapFor } from '../core/custommaps.js';
+import { listMaps, battleMapFor, BUILTIN_MAPS } from '../core/custommaps.js';
+import { THEMES, THEME_IDS } from '../core/catalog.js';
 import { validateMap } from '../core/mapfmt.js';
 
 const lo = (ctx) => (ctx.sub.loadout ||= { draft: null, confirmHS: false });
@@ -58,8 +59,8 @@ export function render(ctx) {
       <div class="loadmap">
         <span class="tiny dim">Map</span>
         <select data-act="setLoadMap" aria-label="Battle map">
-          <option value="docklands">Docklands yard</option>
-          ${listMaps().filter((j) => validateMap(j).ok).map((j) => `<option value="${esc(j.id)}" ${d.mapId === j.id ? 'selected' : ''}>${esc(j.name)} (${j.w}×${j.h})</option>`).join('')}
+          ${THEME_IDS.map((th) => `<optgroup label="${esc(THEMES[th].name)}">${BUILTIN_MAPS.filter((j) => j.theme === th).map((j) => `<option value="${esc(j.id)}" ${(d.mapId || 'docklands') === j.id ? 'selected' : ''}>${esc(j.id === 'docklands' ? 'Docklands yard' : j.name)}</option>`).join('')}</optgroup>`).join('')}
+          ${(() => { const own = listMaps().filter((j) => validateMap(j).ok); return own.length ? `<optgroup label="My maps">${own.map((j) => `<option value="${esc(j.id)}" ${d.mapId === j.id ? 'selected' : ''}>${esc(j.name)} (${j.w}×${j.h})</option>`).join('')}</optgroup>` : ''; })()}
         </select>
         <button class="btn sm" data-act="openEditor">Edit maps</button>
       </div>

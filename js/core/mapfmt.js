@@ -1,54 +1,49 @@
-// Fang City battle-map format (v1): plain JSON, one string per row per layer, so maps are easy
+// Fang City battle-map format (v2): plain JSON, one string per row per layer, so maps are easy
 // to read, diff and hand-edit. Multi-tile things (container runs, vans, boats) live in an object
 // list. Every battle map, including the built-in Docklands yard, loads through mapFromJson().
 // Spec: docs/map-editor.md.
+import { CATALOG, PROP, GROUND, THEMES, ENV_TIMES, ENV_WEATHER, ROOM_STYLES, ROOM_BY_CH, INTERIOR_CHARS } from './catalog.js';
 
 export const MAP_FORMAT = 'fang-city-map';
-export const MAP_VERSION = 1;
+// v1: Docklands-only props layer + container/van/boat objects.
+// v2: adds `theme` (location pack), `env` (time/weather) and any catalogue prop as an object.
+export const MAP_VERSION = 2;
 export const MAP_SIZES = { small: [16, 12], medium: [22, 16], large: [28, 20] };
 export const MIN_SPAWNS = 4;
 
-// ground layer
-export const GROUND = {
-  '.': { t: 'yard', label: 'Concrete' },
-  '~': { t: 'water', label: 'Water / canal', block: 1 },
-  '=': { t: 'edge', label: 'Quay edge' },
-  's': { t: 'shed', label: 'Workshop canopy' },
-  'o': { t: 'interior', hue: 'office', label: 'Office floor' },
-  'r': { t: 'interior', hue: 'cafe', label: 'Bar floor' },
-};
-// single-tile props layer (cover: 1 half, 2 full)
-export const PROPS = {
-  '.': null,
-  'x': { decor: 'crate', cover: 1, label: 'Crates' },
-  'b': { decor: 'barrel', cover: 1, explosive: 1, label: 'Explosive barrel' },
-  'f': { decor: 'burn', cover: 1, label: 'Burn barrel' },
-  'B': { decor: 'barrier', cover: 2, label: 'Concrete barrier' },
-  'l': { decor: 'lamp', cover: 0, block: 0, label: 'Lamp post' },
-  'n': { decor: 'fence', cover: 0, label: 'Fence' },
-  'W': { decor: 'wall', cover: 2, los: 1, cut: 0, label: 'Wall' },
-  'w': { decor: 'wall', cover: 2, los: 1, cut: 1, label: 'Wall (low, cut away)' },
-  'D': { door: 1, cut: 0, label: 'Door' },
-  'd': { door: 1, cut: 1, label: 'Door (low)' },
-  'k': { decor: 'desk', cover: 1, label: 'Desk / counter' },
-  'h': { decor: 'shelf', cover: 1, label: 'Shelf' },
-  'p': { decor: 'barrel-shelf', cover: 0, block: 0, label: 'Workshop rack' },
-};
-export const CONTAINER_HUES = ['green', 'rust', 'teal', 'blue', 'mustard', 'grey', 'red', 'white'];
-export const VAN_HUES = ['white', 'grey'];
-export const BOAT_HUES = ['tug', 'work', 'small'];
+// Ground layer chars come straight from the catalogue.
+export { GROUND };
+// Single-tile props layer (v1 codes): derived from catalogue entries that have a `ch`.
+export const PROPS = { '.': null };
+for (const d of CATALOG) {
+  if (!d.ch) continue;
+  if (d.special === 'door') {
+    PROPS[d.ch] = { door: 1, cut: 0, label: d.name };
+    PROPS[d.chLow] = { door: 1, cut: 1, label: d.name + ' (low)' };
+    continue;
+  }
+  const rec = (cut) => ({ decor: d.id, cover: d.cover, block: d.block, los: d.los, explosive: d.explosive, cut, label: d.name + (cut ? ' (low, cut away)' : '') });
+  PROPS[d.ch] = rec(0);
+  if (d.chLow) PROPS[d.chLow] = rec(1);
+}
+export const CONTAINER_HUES = PROP.container.variants;
+export const VAN_HUES = PROP.van.variants;
+export const BOAT_HUES = PROP.boat.variants;
+// Catalogue props that live in the objects list (multi-tile, coloured, or without a v1 code).
+export const isObjectProp = (id) => { const d = PROP[id]; return !!(d && !d.hidden && !d.ch); };
 
 function blank(t = 'yard') {
   return { t, block: 0, cover: 0, face: -1, decor: '', los: 0, explosive: 0, hue: '' };
 }
 const rowsOf = (w, h, ch) => Array.from({ length: h }, () => ch.repeat(w));
 
-export function blankMapJson(size = 'medium', name = 'New map') {
+export function blankMapJson(size = 'medium', name = 'New map', theme = 'docklands') {
   const [w, h] = MAP_SIZES[size] || MAP_SIZES.medium;
+  const th = THEMES[theme] ? theme : 'docklands';
   return {
     format: MAP_FORMAT, version: MAP_VERSION,
-    id: 'map-' + Date.now().toString(36), name, w, h,
-    ground: rowsOf(w, h, '.'), props: rowsOf(w, h, '.'), spawn: rowsOf(w, h, '.'),
+    id: 'map-' + Date.now().toString(36), name, w, h, theme: th, env: { ...THEMES[th].env },
+    ground: rowsOf(w, h, THEMES[th].ground), props: rowsOf(w, h, '.'), spawn: rowsOf(w, h, '.'),
     objects: [], notes: '',
   };
 }
@@ -67,18 +62,30 @@ export function normalizeMapJson(j) {
     for (let x = 0; x < w; x++) { const c = r[x] || ch; out += okSet[c] !== undefined ? c : ch; }
     return out;
   });
+  // v1 -> v2: every v1 map was a Docklands-style yard
+  const theme = THEMES[j.theme] ? j.theme : 'docklands';
+  const env = { ...THEMES[theme].env };
+  if (j.env && ENV_TIMES.includes(j.env.time)) env.time = j.env.time;
+  if (j.env && ENV_WEATHER.includes(j.env.weather)) env.weather = j.env.weather;
+  const objects = [];
+  for (const o of Array.isArray(j.objects) ? j.objects : []) {
+    if (!o) continue;
+    const d = PROP[o.k];
+    if (!d || d.hidden || !(d.special === 'container' || isObjectProp(o.k))) continue;
+    const r = { k: o.k, x: o.x | 0, y: o.y | 0 };
+    if (o.k === 'container') { r.len = Math.max(1, Math.min(6, o.len | 0 || 1)); r.stack = o.stack >= 2 ? 2 : 1; }
+    if (d.rot) r.dir = o.dir === 'S' ? 'S' : 'E';
+    r.hue = String(o.hue || (o.k === 'container' || o.k === 'van' || o.k === 'boat' ? '' : (d.variants[0] || '')));
+    objects.push(r);
+  }
   return {
     format: MAP_FORMAT, version: MAP_VERSION,
     id: String(j.id || 'map-' + Date.now().toString(36)), name: String(j.name || 'Untitled map').slice(0, 40), w, h,
+    theme, env,
     ground: fix(j.ground, '.', GROUND),
     props: fix(j.props, '.', PROPS),
     spawn: fix(j.spawn, '.', { '.': 1, P: 1, E: 1 }),
-    objects: (Array.isArray(j.objects) ? j.objects : []).filter((o) => o && ['container', 'van', 'boat'].includes(o.k)).map((o) => ({
-      k: o.k, x: o.x | 0, y: o.y | 0,
-      ...(o.k === 'container' ? { len: Math.max(1, Math.min(6, o.len | 0 || 1)), stack: o.stack >= 2 ? 2 : 1 } : {}),
-      ...(o.k !== 'boat' ? { dir: o.dir === 'S' ? 'S' : 'E' } : {}),
-      hue: String(o.hue || ''),
-    })),
+    objects,
     ...(j.seats ? { seats: j.seats } : {}),
     notes: String(j.notes || ''),
     ...(j.flavour ? { flavour: j.flavour } : {}),
@@ -87,7 +94,8 @@ export function normalizeMapJson(j) {
 
 // Tiles an object covers, in order.
 export function objectTiles(o) {
-  const n = o.k === 'container' ? o.len : o.k === 'van' ? 2 : 1;
+  const d = PROP[o.k];
+  const n = o.k === 'container' ? o.len : (d && d.size) || 1;
   const out = [];
   for (let i = 0; i < n; i++) out.push(o.dir === 'S' ? [o.x, o.y + i] : [o.x + i, o.y]);
   return out;
@@ -114,12 +122,12 @@ export function mapFromJson(input) {
       const g = GROUND[j.ground[y][x]] || GROUND['.'];
       const t = blank(g.t);
       if (g.block) t.block = 1;
-      if (g.hue) t.hue = g.hue;
+      if (g.hue) { t.hue = g.hue; t.ghue = g.hue; } // ghue: the floor style, kept even when a prop sits on it
       row.push(t);
     }
     tiles.push(row);
   }
-  const roomHue = (x, y) => { const c = near(j.ground, x, y, 'or'); return c === 'r' ? 'cafe' : 'office'; };
+  const roomHue = (x, y) => { const c = near(j.ground, x, y, INTERIOR_CHARS); return ROOM_BY_CH[c] || 'office'; };
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const p = PROPS[j.props[y][x]];
     if (!p) continue;
@@ -154,6 +162,22 @@ export function mapFromJson(input) {
     } else if (o.k === 'boat') {
       const [x, y] = cells[0];
       Object.assign(tiles[y][x], { t: 'water', decor: 'boat', cover: 0, block: 1, face: -1, los: 0, explosive: 0, hue: o.hue || 'tug', stack: 0, cut: 0 });
+    } else {
+      const d = PROP[o.k];
+      if (!d || cells.length < d.size) continue;
+      const base = { decor: o.k, cover: d.cover, block: d.block, face: -1, los: d.los, explosive: d.explosive, hue: o.hue || d.variants[0] || '', stack: 0, cut: 0 };
+      if (d.explosive) base.blast = d.blast;
+      cells.forEach(([x, y], i) => {
+        const t = tiles[y][x];
+        Object.assign(t, base);
+        if (t.t === 'water') t.block = 1; // stilt shacks over water stay impassable
+        if (o.dir === 'S') t.dir = 'S';
+        if (cells.length > 1) {
+          const [px, py] = cells[i === 0 ? 1 : 0];
+          t.partner = { x: px, y: py };
+          if (i > 0) t.sub = 1;
+        }
+      });
     }
   }
   const zone = { player: [], enemy: [] };
@@ -170,6 +194,7 @@ export function mapFromJson(input) {
   m.zone = zone;
   m.id = j.id; m.name = j.name;
   m.flavour = j.flavour || 'custom';
+  m.theme = j.theme; m.env = j.env;
   m.source = j;
   return m;
 }
@@ -178,8 +203,9 @@ export function mapFromJson(input) {
 export function mapToJson(m, meta = {}) {
   const gch = (t) => {
     if (t.decor === 'boat') return '~';
-    if (t.t === 'door') return t.hue === 'cafe' ? 'r' : 'o';
-    for (const [k, g] of Object.entries(GROUND)) if (g.t === t.t && (!g.hue || g.hue === t.hue)) return k;
+    if (t.t === 'door') return (ROOM_STYLES[t.hue] || ROOM_STYLES.office).ch;
+    const hue = t.ghue || t.hue;
+    for (const [k, g] of Object.entries(GROUND)) if (g.t === t.t && (!g.hue || g.hue === hue)) return k;
     return '.';
   };
   const ground = [], props = [], spawn = [];
@@ -198,7 +224,9 @@ export function mapToJson(m, meta = {}) {
         if (!runs.has(r.id)) { const o = { k: 'container', x, y, len: r.n, dir: t.dir === 'S' ? 'S' : 'E', stack: t.stack >= 2 ? 2 : 1, hue: t.hue }; runs.set(r.id, o); }
       } else if (t.decor === 'van' || t.decor === 'wreck' || t.decor === 'car') objects.push({ k: 'van', x, y, dir: t.dir === 'S' ? 'S' : 'E', hue: t.hue });
       else if (t.decor === 'boat') objects.push({ k: 'boat', x, y, hue: t.hue });
-      else if (t.decor && t.decor !== 'van2' && t.decor !== 'wreck2' && t.decor !== 'car2') {
+      else if (t.decor && isObjectProp(t.decor)) {
+        if (!t.sub) { const o = { k: t.decor, x, y }; if (PROP[t.decor].rot) o.dir = t.dir === 'S' ? 'S' : 'E'; o.hue = t.hue || ''; objects.push(o); }
+      } else if (t.decor && t.decor !== 'van2' && t.decor !== 'wreck2' && t.decor !== 'car2') {
         const k = Object.keys(PROPS).find((c) => PROPS[c] && PROPS[c].decor === t.decor);
         if (k) pc = k;
       }
@@ -209,9 +237,11 @@ export function mapToJson(m, meta = {}) {
     ground.push(gr); props.push(pr); spawn.push(sp);
   }
   const cont = [...runs.entries()].sort((a, b) => (typeof a[0] === 'number' && typeof b[0] === 'number' ? a[0] - b[0] : 0)).map((e) => e[1]);
+  const theme = meta.theme || m.theme || 'docklands';
   const j = {
     format: MAP_FORMAT, version: MAP_VERSION,
     id: meta.id || m.id || 'map', name: meta.name || m.name || 'Map', w: m.w, h: m.h,
+    theme, env: { ...(m.env || THEMES[theme].env) },
     ground, props, spawn, objects: [...cont, ...objects], notes: meta.notes || '',
   };
   if (meta.flavour) j.flavour = meta.flavour;

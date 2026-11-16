@@ -1,52 +1,45 @@
 // Map editor: build your own battle maps. Top-down grid editing (precise on a phone) with a live
 // iso preview that uses the real battle renderer; both views can be painted. Maps are stored as
-// v1 map JSON (js/core/mapfmt.js), saved in localStorage and playable straight away.
+// map JSON (js/core/mapfmt.js, v2), saved in localStorage and playable straight away.
+// The palette is built from the shared prop catalogue (js/core/catalog.js) for the map's location.
 import {
-  GROUND, PROPS, MAP_SIZES, CONTAINER_HUES, VAN_HUES, blankMapJson, normalizeMapJson, mapFromJson,
+  GROUND, PROPS, MAP_SIZES, CONTAINER_HUES, blankMapJson, normalizeMapJson, mapFromJson,
   validateMap, objectTiles, stringifyMap,
 } from '../core/mapfmt.js';
-import { listMaps, saveMap, deleteMap, getMap } from '../core/custommaps.js';
-import { DOCKLANDS } from '../core/maps/docklands.js';
+import { listMaps, saveMap, deleteMap, getMap, BUILTIN_MAPS, isBuiltinId } from '../core/custommaps.js';
+import { THEMES, THEME_IDS, ENV_TIMES, ENV_WEATHER, CATS, PROP, CATALOG, ROOM_STYLES, INTERIOR_CHARS, groundFor } from '../core/catalog.js';
 import { startCustom } from '../core/tactics.js';
 import * as Dock from './dockart.js';
 import { esc } from './fmt.js';
 
 // ---------- tools ----------
-const TOOLS = [
-  { g: 'Ground', id: 'g.', label: 'Concrete', ico: '⬜' },
-  { g: 'Ground', id: 'g~', label: 'Water', ico: '🌊' },
-  { g: 'Ground', id: 'g=', label: 'Quay edge', ico: '▤' },
-  { g: 'Ground', id: 'gs', label: 'Canopy', ico: '⛺' },
-  { g: 'Ground', id: 'go', label: 'Office floor', ico: '▦' },
-  { g: 'Ground', id: 'gr', label: 'Bar floor', ico: '▩' },
-  { g: 'Build', id: 'room', label: 'Room', ico: '🏠' },
-  { g: 'Build', id: 'c1', label: 'Container', ico: '📦' },
-  { g: 'Build', id: 'c2', label: 'Double stack', ico: '🧱' },
-  { g: 'Build', id: 'van', label: 'Van', ico: '🚐' },
-  { g: 'Build', id: 'px', label: 'Crates', ico: '🟫' },
-  { g: 'Build', id: 'pb', label: 'Barrel', ico: '🛢️' },
-  { g: 'Build', id: 'pf', label: 'Burn barrel', ico: '🔥' },
-  { g: 'Build', id: 'pB', label: 'Barrier', ico: '🚧' },
-  { g: 'Build', id: 'pn', label: 'Fence', ico: '⛓️' },
-  { g: 'Build', id: 'pl', label: 'Lamp', ico: '💡' },
-  { g: 'Build', id: 'pW', label: 'Wall', ico: '🧱' },
-  { g: 'Build', id: 'pD', label: 'Door', ico: '🚪' },
-  { g: 'Build', id: 'pk', label: 'Counter', ico: '🪑' },
-  { g: 'Build', id: 'ph', label: 'Shelf', ico: '🗄️' },
-  { g: 'Build', id: 'boat', label: 'Boat', ico: '🚤' },
-  { g: 'Spawns', id: 'sP', label: 'Your spawn', ico: '🔵' },
-  { g: 'Spawns', id: 'sE', label: 'Enemy spawn', ico: '🔴' },
-  { g: 'Edit', id: 'rot', label: 'Rotate / flip', ico: '⟳' },
-  { g: 'Edit', id: 'erase', label: 'Eraser', ico: '⌫' },
-];
-const DRAG_TOOLS = (id) => id[0] === 'g' || id[0] === 'p' || id[0] === 's' || id === 'erase';
-const ROOM_HUES = ['office', 'cafe'];
+// Tool ids: g<ch> ground, p<ch> single-tile layer prop, o:<id> catalogue object, c1/c2 containers,
+// room, sP/sE spawns, rot, erase.
+const CH_TOOL = Object.fromEntries(CATALOG.filter((p) => p.ch && p.id !== 'wall' && p.id !== 'door').map((p) => [p.id, 'p' + p.ch]));
+function toolsFor(theme, scope) {
+  const T = [];
+  for (const ch of groundFor(theme)) T.push({ g: 'Ground', id: 'g' + ch, label: GROUND[ch].label, col: GROUND[ch].col });
+  T.push({ g: 'Build', id: 'room', label: 'Room', ico: '🏠' }, { g: 'Build', id: 'pW', label: 'Wall', ico: '🧱' }, { g: 'Build', id: 'pD', label: 'Door', ico: '🚪' });
+  const show = (p) => !p.hidden && (scope === 'all' || p.themes.includes('all') || p.themes.includes(theme));
+  for (const cat of Object.keys(CATS)) {
+    for (const p of CATALOG) {
+      if (p.cat !== cat || !show(p) || p.id === 'wall' || p.id === 'door') continue;
+      if (p.id === 'container') { T.push({ g: CATS[cat], id: 'c1', label: 'Container', ico: '📦' }, { g: CATS[cat], id: 'c2', label: 'Double stack', ico: '🧱' }); continue; }
+      T.push({ g: CATS[cat], id: CH_TOOL[p.id] || 'o:' + p.id, label: p.name, ico: p.ico || '▪', own: p.themes.includes(theme) });
+    }
+  }
+  T.push({ g: 'Spawns', id: 'sP', label: 'Your spawn', ico: '🔵' }, { g: 'Spawns', id: 'sE', label: 'Enemy spawn', ico: '🔴' });
+  T.push({ g: 'Edit', id: 'rot', label: 'Rotate / flip', ico: '⟳' }, { g: 'Edit', id: 'erase', label: 'Eraser', ico: '⌫' });
+  return T;
+}
+const DRAG_TOOLS = (id) => id[0] === 'g' || id[0] === 'p' || id[0] === 's' || id === 'erase' || (id.startsWith('o:') && PROP[id.slice(2)] && PROP[id.slice(2)].size === 1);
+const objDef = (t) => (t && t.startsWith('o:') ? PROP[t.slice(2)] : null);
 
 function ed(ctx) {
   if (!ctx.sub.editor) {
     ctx.sub.editor = {
       doc: normalizeMapJson(blankMapJson('medium', 'My map')),
-      undo: [], redo: [], tool: 'c1', dir: 'E', len: 2, hue: 'green', vanHue: 'white', roomHue: 'office',
+      undo: [], redo: [], tool: 'c1', dir: 'E', len: 2, hue: 'green', vh: {}, roomHue: 'office', scope: 'loc', q: '',
       view: 'top', zoom: 1, pan: { x: 0, y: 0 }, saved: true,
     };
     ctx.sub.editor.doc.spawn = defaultSpawns(ctx.sub.editor.doc);
@@ -64,14 +57,15 @@ export function openEditor(ctx, id) {
   const e = ed(ctx);
   if (id) {
     const j = getMap(id);
-    if (j) loadDoc(e, id === 'docklands' ? { ...j, id: 'map-' + Date.now().toString(36), name: 'Docklands copy', seats: undefined, flavour: undefined } : j);
+    if (j) loadDoc(e, isBuiltinId(id) ? builtinCopy(j) : j);
   }
   ctx.go('editor');
 }
+const builtinCopy = (j) => ({ ...j, id: 'map-' + Date.now().toString(36), name: `${j.id === 'docklands' ? 'Docklands' : j.name} copy`, builtin: undefined, seats: undefined, flavour: undefined });
 function loadDoc(e, j) {
   const d = normalizeMapJson(j);
-  delete d.seats; delete d.flavour;
-  e.doc = d; e.undo = []; e.redo = []; e.saved = true; e.zoom = 1; e.pan = { x: 0, y: 0 }; e.map = null;
+  delete d.seats; delete d.flavour; delete d.builtin;
+  e.doc = d; e.undo = []; e.redo = []; e.saved = true; e.zoom = 1; e.pan = { x: 0, y: 0 }; e.map = null; e.check = null;
 }
 
 // ---------- doc helpers ----------
@@ -87,10 +81,16 @@ function clearTile(d, x, y, { keepSpawn = false } = {}) {
   if (!keepSpawn) setCh(d.spawn, x, y, '.');
 }
 const isWater = (d, x, y) => d.ground[y][x] === '~';
-const solidAt = (d, x, y) => objAt(d, x, y) || (PROPS[d.props[y][x]] && PROPS[d.props[y][x]].block !== 0 && !PROPS[d.props[y][x]].door);
+const solidAt = (d, x, y) => { const o = objAt(d, x, y); return (o && (PROP[o.k] || {}).block !== 0) || (PROPS[d.props[y][x]] && PROPS[d.props[y][x]].block !== 0 && !PROPS[d.props[y][x]].door); };
+// can this object stand on these tiles? (boats on water, stilt shacks either, everything else on land)
+function waterOk(d, def, cells) {
+  const w = def.water || 'land';
+  if (w === 'any') return true;
+  return w === 'water' ? cells.every(([a, b]) => isWater(d, a, b)) : !cells.some(([a, b]) => isWater(d, a, b));
+}
 // Front walls (with room floor behind them, north or west) are drawn low so you can see in.
 function autoWall(d, x, y, door) {
-  const fl = (xx, yy) => inside(d, xx, yy) && 'or'.includes(d.ground[yy][xx]);
+  const fl = (xx, yy) => inside(d, xx, yy) && INTERIOR_CHARS.includes(d.ground[yy][xx]);
   const low = fl(x, y - 1) || fl(x - 1, y) || fl(x - 1, y - 1);
   return door ? (low ? 'd' : 'D') : (low ? 'w' : 'W');
 }
@@ -102,8 +102,9 @@ function applyTool(ctx, x, y, first) {
     const c = t[1];
     if (d.ground[y][x] === c) return false;
     setCh(d.ground, x, y, c);
-    if (c === '~') { const o = objAt(d, x, y); if (o && o.k !== 'boat') d.objects.splice(d.objects.indexOf(o), 1); setCh(d.props, x, y, '.'); setCh(d.spawn, x, y, '.'); }
-    else { const o = objAt(d, x, y); if (o && o.k === 'boat') d.objects.splice(d.objects.indexOf(o), 1); }
+    const o = objAt(d, x, y), w = o ? (PROP[o.k].water || 'land') : null;
+    if (c === '~') { if (o && w === 'land') d.objects.splice(d.objects.indexOf(o), 1); setCh(d.props, x, y, '.'); setCh(d.spawn, x, y, '.'); }
+    else if (o && w === 'water') d.objects.splice(d.objects.indexOf(o), 1);
     return true;
   }
   if (t[0] === 'p') {
@@ -128,18 +129,30 @@ function applyTool(ctx, x, y, first) {
     if (d.spawn[y][x] !== '.') { setCh(d.spawn, x, y, '.'); return true; }
     return false;
   }
-  if (!first) return false;
-  if (t === 'c1' || t === 'c2' || t === 'van' || t === 'boat') {
-    const o = t === 'van' ? { k: 'van', x, y, dir: e.dir, hue: e.vanHue }
-      : t === 'boat' ? { k: 'boat', x, y, hue: ['tug', 'work', 'small'][(x + y) % 3] }
-      : { k: 'container', x, y, len: e.len, dir: e.dir, stack: t === 'c2' ? 2 : 1, hue: e.hue };
+  const def = objDef(t);
+  if (!first && !(def && def.size === 1)) return false;
+  if (def) {
+    const o = { k: def.id, x, y };
+    if (def.rot) o.dir = e.dir;
+    o.hue = def.variants.length ? (e.vh[def.id] || def.variants[0]) : '';
+    const cells = objectTiles(o);
+    if (cells.some(([a, b]) => !inside(d, a, b))) return first ? toastNo(ctx, 'No room there.') : false;
+    if (!waterOk(d, def, cells)) return first ? toastNo(ctx, def.water === 'water' ? `${def.name} goes on water.` : "Can't build that on water.") : false;
+    const cur = objAt(d, x, y);
+    if (!first && cur && cur.k === def.id) return false;
+    for (const [a, b] of cells) clearTile(d, a, b, { keepSpawn: def.block === 0 });
+    d.objects.push(o);
+    return true;
+  }
+  if (t === 'c1' || t === 'c2') {
+    const o = { k: 'container', x, y, len: e.len, dir: e.dir, stack: t === 'c2' ? 2 : 1, hue: e.hue };
     if (o.k === 'container') {
       // shorten the run if it would leave the map or hit water
       while (o.len > 1 && objectTiles(o).some(([a, b]) => !inside(d, a, b) || isWater(d, a, b))) o.len--;
     }
     const cells = objectTiles(o);
     if (cells.some(([a, b]) => !inside(d, a, b))) return toastNo(ctx, 'No room there.');
-    if (o.k === 'boat' ? cells.some(([a, b]) => !isWater(d, a, b)) : cells.some(([a, b]) => isWater(d, a, b))) return toastNo(ctx, o.k === 'boat' ? 'Boats go on water.' : "Can't build on water.");
+    if (cells.some(([a, b]) => isWater(d, a, b))) return toastNo(ctx, "Can't build on water.");
     for (const [a, b] of cells) clearTile(d, a, b);
     d.objects.push(o);
     if (o.k === 'container') e.hue = CONTAINER_HUES[(CONTAINER_HUES.indexOf(e.hue) + 1) % CONTAINER_HUES.length];
@@ -147,11 +160,11 @@ function applyTool(ctx, x, y, first) {
   }
   if (t === 'rot') {
     const o = objAt(d, x, y);
-    if (o && o.k !== 'boat') {
+    if (o && PROP[o.k] && PROP[o.k].rot) {
       const n = { ...o, dir: o.dir === 'S' ? 'E' : 'S' };
       const cells = objectTiles(n);
       const others = d.objects.filter((q) => q !== o);
-      const bad = cells.some(([a, b]) => !inside(d, a, b) || isWater(d, a, b) || others.some((q) => objectTiles(q).some(([p, r]) => p === a && r === b)) || (d.props[b][a] !== '.' && !objectTiles(o).some(([p, r]) => p === a && r === b)));
+      const bad = !waterOk(d, PROP[o.k], cells) || cells.some(([a, b]) => !inside(d, a, b) || others.some((q) => objectTiles(q).some(([p, r]) => p === a && r === b)) || (d.props[b][a] !== '.' && !objectTiles(o).some(([p, r]) => p === a && r === b)));
       if (bad) return toastNo(ctx, 'No room to rotate it there.');
       Object.assign(o, n);
       for (const [a, b] of cells) setCh(d.spawn, a, b, '.');
@@ -170,7 +183,7 @@ function placeRoom(ctx, a, b) {
   const x0 = Math.max(0, Math.min(a.x, b.x)), x1 = Math.min(d.w - 1, Math.max(a.x, b.x));
   const y0 = Math.max(0, Math.min(a.y, b.y)), y1 = Math.min(d.h - 1, Math.max(a.y, b.y));
   if (x1 - x0 < 2 || y1 - y0 < 2) { ctx.toast('Drag out a room at least 3 × 3.'); return false; }
-  const fl = e.roomHue === 'cafe' ? 'r' : 'o';
+  const fl = (ROOM_STYLES[e.roomHue] || ROOM_STYLES.office).ch;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
     clearTile(d, x, y);
     if (isWater(d, x, y)) setCh(d.ground, x, y, '.');
@@ -202,8 +215,12 @@ export function render(ctx) {
   const e = ed(ctx), d = e.doc;
   const sizeKey = Object.keys(MAP_SIZES).find((k) => MAP_SIZES[k][0] === d.w && MAP_SIZES[k][1] === d.h) || 'custom';
   const v = e.check || (e.check = validateMap(d));
+  const TOOLS = toolsFor(d.theme, e.scope);
+  if (!TOOLS.some((t) => t.id === e.tool)) e.tool = 'erase';
   const groups = [...new Set(TOOLS.map((t) => t.g))];
   const opt = optionsFor(e);
+  const sel = (act, list, cur, lab) => `<select class="edsel" data-act="${act}" aria-label="${lab}">${list.map(([v, n]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  const env = d.env || {};
   return `
   <div class="edscr">
     <div class="edtop">
@@ -224,8 +241,15 @@ export function render(ctx) {
     </div>
     <div class="edbody">
       <div class="edtools">
+        <div class="edloc">
+          <div class="edgrp">Location</div>
+          ${sel('edTheme', THEME_IDS.map((k) => [k, THEMES[k].name]), d.theme, 'Location')}
+          <div class="edrow">${sel('edTime', ENV_TIMES.map((k) => [k, k === 'dusk' ? 'Dusk' : 'Night']), env.time, 'Time of day')}${sel('edWeather', ENV_WEATHER.map((k) => [k, k[0].toUpperCase() + k.slice(1)]), env.weather, 'Weather')}</div>
+        </div>
+        <input id="edq" class="edq" type="search" placeholder="Search props…" value="${esc(e.q)}" aria-label="Search props">
+        <div class="edrow"><button class="edlen wide ${e.scope === 'loc' ? 'on' : ''}" data-act="edScope" data-v="loc">This location</button><button class="edlen wide ${e.scope === 'all' ? 'on' : ''}" data-act="edScope" data-v="all">All</button></div>
         ${opt}
-        ${groups.map((g) => `<div class="edgrp">${g}</div><div class="edgrid">${TOOLS.filter((t) => t.g === g).map((t) => `<button class="edtool ${e.tool === t.id ? 'on' : ''}" data-act="edTool" data-tool="${t.id}" title="${esc(t.label)}"><span>${t.ico}</span>${esc(t.label)}</button>`).join('')}</div>`).join('')}
+        ${groups.map((g) => `<div class="edsec"><div class="edgrp">${g}</div><div class="edgrid">${TOOLS.filter((t) => t.g === g).map((t) => `<button class="edtool ${e.tool === t.id ? 'on' : ''} ${t.own === false ? 'other' : ''}" data-act="edTool" data-tool="${t.id}" data-name="${esc(t.label.toLowerCase())}" title="${esc(t.label)}"><span>${t.col ? `<i class="edgsw" style="background:${t.col}"></i>` : t.ico}</span>${esc(t.label)}</button>`).join('')}</div></div>`).join('')}
       </div>
       <div class="edcanvas">
         <canvas id="edcv"></canvas>
@@ -242,11 +266,21 @@ function optionsFor(e) {
     return `<div class="edopt"><div class="edgrp">Length</div><div class="edrow">${[1, 2, 3, 4].map((n) => `<button class="edlen ${e.len === n ? 'on' : ''}" data-act="edLen" data-v="${n}">${n}</button>`).join('')}</div>
       <div class="edrow">${sw(CONTAINER_HUES, e.hue, 'edHue')}</div></div>`;
   }
-  if (e.tool === 'van') return `<div class="edopt"><div class="edrow">${sw(VAN_HUES, e.vanHue, 'edVanHue')}</div></div>`;
-  if (e.tool === 'room') return `<div class="edopt"><div class="edgrp">Drag a rectangle</div><div class="edrow">${ROOM_HUES.map((h) => `<button class="edlen wide ${e.roomHue === h ? 'on' : ''}" data-act="edRoomHue" data-v="${h}">${h === 'cafe' ? 'Bar' : 'Office'}</button>`).join('')}</div></div>`;
+  const def = objDef(e.tool);
+  if (def && (def.variants.length || def.rot)) {
+    return `<div class="edopt"><div class="edgrp">${esc(def.name)}</div>${def.variants.length ? `<div class="edrow">${def.variants.map((h) => `<button class="edsw ${(e.vh[def.id] || def.variants[0]) === h ? 'on' : ''}" data-act="edVar" data-v="${h}" style="--c:${SWATCH[h] || '#888'}" title="${h}"></button>`).join('')}</div>` : ''}
+      ${def.rot ? `<div class="tiny dim" style="margin-top:3px">${e.dir === 'E' ? '↘ along x' : '↙ along y'} · R to turn</div>` : ''}</div>`;
+  }
+  if (e.tool === 'room') return `<div class="edopt"><div class="edgrp">Drag a rectangle</div><div class="edrow">${Object.entries(ROOM_STYLES).map(([k, r]) => `<button class="edlen wide ${e.roomHue === k ? 'on' : ''}" data-act="edRoomHue" data-v="${k}">${r.name}</button>`).join('')}</div></div>`;
   return '';
 }
-const SWATCH = { green: '#40683f', rust: '#8e3c24', teal: '#2c6a62', blue: '#30557a', mustard: '#a27c2c', grey: '#6a6e70', red: '#8a2c22', white: '#c4beb2' };
+const SWATCH = {
+  green: '#40683f', rust: '#8e3c24', teal: '#2c6a62', blue: '#30557a', mustard: '#a27c2c', grey: '#6a6e70', red: '#8a2c22', white: '#c4beb2',
+  tug: '#7a3a2a', work: '#3a5a6a', small: '#8a8070', yellow: '#c8a028', orange: '#c86a28', pink: '#ff4aa8', cyan: '#3ad8ff', amber: '#ffb03a',
+  black: '#26262a', taxi: '#e0b420', purple: '#6a3a8a', tin: '#7a8088', plank: '#6a5038',
+};
+// top-down colour per catalogue category
+const CATCOL = { structure: '#55606a', cover: '#7a6040', vehicle: '#5a6a80', hazard: '#a03a2a', street: '#5a5a50', nature: '#3e6a36', industry: '#6a6a5a', furniture: '#6a4a3a', water: '#3a5a6a' };
 
 // ---------- canvas ----------
 let RAF = 0;
@@ -257,6 +291,18 @@ export function mount(ctx) {
   const name = document.getElementById('edname');
   name.addEventListener('input', () => { e.doc.name = name.value.slice(0, 40) || 'Untitled map'; e.saved = false; });
   name.addEventListener('keydown', (ev) => ev.stopPropagation());
+  const q = document.getElementById('edq');
+  if (q) {
+    const filt = () => {
+      e.q = q.value; const s = e.q.trim().toLowerCase();
+      for (const sec of document.querySelectorAll('.edsec')) {
+        let any = false;
+        for (const b of sec.querySelectorAll('.edtool')) { const hit = !s || b.dataset.name.includes(s); b.style.display = hit ? '' : 'none'; any = any || hit; }
+        sec.style.display = any ? '' : 'none';
+      }
+    };
+    q.addEventListener('input', filt); q.addEventListener('keydown', (ev) => ev.stopPropagation()); filt();
+  }
   bind(ctx, cv);
   draw(ctx);
   if (!window.__edKeys) {
@@ -342,7 +388,7 @@ function bind(ctx, cv) {
       const d = e.doc;
       if (inside(d, t.x, t.y)) {
         const o = objAt(d, t.x, t.y), pr = PROPS[d.props[t.y][t.x]];
-        hint(`${t.x},${t.y} · ${GROUND[d.ground[t.y][t.x]].label}${o ? ' · ' + (o.k === 'container' ? `${o.stack === 2 ? 'double ' : ''}container ×${o.len}` : o.k) : pr ? ' · ' + pr.label : ''}${d.spawn[t.y][t.x] !== '.' ? (d.spawn[t.y][t.x] === 'P' ? ' · your spawn' : ' · enemy spawn') : ''}`);
+        hint(`${t.x},${t.y} · ${GROUND[d.ground[t.y][t.x]].label}${o ? ' · ' + (o.k === 'container' ? `${o.stack === 2 ? 'double ' : ''}container ×${o.len}` : PROP[o.k].name) : pr ? ' · ' + (pr.label || pr.name || '') : ''}${d.spawn[t.y][t.x] !== '.' ? (d.spawn[t.y][t.x] === 'P' ? ' · your spawn' : ' · enemy spawn') : ''}`);
       } else hint('');
       if (!stroke) draw(ctx);
     }
@@ -392,9 +438,8 @@ function draw(ctx) {
 function drawTop(ctx, g, G) {
   const e = ed(ctx), d = e.doc, ts = G.ts;
   const X = (x) => G.ox + x * ts, Y = (y) => G.oy + y * ts;
-  const GCOL = { '.': '#4a4844', '~': '#163a48', '=': '#6a675f', s: '#3a3c3b', o: '#5a636a', r: '#5a3f35' };
   for (let y = 0; y < d.h; y++) for (let x = 0; x < d.w; x++) {
-    g.fillStyle = GCOL[d.ground[y][x]] || '#444';
+    g.fillStyle = (GROUND[d.ground[y][x]] || {}).col || '#444';
     g.fillRect(X(x), Y(y), ts + 0.5, ts + 0.5);
     if (d.ground[y][x] === 'r' && ts > 10) { g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(X(x), Y(y), ts / 2, ts / 2); g.fillRect(X(x) + ts / 2, Y(y) + ts / 2, ts / 2, ts / 2); }
   }
@@ -431,6 +476,16 @@ function drawTop(ctx, g, G) {
       if (o.dir === 'S') g.fillRect(x0 + w * 0.15, y0 + h - ts * 0.5, w * 0.7, ts * 0.25); else g.fillRect(x0 + w - ts * 0.5, y0 + h * 0.15, ts * 0.25, h * 0.7);
     } else if (o.k === 'boat') {
       g.fillStyle = '#8a4a2a'; g.beginPath(); g.ellipse(x0 + w / 2, y0 + h / 2, w * 0.45, h * 0.32, 0, 0, Math.PI * 2); g.fill();
+    } else if (PROP[o.k]) {
+      const def = PROP[o.k];
+      const r = Math.min(w, h) * (def.block === 0 ? 0.3 : 0.18);
+      g.fillStyle = SWATCH[o.hue] || CATCOL[def.cat] || '#666';
+      g.globalAlpha = def.block === 0 ? 0.55 : 0.95;
+      g.beginPath(); g.roundRect ? g.roundRect(x0, y0, w, h, r) : g.rect(x0, y0, w, h); g.fill();
+      g.globalAlpha = 1;
+      if (def.explosive) { g.strokeStyle = '#ff5a3a'; g.lineWidth = Math.max(1, ts * 0.07); g.stroke(); }
+      if (def.rot && (w > ts || h > ts)) { g.fillStyle = 'rgba(0,0,0,0.35)'; if (o.dir === 'S') g.fillRect(x0, y0 + h - ts * 0.18, w, ts * 0.1); else g.fillRect(x0 + w - ts * 0.18, y0, ts * 0.1, h); }
+      if (ts > 14 && def.ico) { g.font = `${Math.round(ts * 0.52)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(def.ico, x0 + w / 2, y0 + h / 2 + 1); }
     }
   }
   // props
@@ -460,7 +515,8 @@ function drawTop(ctx, g, G) {
 function ghost(e) {
   const h = e.hover;
   if (e.tool === 'c1' || e.tool === 'c2') return objectTiles({ k: 'container', x: h.x, y: h.y, len: e.len, dir: e.dir });
-  if (e.tool === 'van') return objectTiles({ k: 'van', x: h.x, y: h.y, dir: e.dir });
+  const def = objDef(e.tool);
+  if (def) return objectTiles({ k: def.id, x: h.x, y: h.y, dir: e.dir });
   return [[h.x, h.y]];
 }
 function topProp(g, c, x, y, ts) {
@@ -528,12 +584,20 @@ function drawIso(ctx, g, G) {
 // ---------- menus ----------
 function menuHtml(ctx) {
   const maps = listMaps();
+  const th = ed(ctx).doc.theme || 'docklands';
   return `<div class="edmenu">
     <div class="h" style="font-size:20px">Battle maps</div>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin:8px 0">
       ${Object.entries(MAP_SIZES).map(([k, [w, h]]) => `<button class="btn sm" data-act="edNew" data-size="${k}">New ${k} ${w}×${h}</button>`).join('')}
-      <button class="btn sm" data-act="edFromDocklands">Copy Docklands</button>
+      <span class="tiny dim" style="align-self:center">in ${esc(THEMES[th].name)}</span>
     </div>
+    <div class="edgrp">Ready-made maps</div>
+    <div class="edlist edbuilt">
+      ${BUILTIN_MAPS.map((j) => `<div class="edli"><b>${esc(j.id === 'docklands' ? 'Docklands yard' : j.name)}</b><span class="tiny dim">${esc(THEMES[j.theme].name)}</span>
+        <span class="grow"></span><button class="btn sm" data-act="edFromBuiltin" data-id="${esc(j.id)}">Copy &amp; edit</button>
+        <button class="btn sm red" data-act="edPlayId" data-id="${esc(j.id)}">Play</button></div>`).join('')}
+    </div>
+    <div class="edgrp">My maps</div>
     <div class="edlist">
       ${maps.length ? maps.map((j) => { const v = validateMap(j); return `<div class="edli"><b>${esc(j.name)}</b><span class="tiny dim">${j.w}×${j.h} · ${v.ok ? 'playable' : 'needs fixing'}</span>
         <span class="grow"></span><button class="btn sm" data-act="edOpen" data-id="${esc(j.id)}">Edit</button>
@@ -569,7 +633,20 @@ export const actions = {
   edTool(ctx, el) { const e = ed(ctx); e.tool = el.dataset.tool; ctx.render(); },
   edLen(ctx, el) { ed(ctx).len = +el.dataset.v; ctx.render(); },
   edHue(ctx, el) { ed(ctx).hue = el.dataset.v; ctx.render(); },
-  edVanHue(ctx, el) { ed(ctx).vanHue = el.dataset.v; ctx.render(); },
+  edVar(ctx, el) { const e = ed(ctx), def = objDef(e.tool); if (def) e.vh[def.id] = el.dataset.v; ctx.render(); },
+  edScope(ctx, el) { ed(ctx).scope = el.dataset.v === 'all' ? 'all' : 'loc'; ctx.render(); },
+  edTheme(ctx, el) {
+    const e = ed(ctx), d = e.doc, th = el.value;
+    if (!THEMES[th] || th === d.theme) return;
+    snapshot(e);
+    // repaint the old location's base ground with the new one; keep everything else
+    const from = THEMES[d.theme || 'docklands'].ground, to = THEMES[th].ground;
+    if (from !== to) d.ground = d.ground.map((r) => r.split(from).join(to));
+    d.theme = th; d.env = { ...THEMES[th].env };
+    changed(e); ctx.render();
+  },
+  edTime(ctx, el) { const e = ed(ctx); if (!ENV_TIMES.includes(el.value)) return; snapshot(e); e.doc.env = { ...e.doc.env, time: el.value }; changed(e); ctx.render(); },
+  edWeather(ctx, el) { const e = ed(ctx); if (!ENV_WEATHER.includes(el.value)) return; snapshot(e); e.doc.env = { ...e.doc.env, weather: el.value }; changed(e); ctx.render(); },
   edRoomHue(ctx, el) { ed(ctx).roomHue = el.dataset.v; ctx.render(); },
   edDir(ctx) { const e = ed(ctx); e.dir = e.dir === 'E' ? 'S' : 'E'; ctx.render(); },
   edView(ctx) { const e = ed(ctx); e.view = e.view === 'top' ? 'iso' : 'top'; e.zoom = 1; e.pan = { x: 0, y: 0 }; ctx.render(); },
@@ -589,7 +666,7 @@ export const actions = {
     ctx.render();
   },
   edPlay(ctx) { const e = ed(ctx); if (validateMap(e.doc).ok) { saveMap(e.doc); e.saved = true; } play(ctx, e.doc); },
-  edPlayId(ctx, el) { const j = getMap(el.dataset.id); if (j) { loadDoc(ed(ctx), j); play(ctx, j); } },
+  edPlayId(ctx, el) { const j = getMap(el.dataset.id); if (j) { loadDoc(ed(ctx), isBuiltinId(j.id) ? builtinCopy(j) : j); play(ctx, j); } },
   edIssues(ctx) { ctx.modal(issuesHtml(validateMap(ed(ctx).doc)), { center: true }); },
   edExit(ctx) { ctx.go(ctx.sub.editorBack || 'heroes'); },
   edMenu(ctx) {
@@ -597,8 +674,9 @@ export const actions = {
     const f = el.querySelector('#edfile');
     if (f) f.addEventListener('change', async () => { const file = f.files[0]; if (!file) return; importText(ctx, await file.text()); });
   },
-  edNew(ctx, el) { const e = ed(ctx); snapshot(e); const d = normalizeMapJson(blankMapJson(el.dataset.size, 'My map')); d.spawn = defaultSpawns(d); e.doc = d; e.saved = false; changed(e); e.undo = []; ctx.closeModal(); ctx.render(); },
-  edFromDocklands(ctx) { loadDoc(ed(ctx), { ...DOCKLANDS, id: 'map-' + Date.now().toString(36), name: 'Docklands copy', seats: undefined, flavour: undefined }); ed(ctx).saved = false; ctx.closeModal(); ctx.render(); },
+  edNew(ctx, el) { const e = ed(ctx); snapshot(e); const d = normalizeMapJson(blankMapJson(el.dataset.size, 'My map', e.doc.theme || 'docklands')); d.spawn = defaultSpawns(d); e.doc = d; e.saved = false; changed(e); e.undo = []; ctx.closeModal(); ctx.render(); },
+  edFromBuiltin(ctx, el) { const j = getMap(el.dataset.id || 'docklands'); if (!j) return; loadDoc(ed(ctx), builtinCopy(j)); ed(ctx).saved = false; ctx.closeModal(); ctx.render(); },
+  edFromDocklands(ctx) { actions.edFromBuiltin(ctx, { dataset: { id: 'docklands' } }); },
   edOpen(ctx, el) { const j = getMap(el.dataset.id); if (j) loadDoc(ed(ctx), j); ctx.closeModal(); ctx.render(); },
   edDelete(ctx, el) { deleteMap(el.dataset.id); actions.edMenu(ctx); },
   edExport(ctx) {
@@ -620,7 +698,7 @@ export const actions = {
 function importText(ctx, txt) {
   try {
     const j = normalizeMapJson(txt);
-    if (!j.id || j.id === 'docklands' || listMaps().some((m) => m.id === j.id)) { j.id = 'map-' + Date.now().toString(36); delete j.seats; }
+    if (!j.id || isBuiltinId(j.id) || listMaps().some((m) => m.id === j.id)) { j.id = 'map-' + Date.now().toString(36); delete j.seats; delete j.builtin; }
     const e = ed(ctx); snapshot(e);
     loadDoc(e, j); e.saved = false;
     ctx.closeModal(); ctx.toast(`Loaded “${j.name}”.`); ctx.render();

@@ -7,6 +7,7 @@ import { levelBonus, perkMods, addXp, xpFromBattle, resetAfterKo, perkChoices, x
 import { kitMods, returnUnused, commitLoadout, defaultLoadout, carryOf } from './loadout.js';
 import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, DIRS4, docklandsMap } from './tmaps.js';
 import { mapFromJson } from './mapfmt.js';
+import { propDef } from './catalog.js';
 import { findMatch, pvpStake, settlePvp, opponentLabel } from './pvp.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
@@ -675,14 +676,15 @@ function reviveAlly(b, u, t, events) {
 
 export function isExplosiveAt(b, x, y) {
   const t = tile(b.map, x, y);
-  return !!(t && t.explosive && (t.decor === 'barrel' || t.decor === 'van' || t.decor === 'van2' || t.decor === 'car' || t.decor === 'car2'));
+  return !!(t && t.explosive && blastRadiusOf(t) > 0);
 }
 
 export function blastRadiusOf(t) {
   if (!t) return 0;
   if (t.decor === 'barrel') return 1;
   if (t.decor === 'van' || t.decor === 'van2' || t.decor === 'car' || t.decor === 'car2') return 2;
-  return 0;
+  const d = propDef(t.decor); // location-pack explosives (parked cars, stills, gas tanks)
+  return d && d.explosive ? d.blast : 0;
 }
 
 export function previewProp(b, att, x, y, mode = 'shot') {
@@ -707,7 +709,8 @@ function explodeTile(b, x, y, events, seen) {
   if (seen.has(key)) return;
   seen.add(key);
   const radius = blastRadiusOf(t);
-  const dmg = (t.decor === 'barrel' ? 4 : 5) + (b._chargeBonus || 0);
+  const def = propDef(t.decor);
+  const dmg = (t.decor === 'barrel' ? 4 : def && def.dmg ? def.dmg : 5) + (b._chargeBonus || 0);
   // partner van tile goes at the same time
   const spots = [{ x, y }];
   if (t.partner) spots.push({ x: t.partner.x, y: t.partner.y });
@@ -717,12 +720,14 @@ function explodeTile(b, x, y, events, seen) {
     seen.add(s.x + ',' + s.y);
     const was = tt.decor;
     tt.explosive = 0;
+    const wd = propDef(was);
     if (was === 'barrel') tt.decor = 'barrelWreck';
+    else if (wd && wd.wreck && was !== 'van') tt.decor = wd.wreck;
     else if (was === 'van2' || was === 'car2') tt.decor = 'wreck2';
     else tt.decor = 'wreck';
     // cover, block and los stay as they were
   }
-  log(b, `A ${t.decor === 'barrel' || t.decor === 'barrelWreck' ? 'barrel' : 'van'} explodes!`);
+  log(b, `A ${t.decor === 'barrel' || t.decor === 'barrelWreck' ? 'barrel' : def && def.explosive && t.decor !== 'van' ? def.name.toLowerCase() : 'van'} explodes!`);
   events.push({ typ: 'boom', x, y, radius, dmg, spots });
   blastUnits(b, spots, radius, dmg, events);
   if (b.status !== 'active') return;
@@ -812,6 +817,23 @@ function approachScore(b, u, x, y, foes) {
   return best;
 }
 
+function closeInStep(b, u, foes) {
+  let bestP = null;
+  for (const f of foes) for (const [dx, dy] of DIRS4) {
+    const x = f.x + dx, y = f.y + dy;
+    if (!walkable(b, x, y, u.uid) && !(x === u.x && y === u.y)) continue;
+    const info = pathTo(b, { ...u, ap: 99, move: 99, sprint: 0 }, x, y);
+    if (info && info.path && (!bestP || info.cost < bestP.cost)) bestP = info;
+  }
+  if (!bestP || !bestP.path.length) return null;
+  const { dist } = reachable(b, u);
+  for (let i = bestP.path.length - 1; i >= 0; i--) {
+    const p = bestP.path[i];
+    if (dist.get(`${p.x},${p.y}`)) return p;
+  }
+  return null;
+}
+
 // Pick one action for whoever's turn it is.
 export function think(b) {
   if (b.status !== 'active') return { type: 'endTurn' };
@@ -868,6 +890,15 @@ export function think(b) {
       consider({ type: 'move', uid: u.uid, x, y }, sc);
     }
     if (u.ap >= 2 && u.acted === 0) consider({ type: 'overwatch', uid: u.uid }, 12);
+  }
+  // An operator with no rounds left can only win up close. If nothing better came up (e.g. a fence
+  // makes the straight-line approach look bad), walk the real path toward the nearest foe.
+  if (!best || best.type === 'overwatch' || (best.type === 'move' && bestScore < 8)) {
+    const u = (best && mine.find((x) => x.uid === best.uid)) || mine[0];
+    if (u && (u.ammo || 0) <= 0 && defOf(u.hero).weapon.typ !== 'melee') {
+      const step = closeInStep(b, u, foes);
+      if (step) return { type: 'move', uid: u.uid, x: step.x, y: step.y };
+    }
   }
   if (!best) return { type: 'endTurn' };
   // Don't wander for a tiny score; if the best is a weak shuffle, overwatch or end.

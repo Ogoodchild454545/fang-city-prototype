@@ -707,3 +707,12 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .edli .btn{flex:none;min-width:0}
 .edjson{width:100%;height:42vh;background:#0c0a09;color:#d8cfbf;border:1px solid var(--line2);border-radius:6px;font:11px ui-monospace,Menlo,monospace;margin:6px 0;white-space:pre}
 @media (max-height:420px){.edtools{width:146px}.edtool{min-height:36px}}
+/* v0.8 editor: location, search, catalogue palette */
+.edloc .edsel{width:100%;margin-bottom:3px}
+.edloc .edrow{flex-wrap:nowrap;margin-top:0}
+.edloc .edrow .edsel{flex:1;min-width:0}
+.edq{width:100%;box-sizing:border-box;margin:5px 0 3px;background:#0e0c0b;color:#f3e7c9;border:1px solid var(--line2);border-radius:6px;padding:4px 6px;font:500 11px Inter,sans-serif}
+.edtools > .edrow .edlen{font-size:10px;height:24px;font-weight:600}
+.edgsw{display:inline-block;width:18px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.2)}
+.edtool.other{opacity:.72}
+.edbuilt{max-height:30vh;margin-bottom:6px}

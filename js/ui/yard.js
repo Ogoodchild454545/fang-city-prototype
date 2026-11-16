@@ -3,6 +3,8 @@
 // (crane, far bank, stacked boxes) and detailed props: corrugated containers drawn as
 // whole runs, container-panel rooms with cut-away near walls, chain-link fences, burn
 // barrels, shelving. All drawn in canvas — original art, no third-party tiles.
+import { drawPackProp, packFootprint, neonCol, hasPackArt } from './props.js';
+import { propDef, THEMES, ROOM_STYLES } from '../core/catalog.js';
 export const TW = 58, TH = 29;
 const HX = TW / 2, HY = TH / 2;
 export function toWorld(x, y) { return { x: (x - y) * HX, y: (x + y) * HY }; }
@@ -116,16 +118,21 @@ export function prepMap(m) {
         r.x0 = Math.min(r.x0, x); r.y0 = Math.min(r.y0, y); r.x1 = Math.max(r.x1, x); r.y1 = Math.max(r.y1, y);
       }
     }
-    if (t.decor === 'fence') {
-      const f = (n) => n && n.decor === 'fence';
+    const def = t.decor ? propDef(t.decor) : null;
+    if (t.decor === 'fence' || (def && def.link)) {
+      const f = (n) => n && n.decor === t.decor;
       info.conn = { N: f(at(x, y - 1)), S: f(at(x, y + 1)), W: f(at(x - 1, y)), E: f(at(x + 1, y)) };
     }
     if (t.decor === 'lamp') p.lights.push({ kind: 'lamp', x, y });
-    if (t.decor === 'burn') p.lights.push({ kind: 'fire', x, y });
+    else if (t.decor === 'burn') p.lights.push({ kind: 'fire', x, y });
+    else if (def && def.light && !t.sub) {
+      const two = def.size === 2 ? (t.dir === 'S' ? [0, 0.5] : [0.5, 0]) : [0, 0];
+      p.lights.push({ kind: def.light.kind, x: x + two[0], y: y + two[1], col: def.light.kind === 'neon' ? neonCol(t) : null });
+    }
     INFO.set(t, info);
   }
   for (const r of Object.values(p.rooms)) {
-    p.lights.push({ kind: r.hue === 'cafe' ? 'neon' : 'tube', x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 });
+    p.lights.push({ kind: r.hue === 'cafe' || r.hue === 'club' ? 'neon' : r.hue === 'house' || r.hue === 'shack' ? 'warm' : 'tube', x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2, col: r.hue === 'club' ? '170,80,255' : null });
     // a couple of bulkhead wall lights on the back walls
     for (const [wx, wy, dx, dy] of [[Math.round((r.x0 + r.x1) / 2), r.y0, 0, 0.7], [r.x0, r.y0 + 1, 0.7, 0]]) {
       const wt = at(wx, wy);
@@ -148,7 +155,7 @@ const HUES = {
 };
 const ALT = ['grey', 'blue', 'rust', 'teal', 'white', 'green', 'mustard'];
 const BRANDS = ['KESTREL', 'NORDHAVN', 'AMBERLINE', 'ORCA LINES', 'TALLOW & CO', 'HALCYON', 'GREYWATER', 'MARROW BAY'];
-const WALLHUE = { office: '#6a7c8a', cafe: '#7c3e2a' };
+const WALLHUE = Object.fromEntries(Object.entries(ROOM_STYLES).map(([k, r]) => [k, r.wall]));
 
 // ---------- props ----------
 // Container box height: ~1.4x a 27 px wolf (2.6 m vs 1.8 m).
@@ -170,14 +177,24 @@ export function propHeight(t) {
   if (d === 'fence') return 30;
   if (d === 'boat') return 14;
   if (d === 'door') return t.cut ? 0 : 40;
-  return 0;
+  const def = propDef(d);
+  return def ? def.h : 0;
 }
 // Tall things that should fade when a unit stands just behind them.
 export function isTall(t) {
   if (!t || !t.decor) return false;
   if (t.decor === 'container') return true;
   if (t.decor === 'wall' || t.decor === 'door') return !t.cut;
-  return t.decor === 'shelf' || t.decor === 'lamp';
+  if (t.decor === 'shelf' || t.decor === 'lamp') return true;
+  const def = hasPackArt(t.decor) ? propDef(t.decor) : null;
+  return !!(def && def.block && (def.cut || def.h >= 30));
+}
+// Location-pack props that drop to a stub when a unit is behind them (containers have their own path).
+export function canCut(t) {
+  if (!t || !t.decor) return false;
+  if (t.decor === 'container') return true;
+  const def = propDef(t.decor);
+  return !!(def && def.cut && !def.hidden);
 }
 
 function grime(g, top = 0.06, bot = 0.32) {
@@ -348,6 +365,19 @@ function wallDecor(g, F, kind, z) {
   });
 }
 
+const BRICK = new Set(['house', 'shop', 'club']);
+const WALL_DECOR = {
+  office: ['lockers', 'window', 'poster', 'fridge', 'lockers'], cafe: ['rack', 'neon', 'fridge', 'poster', 'rack'],
+  club: ['neon', 'poster', 'neon', 'rack'], shop: ['rack', 'rack', 'poster', 'fridge'], house: ['window', 'poster', 'window', 'rack'],
+  shack: ['window', 'rack', 'poster'], works: ['lockers', 'rack', 'window', 'lockers'],
+};
+function brick(g, len, a) {
+  const rows = 9, cols = Math.max(2, Math.round(len * 5));
+  for (let r = 0; r < rows; r++) {
+    g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(0, (r + 1) / rows - 0.01, 1, 0.012);
+    for (let c = 0; c <= cols; c++) g.fillRect((c + (r % 2) * 0.5) / cols, r / rows, 0.008, 1 / rows);
+  }
+}
 function drawWall(g, t, sx, sy, z) {
   const info = tileInfo(t);
   const c = info.conn || { E: true, W: true };
@@ -370,7 +400,9 @@ function drawWall(g, t, sx, sy, z) {
     const len = Math.max(x1 - x0, y1 - y0);
     if (len > 0.3) {
       onFace(g, long, () => {
-        corrugate(g, Math.max(2, Math.round(len * 9)), 0.06, 0.95, 0.9);
+        if (BRICK.has(t.hue)) brick(g, len, t.hue === 'club' ? 0.12 : 0.22);
+        else if (t.hue === 'shack') { g.fillStyle = 'rgba(0,0,0,0.3)'; for (let k = 0; k < Math.round(len * 7); k++) g.fillRect(k / Math.round(len * 7), 0.04, 0.012, 0.92); }
+        else corrugate(g, Math.max(2, Math.round(len * 9)), 0.06, 0.95, 0.9);
         g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(0, 0.94, 1, 0.06);
         if (!cut) rust(g, r, 1);
         grime(g, 0.05, 0.35);
@@ -384,7 +416,7 @@ function drawWall(g, t, sx, sy, z) {
   }
   if (!cut) {
     // interior dressing on the face that looks into the room
-    const kinds = t.hue === 'cafe' ? ['rack', 'neon', 'fridge', 'poster', 'rack'] : ['lockers', 'window', 'poster', 'fridge', 'lockers'];
+    const kinds = WALL_DECOR[t.hue] || WALL_DECOR.office;
     const kind = kinds[Math.floor(hash(info.x, info.y, 4) * kinds.length)];
     const straightX = (c.E && c.W) && !c.N && !c.S;
     const straightY = (c.N && c.S) && !c.E && !c.W;
@@ -392,7 +424,7 @@ function drawWall(g, t, sx, sy, z) {
     else if (straightY) wallDecor(g, { A: P(sx, sy, z, th, 0.5, 0), B: P(sx, sy, z, th, -0.5, 0), H: H * z }, kind, z);
     if (info.wallLight && (straightX || straightY)) {
       const lp = straightX ? P(sx, sy, z, 0.18, th, H * 0.82) : P(sx, sy, z, th, -0.18, H * 0.82);
-      const warm = t.hue === 'cafe';
+      const warm = t.hue !== 'office' && t.hue !== 'works' && t.hue !== 'shop';
       const gl = g.createRadialGradient(lp[0], lp[1], 0, lp[0], lp[1], 16 * z);
       gl.addColorStop(0, warm ? 'rgba(255,190,120,0.6)' : 'rgba(220,235,255,0.6)');
       gl.addColorStop(1, 'rgba(0,0,0,0)');
@@ -429,7 +461,7 @@ function drawDoor(g, t, sx, sy, z) {
   // warm spill through the doorway
   const p = P(sx, sy, z, 0, 0, 0);
   const gl = g.createRadialGradient(p[0], p[1], 0, p[0], p[1], 20 * z);
-  gl.addColorStop(0, t.hue === 'cafe' ? 'rgba(255,120,160,0.18)' : 'rgba(170,210,255,0.14)');
+  gl.addColorStop(0, t.hue === 'cafe' || t.hue === 'club' ? 'rgba(255,120,160,0.18)' : t.hue === 'house' || t.hue === 'shack' ? 'rgba(255,190,120,0.16)' : 'rgba(170,210,255,0.14)');
   gl.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = gl; g.beginPath(); g.ellipse(p[0], p[1], 20 * z, 9 * z, 0, 0, Math.PI * 2); g.fill();
 }
@@ -604,7 +636,7 @@ function drawBarrel(g, sx, sy, z, kind, now) {
 }
 
 function drawDesk(g, t, sx, sy, z) {
-  if (t.hue === 'cafe') {
+  if (t.hue === 'cafe' || t.hue === 'club' || t.hue === 'shop') {
     // bar counter with bottles
     const pal = palOf('#5a2e22', 0.95, 0.7, 0.5);
     const f = box(g, sx, sy, z, -0.44, -0.2, 0.44, 0.2, 0, 11, pal);
@@ -776,7 +808,8 @@ export function drawYardProp(g, t, sx, sy, z, now) {
     const H = propHeight(t);
     let ox = HX + 8, w0 = TW + 16;
     const mir = t.dir === 'S';
-    if (d === 'van' || d === 'wreck' || d === 'car') { ox = mir ? 96 : 34; w0 = 130; }
+    if (d === 'van' || d === 'wreck' || d === 'car' || (t.partner && !t.sub && propDef(d) && propDef(d).size === 2)) { ox = mir ? 96 : 34; w0 = 130; }
+    if (d === 'tree') { ox += 10; w0 += 20; }
     if (d === 'container' && t.run) { const ex = 24 + (t.run.n - 1) * HX * 0.5; if (!mir) ox += ex; w0 += ex; }
     const oy = HY + H + 14, h0 = oy + HY + 12;
     const ck = t.__cut || 0;
@@ -788,7 +821,7 @@ export function drawYardProp(g, t, sx, sy, z, now) {
   return paintProp(g, t, sx, sy, z, now);
 }
 function paintProp(g, t, sx, sy, z, now) {
-  if (t.dir === 'S' && !t.__mir && (t.decor === 'container' || t.decor === 'van' || t.decor === 'wreck' || t.decor === 'car')) {
+  if (t.dir === 'S' && !t.__mir && (t.decor === 'container' || t.decor === 'van' || t.decor === 'wreck' || t.decor === 'car' || (propDef(t.decor) && propDef(t.decor).rot))) {
     // A run or van along +y is the same drawing mirrored about the tile's vertical axis
     // (iso swaps dx and dy under a horizontal flip).
     g.save(); g.translate(sx, 0); g.scale(-1, 1); g.translate(-sx, 0);
@@ -812,7 +845,7 @@ function paintProp(g, t, sx, sy, z, now) {
   if (d === 'shelf') { drawShelf(g, t, sx, sy, z); return true; }
   if (d === 'lamp') { drawLamp(g, sx, sy, z, now); return true; }
   if (d === 'barrel-shelf') { drawRackShed(g, sx, sy, z); return true; }
-  return false;
+  return drawPackProp(g, t, sx, sy, z);
 }
 
 // ---------- scenery (not gameplay): border fences, bollards, backdrop ----------
@@ -821,6 +854,12 @@ function buildScenery(m, p) {
   const rooms = Object.values(p.rooms);
   const Q0 = Math.round(canalQX(m) + 0.5);
   const hasCol0Land = Q0 <= 0;
+  const TH = themeOf(m);
+  if (TH.perimeter === 'none') {
+    if (hasCanal(m)) for (let y = 1; y < m.h; y += 3) s.push({ kind: 'bollard', x: canalQX(m) + 0.28, y: y + 0.2, depth: canalQX(m) + 0.28 + y });
+    return s;
+  }
+  const gate = m.flavour === 'docklands' || m.flavour === 'tutorial';
   for (let x = Math.max(0, Q0 + 1); x < m.w; x++) {
     if (rooms.some((r) => r.y0 <= 0 && x >= r.x0 && x <= r.x1)) continue;
     s.push({ kind: 'fence', x, y: -0.6, alongY: false, depth: -10 });
@@ -831,10 +870,10 @@ function buildScenery(m, p) {
   }
   for (let x = Math.max(0, Q0 + 1); x < m.w; x++) {
     if (rooms.some((r) => x >= r.x0 && x <= r.x1 && r.y1 >= m.h - 1)) continue;
-    if (x === 6 || x === 7) continue; // open gate
+    if (gate && (x === 6 || x === 7)) continue; // open gate
     s.push({ kind: 'fence', x, y: m.h - 0.4, alongY: false, depth: x + m.h + 0.06 });
   }
-  for (let y = 1; y < m.h; y += 3) s.push({ kind: 'bollard', x: canalQX(m) + 0.28, y: y + 0.2, depth: canalQX(m) + 0.28 + y });
+  if (hasCanal(m)) for (let y = 1; y < m.h; y += 3) s.push({ kind: 'bollard', x: canalQX(m) + 0.28, y: y + 0.2, depth: canalQX(m) + 0.28 + y });
   void hasCol0Land;
   return s;
 }
@@ -867,6 +906,7 @@ export function drawBackdrop(g, m, z, now) {
     BACK.set(m, bc);
   }
   g.drawImage(bc.cv, bc.minX * z, bc.minY * z, bc.w * z, bc.h * z);
+  if (themeOf(m).backdrop !== 'docks') return;
   // crane warning lights blink
   const blink = (Math.floor((now || 0) / 700) % 2) ? 0.95 : 0.2;
   const p = toWorld(4, -3.55);
@@ -878,6 +918,8 @@ export function drawBackdrop(g, m, z, now) {
 }
 function paintBackdrop(g, m, z, offX, offY) {
   g.translate(offX, offY);
+  const bd = themeOf(m).backdrop;
+  if (bd !== 'docks') { paintThemeBackdrop(g, m, z, bd); return; }
   const now = 0;
   const dark = (k) => palOf('#2c3036', 0.9 * k, 0.65 * k, 0.5 * k);
   // far stacks beyond the north fence
@@ -916,7 +958,7 @@ function paintBackdrop(g, m, z, offX, offY) {
     g.beginPath(); g.arc(lp2[0], lp2[1], 2.2 * z, 0, Math.PI * 2); g.fill();
   }
   // far canal bank warehouses with a few lit windows
-  for (let y = -3; y < m.h + 3; y += 4) {
+  if (hasCanal(m)) for (let y = -3; y < m.h + 3; y += 4) {
     const p = toWorld(-5.3, y + 1.5);
     const f = box(g, p.x * z, p.y * z, z, -0.6, -2, 0.6, 2, 0, 46 + hash(y, 1) * 22, dark(1));
     onFace(g, f.R, () => {
@@ -926,6 +968,107 @@ function paintBackdrop(g, m, z, offX, offY) {
       }
       corrugate(g, 16, 0, 1, 0.5);
     });
+  }
+}
+
+// Location backdrops beyond the playable edge: city skyline, bayou trees, factory chimneys, estate rooftops.
+function paintThemeBackdrop(g, m, z, bd) {
+  const r = rng(777 + m.w * 13 + m.h);
+  const spots = [];
+  for (let x = -2; x < m.w + 3; x += 1.6) spots.push([x, -4.2 - r() * 1.6]);
+  for (let y = -1; y < m.h + 3; y += 1.6) spots.push([-4.2 - r() * 1.6, y]);
+  spots.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]));
+  const lit = (F, cols, rows, warm, p) => onFace(g, F, () => {
+    for (let i = 0; i < cols; i++) for (let k = 0; k < rows; k++) {
+      if (r() > p) continue;
+      g.fillStyle = warm ? `rgba(255,${180 + Math.floor(r() * 40)},110,${0.35 + r() * 0.3})` : `rgba(150,200,255,${0.25 + r() * 0.25})`;
+      g.fillRect((i + 0.25) / cols, (k + 0.25) / rows, 0.45 / cols, 0.4 / rows);
+    }
+  });
+  for (const [x, y] of spots) {
+    const p = toWorld(x, y), sx = p.x * z, sy = p.y * z;
+    if (bd === 'skyline') {
+      const H = 70 + r() * 150, w = 0.6 + r() * 0.4;
+      const k = 0.55 + r() * 0.25;
+      const f = box(g, sx, sy, z, -w, -w, w, w, 0, H, { t: rgb([40, 34, 52], k), r: rgb([30, 26, 40], k), l: rgb([22, 20, 30], k) });
+      lit(f.L, 5, Math.round(H / 14), r() < 0.7, 0.35); lit(f.R, 5, Math.round(H / 14), true, 0.3);
+      if (r() < 0.35) {
+        const c = ['255,70,160', '70,220,255', '255,170,60'][Math.floor(r() * 3)];
+        onFace(g, f.L, () => { g.fillStyle = `rgba(${c},0.85)`; g.fillRect(0.2, 0.08, 0.6, 0.03); g.fillStyle = `rgba(${c},0.25)`; g.fillRect(0.15, 0.04, 0.7, 0.11); });
+      }
+      if (r() < 0.3) box(g, sx, sy, z, -0.15, -0.15, 0.15, 0.15, H, H + 12, { t: '#2a2420', r: '#1e1a18', l: '#161210' });
+    } else if (bd === 'trees') {
+      const H = 50 + r() * 70;
+      line(g, P(sx, sy, z, 0, 0, 0), P(sx, sy, z, 0, 0, H * 0.7), '#141410', 3 * z);
+      for (let i = 0; i < 5; i++) {
+        const c = P(sx, sy, z, (r() - 0.5) * 0.6, (r() - 0.5) * 0.4, H * (0.55 + i * 0.1));
+        g.fillStyle = i % 2 ? '#141c14' : '#1a241a'; g.beginPath(); g.ellipse(c[0], c[1], (16 + r() * 10) * z, (8 + r() * 5) * z, 0, 0, Math.PI * 2); g.fill();
+        // hanging moss
+        g.strokeStyle = 'rgba(70,80,60,0.35)'; g.lineWidth = 0.8 * z;
+        for (let k = 0; k < 4; k++) { const mx = c[0] + (r() - 0.5) * 24 * z; g.beginPath(); g.moveTo(mx, c[1]); g.lineTo(mx + (r() - 0.5) * 2 * z, c[1] + (8 + r() * 12) * z); g.stroke(); }
+      }
+      if (r() < 0.2) {
+        const f = box(g, sx, sy, z, -0.5, -0.4, 0.5, 0.4, 6, 30, { t: '#2a2218', r: '#201a12', l: '#18140e' });
+        lit(f.L, 2, 1, true, 0.6);
+        for (const [dx, dy] of [[-0.45, 0.35], [0.45, 0.35]]) line(g, P(sx, sy, z, dx, dy, 0), P(sx, sy, z, dx, dy, 6), '#1a140e', 1.4 * z);
+      }
+    } else if (bd === 'chimneys') {
+      const H = 40 + r() * 60;
+      const f = box(g, sx, sy, z, -0.75, -0.7, 0.75, 0.7, 0, H, { t: '#2c2a28', r: '#22201e', l: '#1a1816' });
+      onFace(g, f.L, () => corrugate(g, 14, 0, 1, 0.5));
+      lit(f.R, 6, 2, true, 0.25);
+      // sawtooth roof
+      for (let k = 0; k < 3; k++) fillPts(g, [P(sx, sy, z, -0.75 + k * 0.5, -0.7, H), P(sx, sy, z, -0.75 + k * 0.5, 0.7, H), P(sx, sy, z, -0.25 + k * 0.5, 0.7, H + 12), P(sx, sy, z, -0.25 + k * 0.5, -0.7, H + 12)], k % 2 ? '#26221e' : '#302a24');
+      if (r() < 0.45) {
+        const CH = H + 70 + r() * 70;
+        box(g, sx, sy, z, -0.12, -0.12, 0.12, 0.12, H, CH, { t: '#3a2c26', r: '#2c221e', l: '#201916' });
+        const tp = P(sx, sy, z, 0, 0, CH);
+        for (let k = 0; k < 5; k++) { g.fillStyle = `rgba(70,64,60,${0.25 - k * 0.04})`; g.beginPath(); g.arc(tp[0] + k * 9 * z, tp[1] - k * 7 * z, (6 + k * 3) * z, 0, Math.PI * 2); g.fill(); }
+        g.fillStyle = 'rgba(255,50,40,0.85)'; g.beginPath(); g.arc(tp[0], tp[1] + 3 * z, 1.6 * z, 0, Math.PI * 2); g.fill();
+        const gl = g.createRadialGradient(tp[0], tp[1] + 30 * z, 0, tp[0], tp[1] + 30 * z, 50 * z);
+        gl.addColorStop(0, 'rgba(255,120,40,0.08)'); gl.addColorStop(1, 'rgba(255,120,40,0)'); g.fillStyle = gl; g.fillRect(tp[0] - 50 * z, tp[1] - 20 * z, 100 * z, 100 * z);
+      }
+    } else if (bd === 'rooftops') {
+      if (r() < 0.12) {
+        const H = 160 + r() * 60;
+        const f = box(g, sx, sy, z, -0.7, -0.7, 0.7, 0.7, 0, H, { t: '#2a2c32', r: '#202228', l: '#181a20' });
+        lit(f.L, 6, Math.round(H / 12), true, 0.3); lit(f.R, 6, Math.round(H / 12), true, 0.25);
+        continue;
+      }
+      const H = 34 + r() * 14;
+      const f = box(g, sx, sy, z, -0.8, -0.55, 0.8, 0.55, 0, H, { t: '#3a2a24', r: '#2e221e', l: '#241a16' });
+      lit(f.L, 4, 2, true, 0.4);
+      fillPts(g, [P(sx, sy, z, -0.8, -0.55, H), P(sx, sy, z, 0.8, -0.55, H), P(sx, sy, z, 0.8, 0, H + 16), P(sx, sy, z, -0.8, 0, H + 16)], '#22242a');
+      fillPts(g, [P(sx, sy, z, -0.8, 0, H + 16), P(sx, sy, z, 0.8, 0, H + 16), P(sx, sy, z, 0.8, 0.55, H), P(sx, sy, z, -0.8, 0.55, H)], '#2c2e34');
+      box(g, sx, sy, z, 0.3, -0.1, 0.45, 0.05, H + 8, H + 24, { t: '#4a3026', r: '#3a241e', l: '#2a1a16' });
+    }
+  }
+}
+
+// Weather and time-of-day overlay in screen space (purely visual).
+export function drawWeather(g, w, h, m, now) {
+  const env = (m && m.env) || {};
+  if (env.time === 'night') { g.fillStyle = 'rgba(4,6,14,0.16)'; g.fillRect(0, 0, w, h); }
+  if (env.weather === 'rain') {
+    const t = (now || 0) / 1000;
+    g.save(); g.strokeStyle = 'rgba(170,190,220,0.18)'; g.lineWidth = Math.max(1, w / 900);
+    g.beginPath();
+    for (let i = 0; i < 140; i++) {
+      const sx = (hash(i, 1) * w + t * 60) % w, sy = (hash(i, 2) * h + t * (700 + hash(i, 3) * 300)) % h;
+      g.moveTo(sx, sy); g.lineTo(sx - 4, sy + 14 + hash(i, 4) * 8);
+    }
+    g.stroke(); g.restore();
+  } else if (env.weather === 'fog') {
+    const t = (now || 0) / 1000;
+    g.save();
+    for (let i = 0; i < 4; i++) {
+      const x = ((hash(i, 7) * w + t * 12 * (i + 1)) % (w * 1.6)) - w * 0.3, y = h * (0.25 + 0.18 * i);
+      const gr = g.createRadialGradient(x, y, 0, x, y, w * 0.45);
+      gr.addColorStop(0, 'rgba(150,170,160,0.09)'); gr.addColorStop(1, 'rgba(150,170,160,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    }
+    g.fillStyle = 'rgba(120,140,130,0.05)'; g.fillRect(0, 0, w, h);
+    g.restore();
   }
 }
 
@@ -954,6 +1097,7 @@ function footprints0(t) {
   else if (d === 'shelf') out.push([-0.4, -0.16, 0.4, 0.16, 22]);
   else if (d === 'lamp') out.push([-0.04, -0.04, 0.04, 0.04, 54]);
   else if (d === 'fence') out.push([-0.04, -0.04, 0.04, 0.04, 30]);
+  else if (d && !t.sub && hasPackArt(d)) out.push(...packFootprint(t));
   return out;
 }
 
@@ -993,7 +1137,97 @@ export function canalQX(m) {
     if (!all) break;
     n++;
   }
-  return n ? n - 0.5 : -1.5;
+  return n ? n - 0.5 : -MARGIN - 0.5; // no canal: land runs right out to the edge of the scene
+}
+export function hasCanal(m) { return canalQX(m) > 0; }
+export function themeOf(m) { return THEMES[(m && m.theme) || 'docklands'] || THEMES.docklands; }
+
+// ---------- location ground ----------
+const GROUND_RGB = {
+  edge: [74, 72, 67], shed: [48, 50, 49], water: [12, 30, 38], asphalt: [40, 40, 44], pavement: [74, 74, 76],
+  grass: [42, 58, 36], mud: [58, 48, 34], boardwalk: [14, 24, 26], rail: [54, 50, 46], grate: [30, 34, 38],
+  factory: [62, 68, 62], dirt: [70, 62, 50],
+};
+const INTERIOR_RGB = { club: [30, 24, 36], shop: [112, 112, 104], house: [88, 66, 48], shack: [74, 56, 40], works: [70, 74, 78] };
+function groundRGB(kind, t, th) {
+  if (kind === 'out') return th.out;
+  if (kind === 'interior' && t && INTERIOR_RGB[t.ghue || t.hue]) return INTERIOR_RGB[t.ghue || t.hue];
+  if (kind === 'door' || kind === 'interior') return [64, 62, 58];
+  if (kind === 'yard') return th.yard;
+  return GROUND_RGB[kind] || th.yard;
+}
+function groundDetail(g, m, r0, Q0, M) {
+  const r = rng(5150 + m.w * 31 + m.h);
+  const at = (x, y) => (x >= 0 && y >= 0 && x < m.w && y < m.h ? m.tiles[y][x] : null);
+  const same = (x, y, t) => { const n = at(x, y); return n && n.t === t.t && (n.hue || '') === (t.hue || ''); };
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+    const t = m.tiles[y][x], k = t.t, x0 = x - 0.5, y0 = y - 0.5;
+    if (k === 'grass') {
+      for (let i = 0; i < 14; i++) { g.strokeStyle = r() < 0.5 ? 'rgba(90,120,60,0.35)' : 'rgba(10,20,8,0.35)'; g.lineWidth = 0.025; const px = x0 + r(), py = y0 + r(); g.beginPath(); g.moveTo(px, py); g.lineTo(px + 0.03, py - 0.08); g.stroke(); }
+      if (r() < 0.15) { g.fillStyle = 'rgba(200,190,120,0.25)'; g.beginPath(); g.arc(x0 + r(), y0 + r(), 0.03, 0, 7); g.fill(); }
+    } else if (k === 'mud') {
+      for (let i = 0; i < 4; i++) {
+        const px = x0 + r(), py = y0 + r(), rad = 0.1 + r() * 0.25;
+        const gr = g.createRadialGradient(px, py, 0, px, py, rad);
+        gr.addColorStop(0, r() < 0.5 ? 'rgba(20,16,10,0.45)' : 'rgba(120,110,80,0.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.beginPath(); g.arc(px, py, rad, 0, 7); g.fill();
+      }
+      if (r() < 0.3) { g.fillStyle = 'rgba(130,140,150,0.12)'; g.beginPath(); g.ellipse(x0 + r(), y0 + r(), 0.25, 0.12, r() * 3, 0, 7); g.fill(); }
+    } else if (k === 'boardwalk') {
+      const alongY = (same(x, y - 1, t) || same(x, y + 1, t)) && !(same(x - 1, y, t) || same(x + 1, y, t));
+      for (let i = 0; i < 6; i++) {
+        g.fillStyle = `rgb(${92 + ((i * 37 + x * 13 + y * 7) % 20)},${70 + ((i * 11 + x) % 14)},${46})`;
+        if (alongY) g.fillRect(x0 + 0.02, y0 + i / 6 + 0.015, 0.96, 1 / 6 - 0.03); else g.fillRect(x0 + i / 6 + 0.015, y0 + 0.02, 1 / 6 - 0.03, 0.96);
+      }
+      g.fillStyle = 'rgba(0,0,0,0.25)'; if (alongY) g.fillRect(x0 + 0.02, y0, 0.06, 1); else g.fillRect(x0, y0 + 0.02, 1, 0.06);
+      g.fillStyle = '#2a2016'; for (const [px, py] of [[x0 + 0.04, y0 + 0.04], [x0 + 0.88, y0 + 0.88]]) g.fillRect(px, py, 0.08, 0.08);
+    } else if (k === 'rail') {
+      const alongY = (same(x, y - 1, t) || same(x, y + 1, t)) && !(same(x - 1, y, t) || same(x + 1, y, t));
+      for (let i = 0; i < 30; i++) { g.fillStyle = r() < 0.5 ? 'rgba(120,112,100,0.35)' : 'rgba(10,10,10,0.35)'; g.fillRect(x0 + r(), y0 + r(), 0.035, 0.035); }
+      g.fillStyle = '#3a2a1e';
+      for (let i = 0; i < 4; i++) { const u = (i + 0.5) / 4 - 0.06; if (alongY) g.fillRect(x0 + 0.08, y0 + u, 0.84, 0.12); else g.fillRect(x0 + u, y0 + 0.08, 0.12, 0.84); }
+      for (const v of [0.3, 0.7]) { g.fillStyle = '#7a7c80'; if (alongY) g.fillRect(x0 + v - 0.03, y0, 0.06, 1); else g.fillRect(x0, y0 + v - 0.03, 1, 0.06); g.fillStyle = 'rgba(255,240,220,0.35)'; if (alongY) g.fillRect(x0 + v - 0.01, y0, 0.015, 1); else g.fillRect(x0, y0 + v - 0.01, 1, 0.015); }
+    } else if (k === 'grate') {
+      g.strokeStyle = 'rgba(120,130,140,0.35)'; g.lineWidth = 0.02;
+      for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(x0 + i / 8, y0); g.lineTo(x0 + i / 8, y0 + 1); g.moveTo(x0, y0 + i / 8); g.lineTo(x0 + 1, y0 + i / 8); g.stroke(); }
+      g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(x0 + 0.1, y0 + 0.1, 0.8, 0.8);
+      g.strokeStyle = 'rgba(120,130,140,0.25)'; for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(x0 + 0.1 + i * 0.1, y0 + 0.1); g.lineTo(x0 + 0.1 + i * 0.1, y0 + 0.9); g.stroke(); }
+      const edge = (nx, ny) => !same(nx, ny, t);
+      g.fillStyle = 'rgba(210,170,40,0.7)';
+      if (edge(x, y - 1)) g.fillRect(x0, y0, 1, 0.06); if (edge(x, y + 1)) g.fillRect(x0, y0 + 0.94, 1, 0.06);
+      if (edge(x - 1, y)) g.fillRect(x0, y0, 0.06, 1); if (edge(x + 1, y)) g.fillRect(x0 + 0.94, y0, 0.06, 1);
+    } else if (k === 'factory') {
+      const edge = (nx, ny) => { const n = at(nx, ny); return n && n.t !== 'factory'; };
+      g.fillStyle = 'rgba(210,170,40,0.55)';
+      if (edge(x, y - 1)) g.fillRect(x0 + 0.05, y0 + 0.05, 0.9, 0.05); if (edge(x, y + 1)) g.fillRect(x0 + 0.05, y0 + 0.9, 0.9, 0.05);
+      if (edge(x - 1, y)) g.fillRect(x0 + 0.05, y0 + 0.05, 0.05, 0.9); if (edge(x + 1, y)) g.fillRect(x0 + 0.9, y0 + 0.05, 0.05, 0.9);
+      if (r() < 0.2) { g.fillStyle = 'rgba(10,10,10,0.35)'; g.beginPath(); g.arc(x0 + r(), y0 + r(), 0.12 + r() * 0.15, 0, 7); g.fill(); }
+    } else if (k === 'dirt') {
+      for (let i = 0; i < 24; i++) { g.fillStyle = r() < 0.5 ? 'rgba(140,128,110,0.3)' : 'rgba(20,16,12,0.3)'; g.fillRect(x0 + r(), y0 + r(), 0.03, 0.03); }
+    } else if (k === 'pavement') {
+      g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 0.02;
+      g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y0 + 1); g.moveTo(x0, y); g.lineTo(x0 + 1, y); g.stroke();
+      const kerb = (nx, ny) => { const n = at(nx, ny); return n && n.t === 'asphalt'; };
+      g.fillStyle = 'rgba(170,168,160,0.6)';
+      if (kerb(x, y - 1)) g.fillRect(x0, y0, 1, 0.08); if (kerb(x, y + 1)) g.fillRect(x0, y0 + 0.92, 1, 0.08);
+      if (kerb(x - 1, y)) g.fillRect(x0, y0, 0.08, 1); if (kerb(x + 1, y)) g.fillRect(x0 + 0.92, y0, 0.08, 1);
+    } else if (k === 'asphalt') {
+      // dashed centre line where a road runs two tiles wide or more
+      const ns = same(x, y - 1, t) && same(x, y + 1, t), ew = same(x - 1, y, t) && same(x + 1, y, t);
+      if (ew && !ns && (y % 4 === 1)) { g.fillStyle = 'rgba(220,214,190,0.35)'; g.fillRect(x0 + 0.2, y + 0.46, 0.6, 0.08); }
+      if (ns && !ew && (x % 4 === 1)) { g.fillStyle = 'rgba(220,214,190,0.35)'; g.fillRect(x + 0.46, y0 + 0.2, 0.08, 0.6); }
+      if (r() < 0.3) { g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x0 + r() * 0.6, y0 + r() * 0.6, 0.3, 0.2); }
+    } else if (k === 'interior' && INTERIOR_RGB[t.ghue || t.hue]) {
+      const h = t.ghue || t.hue;
+      if (h === 'club') { for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j + x + y) % 2 ? 'rgba(0,0,0,0.35)' : 'rgba(120,60,160,0.18)'; g.fillRect(x0 + i * 0.5, y0 + j * 0.5, 0.5, 0.5); } if (r() < 0.3) { g.fillStyle = 'rgba(255,80,170,0.12)'; g.beginPath(); g.arc(x0 + r(), y0 + r(), 0.3, 0, 7); g.fill(); } }
+      else if (h === 'shop') { for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if ((i + j) % 2) { g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x0 + i / 3, y0 + j / 3, 1 / 3, 1 / 3); } }
+      else if (h === 'house' || h === 'shack') { g.fillStyle = 'rgba(0,0,0,0.28)'; for (let i = 1; i < (h === 'house' ? 6 : 4); i++) g.fillRect(x0, y0 + i / (h === 'house' ? 6 : 4), 1, 0.02); if (h === 'house' && (x + y) % 3 === 0) { g.fillStyle = 'rgba(120,40,30,0.25)'; g.fillRect(x0 + 0.15, y0 + 0.15, 0.7, 0.7); } }
+      else if (h === 'works') { g.strokeStyle = 'rgba(200,210,220,0.12)'; g.lineWidth = 0.02; for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) { const cx = x0 + (i + 0.5) / 6, cy = y0 + (j + 0.5) / 6, d = (i + j) % 2 ? 0.05 : -0.05; g.beginPath(); g.moveTo(cx - 0.04, cy - d); g.lineTo(cx + 0.04, cy + d); g.stroke(); } }
+      // walls darken the room edges
+      g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x0, y0, 1, 1);
+    }
+  }
+  void r0; void Q0; void M;
 }
 
 export function bakeYard(m) {
@@ -1010,14 +1244,24 @@ export function bakeYard(m) {
   const SC = () => g.setTransform(S, 0, 0, S, -minX * S, -minY * S); // world coords
   const inMap = (x, y) => x >= 0 && y >= 0 && x < m.w && y < m.h;
   const r = rng(7331);
-  const QX = canalQX(m); // canal / quay boundary (2.5 on the Docklands yard; off-map for others)
+  const QX = canalQX(m); // canal / quay boundary (2.5 on the Docklands yard; off-scene when there is no canal)
   const Q0 = Math.round(QX + 0.5); // first land column
+  const CANAL = QX > 0;
   const DOCK = m.flavour === 'docklands' || m.flavour === 'tutorial';
+  const TH = themeOf(m), THID = m.theme || 'docklands';
+  const HARD = new Set(['yard', 'edge', 'shed', 'asphalt', 'pavement', 'factory', 'door']);
+  const tileT = (x, y) => (inMap(x, y) ? m.tiles[y][x].t : 'out');
+  const hardAt = (x, y) => { const tt = tileT(Math.round(x), Math.round(y)); return tt === 'out' || HARD.has(tt); };
+  const hardClip = () => {
+    g.beginPath();
+    for (let ty = -M; ty < m.h + M; ty++) for (let tx = Q0; tx < m.w + M; tx++) if (hardAt(tx, ty)) g.rect(tx - 0.5, ty - 0.5, 1.01, 1.01);
+    g.clip();
+  };
 
   g.fillStyle = '#101113'; g.fillRect(0, 0, W, H);
   GT();
   // --- water ---
-  {
+  if (CANAL) {
     const wg = g.createLinearGradient(-M, 0, QX, 0);
     wg.addColorStop(0, '#0a171c'); wg.addColorStop(0.6, '#0d2129'); wg.addColorStop(1, '#0a1a20');
     g.fillStyle = wg; g.fillRect(-M - 1, -M - 1, QX + M + 1, m.h + 2 * M + 2);
@@ -1036,13 +1280,8 @@ export function bakeYard(m) {
   // --- land tiles ---
   for (let ty = -M; ty < m.h + M; ty++) for (let tx = Q0; tx < m.w + M; tx++) {
     const t = inMap(tx, ty) ? m.tiles[ty][tx] : null;
-    const kind = t ? t.t : (tx === Q0 ? 'edge' : 'out');
-    let c;
-    if (kind === 'edge') c = [74, 72, 67];
-    else if (kind === 'shed') c = [48, 50, 49];
-    else if (kind === 'out') c = [44, 44, 46];
-    else if (kind === 'water') c = [12, 30, 38];
-    else c = [64, 62, 58];
+    const kind = t ? t.t : (tx === Q0 && CANAL ? 'edge' : 'out');
+    const c = groundRGB(kind, t, TH);
     const k = 0.9 + 0.14 * hash(Math.floor(tx / 2), Math.floor(ty / 2), 1) + 0.04 * hash(tx, ty, 2);
     g.fillStyle = rgb(c, k);
     g.fillRect(tx - 0.5, ty - 0.5, 1.02, 1.02);
@@ -1050,19 +1289,19 @@ export function bakeYard(m) {
   // inland water (editor maps): concrete coping where water meets land
   for (let ty = 0; ty < m.h; ty++) for (let tx = Math.max(0, Q0); tx < m.w; tx++) {
     if (m.tiles[ty][tx].t !== 'water') continue;
-    const land = (x, y) => inMap(x, y) && m.tiles[y][x].t !== 'water';
-    g.fillStyle = '#7a766c';
+    const land = (x, y) => inMap(x, y) && m.tiles[y][x].t !== 'water' && m.tiles[y][x].t !== 'boardwalk';
+    g.fillStyle = THID === 'bayou' ? '#3a3020' : '#7a766c';
     if (land(tx, ty - 1)) g.fillRect(tx - 0.5, ty - 0.5, 1, 0.14);
     if (land(tx, ty + 1)) g.fillRect(tx - 0.5, ty + 0.36, 1, 0.14);
     if (land(tx - 1, ty)) g.fillRect(tx - 0.5, ty - 0.5, 0.14, 1);
     if (land(tx + 1, ty)) g.fillRect(tx + 0.36, ty - 0.5, 0.14, 1);
   }
   // --- far bank strip ---
-  g.fillStyle = '#26262a'; g.fillRect(-M - 1, -M - 1, 1.7, m.h + 2 * M + 2);
+  if (CANAL) { g.fillStyle = THID === 'bayou' ? '#1a1c14' : '#26262a'; g.fillRect(-M - 1, -M - 1, 1.7, m.h + 2 * M + 2); }
   // --- texture noise (world space so it is not sheared) ---
   {
     g.save();
-    GT(); g.beginPath(); g.rect(QX, -M - 1, m.w + M, m.h + 2 * M + 2); g.rect(-M - 1, -M - 1, 1.7, m.h + 2 * M + 2);
+    GT(); g.beginPath(); g.rect(QX, -M - 1, m.w + M - QX, m.h + 2 * M + 2); if (CANAL) g.rect(-M - 1, -M - 1, 1.7, m.h + 2 * M + 2);
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clip();
     const pat = g.createPattern(noiseTile(), 'repeat');
@@ -1078,8 +1317,11 @@ export function bakeYard(m) {
     gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = gr; g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
   }
+  // --- location ground textures (grass, mud, boardwalks, rails, grating, interiors) ---
+  groundDetail(g, m, r, Q0, M);
   // --- room floors ---
   for (const room of Object.values(p.rooms)) {
+    if (room.hue !== 'office' && room.hue !== 'cafe') continue;
     const x0 = room.x0, y0 = room.y0, w = room.x1 - room.x0, h = room.y1 - room.y0;
     if (room.hue === 'cafe') {
       for (let yy = 0; yy < h * 2; yy++) for (let xx = 0; xx < w * 2; xx++) {
@@ -1122,6 +1364,7 @@ export function bakeYard(m) {
     }
   }
   // --- slab joints + faint grid ---
+  g.save(); hardClip();
   g.lineWidth = 0.028;
   for (let x = Q0 + 0.5; x < m.w + M; x += 2) {
     g.strokeStyle = 'rgba(0,0,0,0.38)'; g.beginPath(); g.moveTo(x, -M); g.lineTo(x, m.h + M); g.stroke();
@@ -1129,16 +1372,20 @@ export function bakeYard(m) {
   for (let y = -M + 0.5; y < m.h + M; y += 2) {
     g.strokeStyle = 'rgba(0,0,0,0.38)'; g.beginPath(); g.moveTo(QX, y); g.lineTo(m.w + M, y); g.stroke();
   }
+  g.restore();
   g.lineWidth = 0.012; g.strokeStyle = 'rgba(255,240,220,0.055)';
   for (let x = Q0; x <= m.w; x++) { g.beginPath(); g.moveTo(x - 0.5, -0.5); g.lineTo(x - 0.5, m.h - 0.5); g.stroke(); }
   for (let y = 0; y <= m.h; y++) { g.beginPath(); g.moveTo(QX, y - 0.5); g.lineTo(m.w - 0.5, y - 0.5); g.stroke(); }
-  // --- quay coping with hazard paint ---
-  g.fillStyle = '#7a766c'; g.fillRect(QX, -M - 1, 0.3, m.h + 2 * M + 2);
-  for (let y = -M; y < m.h + M; y += 0.5) {
-    g.fillStyle = 'rgba(200,160,44,0.75)'; g.fillRect(QX + 0.02, y, 0.14, 0.25);
-    g.fillStyle = 'rgba(20,20,20,0.75)'; g.fillRect(QX + 0.02, y + 0.25, 0.14, 0.25);
+  // --- quay coping with hazard paint (muddy bank in the bayou) ---
+  if (CANAL && THID === 'bayou') { g.fillStyle = '#3a3020'; g.fillRect(QX, -M - 1, 0.3, m.h + 2 * M + 2); }
+  else if (CANAL) {
+    g.fillStyle = '#7a766c'; g.fillRect(QX, -M - 1, 0.3, m.h + 2 * M + 2);
+    for (let y = -M; y < m.h + M; y += 0.5) {
+      g.fillStyle = 'rgba(200,160,44,0.75)'; g.fillRect(QX + 0.02, y, 0.14, 0.25);
+      g.fillStyle = 'rgba(20,20,20,0.75)'; g.fillRect(QX + 0.02, y + 0.25, 0.14, 0.25);
+    }
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(QX + 0.28, -M - 1, 0.04, m.h + 2 * M + 2);
   }
-  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(QX + 0.28, -M - 1, 0.04, m.h + 2 * M + 2);
   // --- painted yard markings ---
   const paint = (x0, y0, x1, y1, col, w = 0.07, dash) => {
     g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash || []);
@@ -1168,7 +1415,8 @@ export function bakeYard(m) {
     stencil('NO STACKING', 12.5, 10.5, 0.42, 'rgba(206,168,58,0.4)');
     stencil('KEEP CLEAR', 7.2, 1.5, 0.45, 'rgba(206,168,58,0.38)', Math.PI / 2);
   }
-  // cracks
+  // cracks, tyre marks and oil only on hard ground
+  g.save(); hardClip();
   g.lineCap = 'round';
   for (let i = 0; i < 90; i++) {
     let x = QX + 0.5 + r() * (m.w + 2 - QX), y = -2 + r() * (m.h + 4);
@@ -1201,6 +1449,7 @@ export function bakeYard(m) {
     gr.addColorStop(0, 'rgba(6,6,8,0.55)'); gr.addColorStop(0.6, 'rgba(10,10,14,0.3)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = gr; g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
   }
+  g.restore();
   // puddles reflecting the dusk sky
   const puddle = (x, y, s) => {
     const parts = [];
@@ -1215,11 +1464,11 @@ export function bakeYard(m) {
     g.restore();
   };
   for (const [x, y, s] of [[5.2, 2.2, 0.9], [7.6, 10.8, 1.1], [12.3, 13.6, 0.8], [18.8, 9.8, 1.0], [14.2, 2.0, 0.6], [4.6, 14.3, 0.7], [11.6, 7.4, 0.5], [20.5, 2.6, 0.7]]) {
-    if (x < m.w && y < m.h) puddle(x, y, s);
+    if (x < m.w && y < m.h && hardAt(x, y)) puddle(x, y, s);
   }
   // steel road plates laid over trench work
   for (const [x, y, w, h] of [[6.2, 6.6, 1.2, 0.8], [12.6, 11.2, 0.9, 1.3], [19.6, 4.8, 1.0, 0.9]]) {
-    if (x >= m.w || y >= m.h) continue;
+    if (x >= m.w || y >= m.h || !hardAt(x, y) || !DOCK) continue;
     g.fillStyle = 'rgba(70,74,78,0.9)'; g.fillRect(x - w / 2, y - h / 2, w, h);
     g.strokeStyle = 'rgba(10,10,10,0.6)'; g.lineWidth = 0.03; g.strokeRect(x - w / 2, y - h / 2, w, h);
     g.lineWidth = 0.02;
@@ -1233,7 +1482,7 @@ export function bakeYard(m) {
   }
   // drains
   for (const [x, y] of [[6, 11], [12, 10], [18, 3], [9, 2], [14, 14]]) {
-    if (x >= m.w || y >= m.h) continue;
+    if (x >= m.w || y >= m.h || !hardAt(x, y) || THID === 'bayou') continue;
     g.fillStyle = '#121212'; g.fillRect(x - 0.22, y - 0.14, 0.44, 0.28);
     g.strokeStyle = 'rgba(120,120,120,0.45)'; g.lineWidth = 0.025;
     for (let k = 1; k < 6; k++) { g.beginPath(); g.moveTo(x - 0.22 + k * 0.073, y - 0.14); g.lineTo(x - 0.22 + k * 0.073, y + 0.14); g.stroke(); }
@@ -1256,15 +1505,16 @@ export function bakeYard(m) {
   }
   // litter: paper and cans
   for (let i = 0; i < 40; i++) {
-    const x = Q0 + 0.5 + r() * (m.w - Q0 - 0.5), y = r() * m.h;
+    const x = Math.max(0, Q0) + 0.5 + r() * (m.w - Math.max(0, Q0) - 0.5), y = r() * m.h;
     g.fillStyle = r() < 0.6 ? 'rgba(200,190,170,0.35)' : 'rgba(150,60,40,0.5)';
     g.save(); g.translate(x, y); g.rotate(r() * 3); g.fillRect(-0.05, -0.03, 0.1, 0.06); g.restore();
   }
   // outside the playable yard: darker and dirtier
   g.fillStyle = 'rgba(0,0,0,0.38)';
   g.beginPath();
-  g.rect(QX + 0.32, -M - 1, m.w + M + 2, m.h + 2 * M + 2);
-  g.rect(m.w - 0.5, -0.5, -(m.w - 0.5 - QX - 0.32), m.h);
+  const IX = CANAL ? QX + 0.32 : -0.5;
+  if (CANAL) g.rect(IX, -M - 1, m.w + M + 2, m.h + 2 * M + 2); else g.rect(-M - 1, -M - 1, m.w + 2 * M + 4, m.h + 2 * M + 2);
+  g.rect(m.w - 0.5, -0.5, -(m.w - 0.5 - IX), m.h);
   g.fill('evenodd');
 
   // --- soft cast shadows + contact occlusion ---
@@ -1371,7 +1621,9 @@ export function drawYard(g, m, z, now) {
     let R, col, a;
     if (L.kind === 'lamp') { R = 2.6; col = '255,170,80'; a = 0.26; }
     else if (L.kind === 'fire') { R = 2.0; col = '255,120,40'; a = 0.24 + 0.05 * Math.sin(t * 9 + L.x) + 0.04 * Math.sin(t * 23 + L.y); }
-    else if (L.kind === 'neon') { R = 2.2; col = '255,80,150'; a = 0.16; }
+    else if (L.kind === 'neon') { R = 2.2; col = L.col || '255,80,150'; a = 0.16; }
+    else if (L.kind === 'lantern') { R = 2.0; col = '255,180,80'; a = 0.22 + 0.03 * Math.sin(t * 5 + L.x); }
+    else if (L.kind === 'warm') { R = 2.2; col = '255,190,120'; a = 0.16; }
     else if (L.kind === 'wall') { R = 1.3; col = L.hue === 'cafe' ? '255,180,110' : '200,225,255'; a = 0.2; }
     else { R = 2.4; col = '170,205,255'; a = 0.26; }
     const c = toWorld(L.x + (L.kind === 'lamp' ? 0.3 : 0), L.y + (L.kind === 'lamp' ? 0.05 : 0));
@@ -1381,7 +1633,7 @@ export function drawYard(g, m, z, now) {
     gr.addColorStop(0, `rgba(${col},${a})`); gr.addColorStop(0.5, `rgba(${col},${a * 0.45})`); gr.addColorStop(1, `rgba(${col},0)`);
     g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill();
     g.restore();
-    if (L.kind === 'lamp' && L.x <= 4) {
+    if (L.kind === 'lamp' && L.x <= 4 && hasCanal(m)) {
       // reflection streak on the canal
       const w0 = toWorld(1.6, L.y);
       const gr2 = g.createLinearGradient(w0.x * z, (w0.y - 10) * z, w0.x * z, (w0.y + 30) * z);
@@ -1392,12 +1644,14 @@ export function drawYard(g, m, z, now) {
   g.restore();
 }
 
-export function drawNightSky(g, w, h) {
+export function drawNightSky(g, w, h, m) {
+  const c = themeOf(m).sky;
+  const night = m && m.env && m.env.time === 'night';
   const sky = g.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#0c0b12');
-  sky.addColorStop(0.35, '#2a1a24');
-  sky.addColorStop(0.6, '#4a2a26');
-  sky.addColorStop(1, '#0e0f12');
+  sky.addColorStop(0, c[0]);
+  sky.addColorStop(0.35, night ? c[0] : c[1]);
+  sky.addColorStop(0.6, night ? c[1] : c[2]);
+  sky.addColorStop(1, c[3]);
   g.fillStyle = sky; g.fillRect(0, 0, w, h);
 }
 
@@ -1406,3 +1660,6 @@ export function drawVignette(g, w, h) {
   gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.5)');
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
 }
+
+// Shared drawing kit for the location packs (js/ui/props.js).
+export const Kit = { hash, rng, rgb, hex2, palOf, P, path, fillPts, line, box, onFace, facePt, grime, corrugate, rust, crateBox, tyre, drawBarrel, drawLamp, tileInfo, HX, HY };

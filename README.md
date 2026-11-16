@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.7.0)
+# Fang City: Animal Gangs (playable prototype v0.8.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,30 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.8.0 (locations and prop catalogue)
+
+- **Five locations**, each with its own ground, walls, lighting, weather, backdrop and prop pack:
+  - **Docklands:** canal, containers, crane legs, forklifts, warehouse fronts, fish market stalls.
+  - **Velvet Den downtown:** neon shopfronts, a club interior, parked cars that explode, dumpsters, bins and phone boxes.
+  - **Swamp Syndicate bayou:** black water, boardwalks, mud, reeds, stilt shacks, a gator-farm fence, moonshine stills and a rusty boat.
+  - **Iron Claw industrial:** factory floor, catwalk grating, rail track and wagons, machine presses, pipe runs, scrap and gas tanks.
+  - **Grey Pack estate:** terraced houses as cut-away rooms, lock-up garages, garden fences and hedges, a corner shop and a park.
+- **Shared prop catalogue** (`js/core/catalog.js`): one entry per prop with its name, location tags, category, footprint, height, rotation, cover, line of sight, movement blocking, explosive blast and variants. The battle rules, the renderer and the editor palette all read it. There are 55 placeable props and 20 ground types.
+- **Nine ready-made maps**, picked from the Loadout map list (grouped by location) or copied into the editor:
+  - Docklands yard and Fish Market Wharf
+  - Neon Strip and Club Velvet
+  - Gator Farm
+  - Foundry Floor and Rail Sidings
+  - Back Streets and Corner Shop & Park
+- **Editor:**
+  - location picker, time of day (dusk/night) and weather (clear/rain/fog)
+  - palette grouped by category, with search and a This location / All toggle
+  - colour variants for props, and every room style
+  - undo/redo, rotate and validation work as before
+- The map format is now **v2** (it adds `theme` and `env`). v1 maps and saved maps load unchanged as Docklands.
+- The canal and its far-bank warehouses only show on maps that actually have water on the west edge.
+- An AI operator with an empty gun now walks the real path to melee range instead of standing on overwatch. This fixes a rare stalemate when both sides ran dry behind a fence.
 
 ## v0.7.0 (map editor)
 
