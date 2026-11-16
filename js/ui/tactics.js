@@ -312,6 +312,129 @@ function drawOverwatchCone(g, x, y, z, facing, now) {
   g.restore();
 }
 
+// ---------- occlusion: cutaway, fade and x-ray ----------
+// Adapted from the mafia game's v0.7 cutaway: (1) containers in front of the acting/selected
+// unit, its move, its target or your finger drop to a knee-high stub (held 700 ms, eased 150 ms);
+// (2) other tall props covering any unit ease to 0.4 alpha; (3) a unit still covered by
+// something drawn after it is re-drawn on top as a team-coloured silhouette. Purely visual:
+// cover, line of sight and hit chance come from the map tiles and are untouched.
+const HY_ = 14.5;
+function occH(t) {
+  if (!t || !t.decor || t.decor === 'lamp') return 0; // a lamp post is too thin to hide anyone
+  if (t.decor === 'container' || Dock.isTall(t)) return Dock.propHeight(t);
+  const h = Dock.propHeight(t);
+  return h >= 16 && t.decor !== 'lamp' ? h : 0;
+}
+// Does a prop of height H standing on (px,py) cover a figure of height bodyH standing on (fx,fy)?
+function covers(px, py, H, fx, fy, bodyH) {
+  const dd = (px + py) - (fx + fy);
+  if (dd <= 0.01) return 0;
+  const lat = Math.abs((px - py) - (fx - fy));
+  if (lat > 1.2) return 0;
+  // how far the prop's top edge rises above the figure's feet, in world px
+  const rise = H + HY_ * (1 - Math.min(1, lat)) - dd * HY_;
+  if (rise <= 4) return 0;
+  return Math.min(1, rise / Math.max(8, bodyH));
+}
+function runKey(t, x, y) { return t.decor === 'container' && t.run ? `r${t.run.id}` : `t${x},${y}`; }
+function occlusionPass(u, b, sprites, sel, actor, now) {
+  const st = u.occ || (u.occ = { cut: new Map(), fa: new Map(), xa: new Map(), last: now });
+  const dt = Math.min(100, Math.max(0, now - st.last)); st.last = now;
+  const props = [];
+  for (const sp of sprites) if (sp.typ === 'prop') { const H = occH(sp.t); if (H) props.push({ x: sp.x, y: sp.y, t: sp.t, H, key: runKey(sp.t, sp.x, sp.y) }); }
+  const units = sprites.filter((sp) => sp.typ === 'unit' && (sp.un.hp > 0 || sp.un.ko));
+  // 1) cut points
+  const pts = [];
+  const add = (x, y, h) => pts.push({ x, y, h });
+  for (const s2 of units) {
+    const un = s2.un;
+    const focusU = (actor && actor.uid === un.uid) || (sel && sel.uid === un.uid) || (u.pathAnim && u.pathAnim.uid === un.uid)
+      || (u.cutFocus && now < u.cutFocus.until && u.cutFocus.uids.includes(un.uid)) || (u.hover && u.hover.uid === un.uid);
+    if (focusU) add(s2.x, s2.y, Actors.actorHeight(un.hero));
+  }
+  if (sel && u.hover) add(u.hover.x, u.hover.y, 12);
+  const hit = new Set();
+  for (const pr of props) {
+    if (pr.t.decor !== 'container') continue;
+    for (const q of pts) if (covers(pr.x, pr.y, pr.H, q.x, q.y, q.h) > 0.25) { hit.add(pr.key); break; }
+  }
+  for (const k of hit) { const c = st.cut.get(k) || { k: 0, t: 0 }; c.t = now; st.cut.set(k, c); }
+  for (const [k, c] of st.cut) {
+    const tg = now - c.t < Dock.CUT.HOLD ? 1 : 0;
+    c.k = tg ? Math.min(1, c.k + dt / Dock.CUT.ANIM) : Math.max(0, c.k - dt / Dock.CUT.ANIM);
+    if (!tg && c.k <= 0) st.cut.delete(k);
+  }
+  const cutOf = (pr) => (st.cut.get(pr.key) || { k: 0 }).k;
+  // 2) fade + 3) x-ray, for every standing unit
+  const fadeT = new Map();
+  const xray = [];
+  const kf = 1 - Math.exp(-dt / 70), kx = 1 - Math.exp(-dt / 80);
+  for (const s2 of units) {
+    if (s2.un.hp <= 0) continue;
+    const bh = Actors.actorHeight(s2.un.hero);
+    let hidden = 0;
+    for (const pr of props) {
+      const c = covers(pr.x, pr.y, pr.H, s2.x, s2.y, bh);
+      if (!c) continue;
+      const ck = cutOf(pr);
+      if (ck > 0.5) continue; // cut to a stub: no longer hides anyone
+      fadeT.set(`${pr.x},${pr.y}`, 0.4);
+      hidden = Math.max(hidden, c);
+    }
+    const prev = st.xa.get(s2.un.uid) || 0;
+    const tgt = hidden > 0.3 ? 0.62 : 0;
+    let v = prev + (tgt - prev) * kx; if (v < 0.01) v = 0;
+    st.xa.set(s2.un.uid, v);
+    if (v > 0) xray.push({ un: s2.un, x: s2.x, y: s2.y, a: v });
+  }
+  for (const pr of props) {
+    const k = `${pr.x},${pr.y}`;
+    const tg = fadeT.get(k) || 1;
+    const prev = st.fa.has(k) ? st.fa.get(k) : 1;
+    let v = prev + (tg - prev) * kf; if (Math.abs(v - tg) < 0.01) v = tg;
+    if (v >= 1) st.fa.delete(k); else st.fa.set(k, v);
+  }
+  return {
+    alpha: (x, y) => st.fa.get(`${x},${y}`) ?? 1,
+    cut: (t) => { if (t.decor !== 'container') return 0; const pr = props.find((p) => p.t === t); return pr ? cutOf(pr) : 0; },
+    xray,
+  };
+}
+let XCV = null;
+function drawXray(g, list, z, now) {
+  if (!list.length) return;
+  const W = g.canvas.width, H = g.canvas.height;
+  if (!XCV) XCV = document.createElement('canvas');
+  if (XCV.width !== W || XCV.height !== H) { XCV.width = W; XCV.height = H; }
+  const x = XCV.getContext('2d');
+  x.__noShadow = true;
+  const T = g.getTransform();
+  for (const it of list) {
+    const p = toWorld(it.x, it.y);
+    const sx = p.x * z, sy = p.y * z;
+    const hh = (Actors.actorHeight(it.un.hero) + 14) * z;
+    // device-space box around the figure
+    const bx = Math.floor(T.a * (sx - 24 * z) + T.e), by = Math.floor(T.d * (sy - hh) + T.f);
+    const bw = Math.ceil(T.a * 48 * z) + 2, bhh = Math.ceil(T.d * (hh + 6 * z)) + 2;
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.clearRect(bx, by, bw, bhh);
+    x.save();
+    x.beginPath(); x.rect(bx, by, bw, bhh); x.clip();
+    x.setTransform(T);
+    Actors.drawActor(x, it.un, sx, sy, z, now);
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.globalCompositeOperation = 'source-in';
+    x.fillStyle = it.un.side === 'player' ? '#5aa8ff' : '#ff5a48';
+    x.fillRect(bx, by, bw, bhh);
+    x.restore();
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = it.a;
+    g.drawImage(XCV, bx, by, bw, bhh, bx, by, bw, bhh);
+    g.restore();
+  }
+}
+
 function drawChanceTag(g, cx, ly, z, tw, prev, showParts) {
   const label = `${prev.chance}%`;
   g.font = `bold ${Math.round(7.5 * z)}px Oswald, sans-serif`;
@@ -618,24 +741,16 @@ function draw(ctx) {
     sprites.push({ depth: x + y, typ: 'unit', un, x, y });
     if (un.hp > 0 || un.ko) focus.push({ x, y });
   }
-  if (u.hover && sel) focus.push({ x: u.hover.x, y: u.hover.y });
-  // X-ray: tall props just in front of a unit (or the hovered tile) fade so nobody is hidden.
-  const fadeOf = (px, py) => {
-    for (const f of focus) {
-      const dd = (px + py) - (f.x + f.y);
-      if (dd <= 0 || dd > 3.2) continue;
-      if (Math.abs((px - py) - (f.x - f.y)) <= 1.6) return 0.32;
-    }
-    return 1;
-  };
+  const occ = occlusionPass(u, b, sprites, sel, actor, now);
   sprites.sort((a, c) => a.depth - c.depth || (a.typ === 'unit' ? 1 : 0) - (c.typ === 'unit' ? 1 : 0));
 
-  const bubQ = [], tagQ = [], barR = [];
+  const bubQ = [], tagQ = [], barR = [], lateQ = [];
   for (const sp of sprites) {
     if (sp.typ === 'prop') {
       const p = toWorld(sp.x, sp.y);
-      const a = Dock.isTall(sp.t) ? fadeOf(sp.x, sp.y) : 1;
+      const a = occ.alpha(sp.x, sp.y);
       g.save(); g.globalAlpha = a;
+      sp.t.__cut = occ.cut(sp.t);
       Dock.drawProp(g, sp.t, p.x * z, p.y * z, z, now);
       g.restore();
       continue;
@@ -694,6 +809,9 @@ function draw(ctx) {
     }
     const bw = 12 * z, bh = 1.8 * z;
     const barY = Actors.hasActor(un.hero) ? cy - 8 * z : cy + r + 2 * z;
+    // HP bar, AP pips, ammo chip, overwatch eye and blast preview are drawn after every prop and
+    // the x-ray pass, so a unit behind a container never loses its bar.
+    lateQ.push(() => { g.save();
     g.fillStyle = un.side === 'player' ? 'rgba(10,20,34,0.8)' : 'rgba(40,8,6,0.8)';
     g.fillRect(cx - bw / 2 - 0.6 * z, barY - 0.6 * z, bw + 1.2 * z, bh + 1.2 * z);
     g.fillStyle = un.side === 'player'
@@ -730,6 +848,7 @@ function draw(ctx) {
       g.fillStyle = '#fff'; g.textAlign = 'center';
       g.fillText(txt, cx, barY - 5.5 * z); g.textAlign = 'left';
     }
+    g.restore(); });
     if (sel && u.mode !== 'breach' && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
       const prev = T.previewShot(b, sel, un, u.mode === 'aimed' ? 'aimed' : u.mode === 'melee' || u.mode === 'knife' || u.mode === 'roll' ? u.mode : u.mode === 'venom' ? 'venom' : u.mode === 'suppress' ? 'suppress' : 'shot');
       if (prev && prev.ok) {
@@ -747,6 +866,8 @@ function draw(ctx) {
     if (!dead) barR.push({ uid: un.uid, x: cx - bw / 2 - z, y: barY - 4.5 * z, w: bw + 9 * z, h: 7 * z });
     g.restore();
   }
+  drawXray(g, occ.xray, z, now);
+  for (const f of lateQ) f();
   drawTags(g, tagQ, barR, z);
   drawBubbles(g, bubQ, z, now, barR.concat(tagQ));
 
@@ -952,6 +1073,7 @@ async function playEvents(ctx, events) {
         const zz = u.cam.z;
         const melee = ev.mode === 'melee' || ev.mode === 'knife' || ev.mode === 'lunge' || ev.mode === 'roll';
         u.flash = { uid: def.uid, until: performance.now() + 220, muzzle: !melee };
+        u.cutFocus = { uids: [att.uid, def.uid], until: performance.now() + 1600 };
         Actors.faceToward(att, att.x, att.y, def.x, def.y);
         Actors.playClip(att, melee ? 'melee' : 'shoot');
         if (ev.typ === 'overwatch' && ev.target) {

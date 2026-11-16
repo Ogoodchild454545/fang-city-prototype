@@ -127,11 +127,15 @@ const BRANDS = ['KESTREL', 'NORDHAVN', 'AMBERLINE', 'ORCA LINES', 'TALLOW & CO',
 const WALLHUE = { office: '#6a7c8a', cafe: '#7c3e2a' };
 
 // ---------- props ----------
+// Container box height: ~1.4x a 27 px wolf (2.6 m vs 1.8 m).
+export const CONT_H = 38;
+// Cutaway: a cut container drops to a knee-high stub so the street behind it stays readable.
+export const CUT = { STUB: 0.3, STUBMAX: 12, ANIM: 150, HOLD: 700 };
 export function propHeight(t) {
   if (!t || !t.decor) return 0;
   const d = t.decor;
   if (d === 'wall') return t.cut ? 10 : 40;
-  if (d === 'container') return t.stack >= 2 ? 45 : 22;
+  if (d === 'container') return t.stack >= 2 ? CONT_H * 2 + 0.8 : CONT_H;
   if (d === 'van' || d === 'van2' || d === 'wreck' || d === 'wreck2' || d === 'car' || d === 'car2') return 18;
   if (d === 'barrier') return 12;
   if (d === 'crate') return 16;
@@ -186,14 +190,25 @@ function drawContainer(g, t, sx, sy, z) {
   const run = t.run || { id: (tileInfo(t).x * 7 + tileInfo(t).y) % 9, i: 0, n: 1 };
   const last = run.i === run.n - 1;
   const stack = t.stack >= 2 ? 2 : 1;
-  const H1 = 21.5;
+  const H1 = CONT_H;
+  const full = stack * H1 + (stack - 1) * 0.8;
+  const ck = Math.max(0, Math.min(1, t.__cut || 0)), ce = ck * ck * (3 - 2 * ck);
+  const Hc = ck > 0 ? full + (Math.min(CUT.STUBMAX, full * CUT.STUB) - full) * ce : full;
   const x0 = run.i === 0 ? -0.47 : -0.5, x1 = last ? 0.47 : 0.5, y0 = -0.44, y1 = 0.44;
   const info = tileInfo(t);
   for (let s = 0; s < stack; s++) {
     const hue = s === 0 ? (t.hue === 'red' ? 'rust' : t.hue) : ALT[(run.id * 3 + 1) % ALT.length];
     const pal = palOf(HUES[hue] || HUES.rust);
-    const h0 = s * (H1 + 0.8), h1 = h0 + H1;
+    const h0 = s * (H1 + 0.8);
+    if (h0 >= Hc - 0.5) break;
+    const h1 = Math.min(h0 + H1, Hc), cutTop = h1 < h0 + H1 - 0.1;
     const f = box(g, sx, sy, z, x0, y0, x1, y1, h0, h1, pal, { noR: !last });
+    if (cutTop) {
+      // sliced open: dark interior with a lit rim, like a cutaway wall
+      fillPts(g, f.T, 'rgba(10,12,14,0.55)');
+      const T = f.T; g.strokeStyle = 'rgba(255,214,170,0.45)'; g.lineWidth = 0.9 * z;
+      g.beginPath(); g.moveTo(T[0][0], T[0][1]); for (const q of [T[1], T[2], T[3], T[0]]) g.lineTo(q[0], q[1]); g.stroke();
+    }
     const r = rng(hash(info.x, info.y, s + 5) * 1e9);
     onFace(g, f.L, () => {
       corrugate(g, 8, 0.07, 0.93);
@@ -218,6 +233,7 @@ function drawContainer(g, t, sx, sy, z) {
         grime(g, 0.04, 0.3);
       });
     }
+    if (cutTop) continue;
     // roof ribs + wet sheen
     for (let k = 1; k < 4; k++) {
       const u = x0 + (x1 - x0) * (k / 4);
@@ -246,6 +262,20 @@ function drawContainer(g, t, sx, sy, z) {
   }
   // contact darkening at the base
   line(g, P(sx, sy, z, x0, y1, 0), P(sx, sy, z, x1, y1, 0), 'rgba(0,0,0,0.55)', 1.2 * z);
+  if (ck > 0.3) {
+    // faint dashed ghost of the full box, so you still read where the container is
+    g.save();
+    g.globalAlpha *= 0.32 * ce;
+    g.setLineDash([3 * z, 3 * z]); g.strokeStyle = '#f0e2c0'; g.lineWidth = 0.7 * z;
+    const A = P(sx, sy, z, x0, y1, full), B = P(sx, sy, z, x1, y1, full), C = P(sx, sy, z, x1, y0, full), D = P(sx, sy, z, x0, y0, full);
+    const seg = (p, q) => { g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); };
+    g.beginPath();
+    seg(A, B); seg(D, C);
+    if (run.i === 0) { seg(D, A); seg(P(sx, sy, z, x0, y1, Hc), A); }
+    if (last) { seg(B, C); seg(P(sx, sy, z, x1, y1, Hc), B); seg(P(sx, sy, z, x1, y0, Hc), C); }
+    g.stroke();
+    g.restore();
+  }
 }
 
 function wallDecor(g, F, kind, z) {
@@ -723,7 +753,9 @@ export function drawYardProp(g, t, sx, sy, z, now) {
     if (d === 'van' || d === 'wreck' || d === 'car') { ox = 34; w0 = 130; }
     if (d === 'container' && t.run) { ox += 24 + (t.run.n - 1) * HX * 0.5; w0 += 24 + (t.run.n - 1) * HX * 0.5; }
     const oy = HY + H + 14, h0 = oy + HY + 12;
-    const key = `${d}|${t.hue}|${t.cut}|${t.stack}`;
+    const ck = t.__cut || 0;
+    if (ck > 0 && ck < 1) return paintProp(g, t, sx, sy, z, now);
+    const key = `${d}|${t.hue}|${t.cut}|${t.stack}|${ck >= 1 ? 'cut' : ''}`;
     cached(g, t, key, sx, sy, z, ox, oy, w0, h0, (cg, x, y, k) => paintProp(cg, t, x, y, k, now));
     return true;
   }
@@ -868,7 +900,7 @@ const S = 1.6, MARGIN = 5;
 function footprints(t) {
   const d = t.decor;
   const out = [];
-  if (d === 'container') out.push([-0.5, -0.44, 0.5, 0.44, t.stack >= 2 ? 45 : 22]);
+  if (d === 'container') out.push([-0.5, -0.44, 0.5, 0.44, t.stack >= 2 ? CONT_H * 2 + 0.8 : CONT_H]);
   else if (d === 'wall') {
     const c = tileInfo(t).conn || {}; const H = t.cut ? 10 : 40, th = 0.09;
     out.push([-th, -th, th, th, H]);

@@ -4,7 +4,7 @@
 import * as Yard from './yard.js';
 import { TW, TH, toWorld } from './yard.js';
 export { TW, TH, toWorld };
-export { drawYard, drawBackdrop, drawScenery, sceneryOf, prepMap, isTall, drawVignette } from './yard.js';
+export { drawYard, drawBackdrop, drawScenery, sceneryOf, prepMap, isTall, drawVignette, CUT } from './yard.js';
 
 export function drawSky(g, w, h) { Yard.drawNightSky(g, w, h); }
 

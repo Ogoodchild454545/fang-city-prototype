@@ -708,12 +708,14 @@ export function drawRig(g, unit, def, anim, footX, footY, z, now) {
   // Darker contact shadow, widening if the body is down.
   const legs = legSpan(fit);
   const down = Math.max(0, (pose.hipY || 0) / legs);
+  if (!g.__noShadow) {
   g.save();
   g.fillStyle = 'rgba(0,0,0,0.55)';
   g.beginPath();
   g.ellipse((pose.hipX || 0) * 0.35 * s, 1.5 * s, (18 + down * 13) * s, (7 + down * 2.6) * s, 0, 0, Math.PI * 2);
   g.fill();
   g.restore();
+  }
 
   const hipY = kind === 'snake' ? (pose.hipY || 0) : -legs + pose.hipY;
   // pose offsets are in rig units (assembled body = 100); scale them with the body

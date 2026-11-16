@@ -76,7 +76,7 @@ v0.6.2 made the units too small: explosive barrels and crate stacks stood almost
 | Crate stack on pallet | ~1.2 m | chest (~0.65x) | 15.4 px (0.73x) | **18 px (0.67x)** |
 | Door lintel | 2.1 m | ~1.15x | 31 (1.48x) | 31 (**1.15x**) |
 | Room wall | ~2.6 m+ | ~1.4x | 40 | 40 (1.48x) |
-| Single container | 2.6 m | ~1.4x | 21.5 | 21.5 (0.8x, unchanged) |
+| Single container | 2.6 m | ~1.4x | 21.5 | 21.5 (0.8x); **38 (1.4x) from v0.6.4**, see occlusion.md |
 
 The door, room walls, barrel and crate all agree on about 14.5 px per metre, which puts a 1.8 m wolf at **27 px**. New species heights, with the same ratios as before:
 
