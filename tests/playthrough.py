@@ -376,6 +376,16 @@ async def main():
         await shot(page, '23-rook-inventory')
         await tap(page, '[data-act="charBack"]')
         await page.wait_for_selector('.armyscr')
+        # Operators screen (v0.9.3): one-line header, info pop-up, cards fully on screen
+        await tap(page, '[data-act="nav"][data-tab="heroes"]')
+        await page.wait_for_selector('.opsscr .opcard')
+        assert await page.locator('.opsscr .opcard[data-id="rook"]').count() == 1
+        fit = await ev(page, "(()=>{const c=document.querySelector('.opcard[data-id=rook]').getBoundingClientRect();return c.bottom<=innerHeight+1&&c.top>=0})()")
+        assert fit, 'Rook card should be fully visible'
+        await tap(page, '[data-act="opsInfo"]')
+        await page.wait_for_selector('.overlay .opsinfo')
+        await shot(page, '18b-operators-info')
+        await tap(page, '.overlay [data-act="closeModal"]')
         # gang missions are locked gracefully without troops
         await tap(page, '[data-act="nav"][data-tab="missions"]')
         await page.wait_for_selector('.troopnote')
