@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.5.9)
+# Fang City: Animal Gangs (playable prototype v0.6.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,16 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.6.0 (docklands rebuilt as a real place)
+
+- The battle map no longer looks like a board of blocks. The ground is baked once into a textured night-time yard: wet concrete slabs with joints, cracks, puddles reflecting the dusk, oil, tyre marks, painted bay lines and stencils, drains, steel road plates, blood and litter. The tile grid is barely visible; it shows in the movement range and on hover.
+- Containers are drawn as whole corrugated runs with rust, dents, corner castings, locking-bar doors and brand/number markings. Stack-2 runs are two boxes.
+- The site office and the bar are container-panel rooms: back walls full height with lockers, windows, a fridge, shelves and neon; the near walls are cut away so you see inside.
+- New props: chain-link fences (a short gameplay fence blocks movement only), border fences, tyre stacks, wrapped pallets, burn barrels with live fire, shelving, quay bollards, proper vans with cabs and headlights, tugs on the canal. Background: a gantry crane with blinking lights, stacked boxes and far-bank warehouses.
+- Lighting: soft cast shadows and contact shadows under every prop, lamp, fire and room light pools, a shimmering canal, a vignette.
+- Tall props (containers, full-height walls, shelves) fade when one of your units, a rival, or the hovered tile is just behind them.
+- Static props are cached as sprites so the richer map stays fast.
 
 ## v0.5.9 (docklands readability)
 

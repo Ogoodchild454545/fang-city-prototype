@@ -467,13 +467,16 @@ function draw(ctx) {
   for (let y = 0; y < b.map.h; y++) for (let x = 0; x < b.map.w; x++) order.push({ x, y, depth: x + y });
   order.sort((a, c) => a.depth - c.depth);
 
+  Dock.prepMap(b.map);
+  Dock.drawYard(g, b.map, z, now);
+  Dock.drawBackdrop(g, b.map, z, now);
+  for (const sp of Dock.sceneryOf(b.map)) if (sp.depth < 0) Dock.drawScenery(g, sp, z, now);
   for (const c of order) {
     const t = tile(b.map, c.x, c.y);
     const p = toWorld(c.x, c.y);
     const sx = p.x * z, sy = p.y * z;
-    Dock.drawGround(g, t, sx, sy, z, (c.x + c.y) % 2);
     if (reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel && sel.x === c.x && sel.y === c.y)) {
-      hexPoly(g, sx, sy, z, 'rgba(80,150,255,0.34)', 'rgba(140,190,255,0.8)');
+      hexPoly(g, sx, sy, z, 'rgba(70,140,255,0.22)', 'rgba(140,190,255,0.55)');
     }
     if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y) {
       hexPoly(g, sx, sy, z, 'rgba(255,220,120,0.16)', '#f0d060');
@@ -499,19 +502,36 @@ function draw(ctx) {
     const depth = c.x + c.y + (Dock.isPairedWest(t) ? 0.5 : 0);
     sprites.push({ depth, typ: 'prop', x: c.x, y: c.y, t });
   }
+  for (const sp of Dock.sceneryOf(b.map)) if (sp.depth >= 0) sprites.push({ depth: sp.depth, typ: 'scen', sp });
+  const focus = [];
   for (const un of b.units) {
     let x = un.x, y = un.y;
     if (u.pathAnim && u.pathAnim.uid === un.uid) { x = u.pathAnim.x; y = u.pathAnim.y; }
     sprites.push({ depth: x + y, typ: 'unit', un, x, y });
+    if (un.hp > 0 || un.ko) focus.push({ x, y });
   }
-  sprites.sort((a, c) => a.depth - c.depth || (a.typ === 'prop' ? -1 : 1) || 0);
+  if (u.hover && sel) focus.push({ x: u.hover.x, y: u.hover.y });
+  // X-ray: tall props just in front of a unit (or the hovered tile) fade so nobody is hidden.
+  const fadeOf = (px, py) => {
+    for (const f of focus) {
+      const dd = (px + py) - (f.x + f.y);
+      if (dd <= 0 || dd > 3.2) continue;
+      if (Math.abs((px - py) - (f.x - f.y)) <= 1.6) return 0.32;
+    }
+    return 1;
+  };
+  sprites.sort((a, c) => a.depth - c.depth || (a.typ === 'unit' ? 1 : 0) - (c.typ === 'unit' ? 1 : 0));
 
   for (const sp of sprites) {
     if (sp.typ === 'prop') {
       const p = toWorld(sp.x, sp.y);
-      Dock.drawProp(g, sp.t, p.x * z, p.y * z, z);
+      const a = Dock.isTall(sp.t) ? fadeOf(sp.x, sp.y) : 1;
+      g.save(); g.globalAlpha = a;
+      Dock.drawProp(g, sp.t, p.x * z, p.y * z, z, now);
+      g.restore();
       continue;
     }
+    if (sp.typ === 'scen') { Dock.drawScenery(g, sp.sp, z, now); continue; }
     const un = sp.un;
     const p = toWorld(sp.x, sp.y);
     const sx = p.x * z, sy = p.y * z;
@@ -700,6 +720,7 @@ function draw(ctx) {
     g.restore();
   }
   g.restore();
+  Dock.drawVignette(g, cv.width, cv.height);
 
   // live PvP countdown in the HUD chip
   const tel = document.getElementById('ttimer');
