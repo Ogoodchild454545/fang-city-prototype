@@ -21,6 +21,7 @@ import * as Heroes from './heroes.js';
 import * as Loadout from './loadout.js';
 import * as Editor from './editor.js';
 import * as Character from './character.js';
+import * as Facilities from './facilities.js';
 import { formatDrop } from '../core/shards.js';
 import { THEMES, loadTheme, saveTheme, themeAttr } from '../core/themes.js';
 import * as P from '../core/progression.js';
@@ -266,7 +267,7 @@ document.addEventListener('pointerdown', unlockAudio, { once: true, capture: tru
 function dispatchAct(el, e) {
   const act = el.dataset.act;
   if (act !== 'toggleMute' && e.type === 'click') Audio.play('tap');
-  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act] || Heroes.actions[act] || Loadout.actions[act];
+  const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Facilities.actions[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act] || Heroes.actions[act] || Loadout.actions[act];
   if (handler) { handler(ctx, el, e); ctx.save(); }
 }
 document.getElementById('app').addEventListener('click', (e) => {

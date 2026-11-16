@@ -11,6 +11,7 @@ import * as Audio from './audio.js';
 import * as P from '../core/progression.js';
 import * as O from '../core/ops.js';
 import { TROOPS_UI } from './crew.js';
+import * as FAC from './facilities.js';
 
 let view = null;
 const ui = (ctx) => (ctx.sub.base ||= { sel: null, place: null, cam: null, cat: 'money' });
@@ -127,6 +128,10 @@ function onTap(ctx, hit) {
   if (hit.kind === 'building' || hit.kind === 'obstacle') {
     u.sel = u.sel === hit.id && hit.kind === 'obstacle' ? null : hit.id;
     syncGhost(ctx); panel(ctx);
+    // v0.11: a finished Clinic / Factory opens its own panel when tapped
+    const b = hit.kind === 'building' && BS.byId(s, hit.id);
+    if (b && b.lv >= 1 && b.t === 'clinic' && P.clinicBuilt(s)) FAC.openClinic(ctx);
+    if (b && b.lv >= 1 && b.t === 'factory') FAC.openFactory(ctx);
     return;
   }
   u.sel = null; syncGhost(ctx); panel(ctx);
@@ -211,6 +216,8 @@ function buildingPanel(ctx, b, now) {
   if (d.produce && b.lv > 0 && !b.lt) btns.push(`<button class="act2" data-act="hireLt" data-id="${b.id}"><span class="i">🕴</span>Lieutenant<span class="c">${money(BS.lieutenantCost(b))}</span></button>`);
   if ((b.t === 'gym' || b.t === 'bunk') && TROOPS_UI) btns.push(`<button class="act2" data-act="gotoCrew" data-sub="army"><span class="i">🐾</span>Crew<span class="c">train</span></button>`);
   if (b.t === 'armoury') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="upgrades"><span class="i">🔫</span>Troops<span class="c">upgrade</span></button>`);
+  if (b.t === 'clinic' && b.lv >= 1 && P.clinicBuilt(s)) btns.push(`<button class="act2 red" data-act="openClinic"><span class="i">🛏</span>Beds<span class="c">${s.clinic.length}/${P.clinicSlots(s)}</span></button>`);
+  if (b.t === 'factory' && b.lv >= 1) btns.push(`<button class="act2 red" data-act="openFactory"><span class="i">⚙</span>Bench<span class="c">craft</span></button>`);
   if (b.t === 'family') btns.push(`<button class="act2" data-act="family"><span class="i">🤝</span>Family<span class="c">soon</span></button>`);
   if (d.turret || b.t === 'den') btns.push(`<button class="act2" data-act="gotoCity"><span class="i">⚔</span>Raid<span class="c">rivals</span></button>`);
   btns.push(`<button class="act2" data-act="moveB" data-id="${b.id}"><span class="i">✥</span>Move<span class="c">&nbsp;</span></button>`);
@@ -241,6 +248,7 @@ export function live(ctx, now) {
     if (j) { set('[data-live="jobleft"]', dur((j.endsAt - now) / 1000)); set('[data-live="speedc"]', ''); const sc=document.querySelector('[data-live="speedc"]'); if(sc) sc.innerHTML = ico('teeth') + ' ' + BS.speedUpCost(it, now); }
     if (it && BUILDINGS[it.t]?.produce) set('[data-live="till"]', BUILDINGS[it.t].produce.res === 'cash' ? money(it.till) : fmt(it.till));
   }
+  FAC.live(ctx, now);
   if (view) view.dirty = true;
 }
 

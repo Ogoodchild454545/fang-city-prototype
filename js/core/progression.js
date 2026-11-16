@@ -3,6 +3,7 @@
 // Everything is timestamp-based so it keeps working while the game is closed.
 import { HEROES, defOf, grantHero } from './heroes.js';
 import { gain } from './base.js';
+import { LEVEL_ITEMS, addItem, ITEMS, hasBlueprint } from './items.js';
 
 // ---------------------------------------------------------------- player level
 export const PLAYER_MAX = 30;
@@ -21,10 +22,10 @@ export const UNLOCKS = [
   { lv: 5, id: 'medic', name: 'Vesper joins', ico: '🐍', text: 'A free medic joins your crew. Ops become 2 v 2.' },
   { lv: 5, id: 'squad2', name: '2 v 2 ops', ico: '👥', text: 'Take two operators into ops.' },
   { lv: 5, id: 'howl', name: 'Howl', ico: '🐺', text: 'Rook shakes nearby foes and rallies the crew.' },
-  { lv: 5, id: 'clinic', name: 'Clinic', ico: '🏥', text: 'Knocked-out operators patch up over time.' },
+  { lv: 5, id: 'clinic', name: 'Clinic', ico: '🏥', text: 'Build a Clinic in the base: knocked-out operators patch up there.' },
   { lv: 7, id: 'squad3', name: '3 v 3 ops', ico: '👥', text: 'Take three operators into ops.' },
   { lv: 7, id: 'jobs', name: 'Operator jobs', ico: '💼', text: 'Send spare operators on 1–8 hour jobs.' },
-  { lv: 7, id: 'crafting', name: 'Crafting', ico: '🛠️', text: 'Turn scrap parts into gear.' },
+  { lv: 7, id: 'crafting', name: 'Factory', ico: '🏭', text: 'Build a Factory: craft gear from blueprints you find.' },
   { lv: 7, id: 'rep', name: 'Rep', ico: '⭐', text: 'Earn Rep from ops and the Pirate Radio.' },
   { lv: 10, id: 'squad4', name: '4 v 4 ops', ico: '👥', text: 'Full squads of four.' },
   { lv: 10, id: 'allslots', name: 'All 13 gear slots', ico: '🎒', text: 'Every gear slot open on every operator.' },
@@ -51,7 +52,9 @@ export function squadCap(s) {
 }
 
 // Level-up side effects (idempotent: safe to re-run for every level <= current).
-function grantsFor(s, lv) {
+export function grantsFor(s, lv) {
+  s.player.itemsGot ||= {};
+  for (const li of LEVEL_ITEMS) if (lv >= li.lv && !s.player.itemsGot[li.id]) { addItem(s, li.id, 1); s.player.itemsGot[li.id] = 1; }
   if (lv >= 5 && !s.heroes.owned.vesper && !s.player.gotMedic) {
     grantHero(s, 'vesper');
     s.player.gotMedic = 1;
@@ -177,7 +180,10 @@ export function collectJob(s, heroId, now = Date.now()) {
 
 // ---------------------------------------------------------------- clinic
 export const CLINIC_MIN = 10; // minutes per patient
-export const clinicSlots = (s) => (playerLv(s) >= 12 ? 3 : 2);
+// v0.11: the clinic is a building you put down in the base. No building, no beds.
+const clinicB = (s) => ((s.base && s.base.buildings) || []).filter((b) => b.t === 'clinic' && b.lv >= 1);
+export const clinicBuilt = (s) => isUnlocked(s, 'clinic') && clinicB(s).length > 0;
+export const clinicSlots = (s) => (clinicB(s).some((b) => b.lv >= 4) ? 3 : 2);
 export const RUSH_ICE = 5;
 export const inClinic = (s, id, now = Date.now()) => (s.clinic || []).find((p) => p.hero === id && p.end > now) || null;
 // Patients are treated in order; with N beds, patient i starts when patient i-N is discharged.
@@ -191,7 +197,7 @@ function schedule(s, now) {
   });
 }
 export function admit(s, heroId, now = Date.now()) {
-  if (!isUnlocked(s, 'clinic') || inClinic(s, heroId, now)) return null;
+  if (!clinicBuilt(s) || inClinic(s, heroId, now)) return null;
   tickClinic(s, now);
   const beds = clinicSlots(s);
   const prev = s.clinic[s.clinic.length - beds];
@@ -259,15 +265,15 @@ export const TRACK = [
   { text: 'Get Rook to operator level 3', check: (s) => (s.heroes.owned.rook?.lv || 1) >= 3, reward: { cash: 400 } },
   { text: 'Reach player level 6', check: (s) => playerLv(s) >= 6, reward: { teeth: 15 } },
   { text: 'Clear 10 different ops', check: (s) => cleared(s) >= 10, reward: { cash: 600 } },
-  { text: 'Reach player level 7', check: (s) => playerLv(s) >= 7, reward: { teeth: 20 } },
+  { text: 'Reach player level 7', check: (s) => playerLv(s) >= 7, reward: { teeth: 20, bp: 'smg' } },
   { text: 'Send an operator on a job', check: (s) => (s.opJobs || []).length > 0 || (s.stats.opJobs || 0) >= 1, reward: { influence: 40 } },
-  { text: 'Craft a piece of gear', check: (s) => (s.stats.crafted || 0) >= 1, reward: { influence: 40 } },
+  { text: 'Build a Factory and craft a piece of gear', check: (s) => (s.stats.crafted || 0) >= 1, reward: { influence: 40 } },
   { text: 'Reach player level 8', check: (s) => playerLv(s) >= 8, reward: { teeth: 20 } },
   { text: 'Upgrade The Den to level 2', check: (s) => hasB(s, 'den', 2), reward: { cash: 800 } },
-  { text: 'Reach player level 9', check: (s) => playerLv(s) >= 9, reward: { teeth: 20 } },
+  { text: 'Reach player level 9', check: (s) => playerLv(s) >= 9, reward: { teeth: 20, bp: 'karambit' } },
   { text: 'Clear 15 different ops', check: (s) => cleared(s) >= 15, reward: { cash: 1000 } },
   { text: 'Reach player level 10', check: (s) => playerLv(s) >= 10, reward: { teeth: 30 } },
-  { text: 'Use the Best gear button', check: (s) => (s.stats.bestGear || 0) >= 1, reward: { teeth: 30, universal: 5 } },
+  { text: 'Use the Best gear button', check: (s) => (s.stats.bestGear || 0) >= 1, reward: { teeth: 30, universal: 5, item: 'wolfknux' } },
 ];
 export function trackState(s) {
   const i = s.track.claimed;
@@ -288,6 +294,8 @@ export function claimTrack(s) {
   if (r.teeth) s.teeth += r.teeth;
   if (r.influence) gain(s, 'influence', r.influence);
   if (r.universal) s.heroes.universal = (s.heroes.universal || 0) + r.universal;
+  if (r.item) addItem(s, r.item, 1);
+  if (r.bp && !hasBlueprint(s, r.bp)) { s.blueprints ||= {}; s.blueprints[r.bp] = 1; }
   s.track.claimed += 1;
   return { ok: true, reward: r };
 }
@@ -303,6 +311,9 @@ export function ensureProgress(s, now = Date.now()) {
   s.track ||= { claimed: 0 };
   s.ops ||= { cleared: {}, runs: 0 };
   s.ops.cleared ||= {};
+  s.blueprints ||= {};
+  if (s.factory === undefined) s.factory = null;
+  s.player.itemsGot ||= {};
   return s;
 }
 

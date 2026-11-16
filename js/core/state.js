@@ -9,12 +9,12 @@ import { rollClearDrop } from './shards.js';
 import { ensurePvp } from './pvp.js';
 import { ensureItems } from './items.js';
 import { kitFits } from './loadout.js';
-import { ensureProgress, estimateLevel, trimSquad } from './progression.js';
+import { ensureProgress, estimateLevel, trimSquad, grantsFor as regrant } from './progression.js';
 setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 export function newGame(now, seed = newSeed()) {
   const s = {
@@ -140,6 +140,15 @@ export function migrate(s, now = Date.now()) {
     trimSquad(s);
     s.v = 7;
     s.migratedTo7 = 1;
+  }
+  if (s.v === 7 && s.base) {
+    // v0.11: rarity, blueprints, the Factory and the Clinic building. Everything owned is kept;
+    // level-unlock items for levels already reached are handed out now.
+    ensureHeroes(s);
+    ensureProgress(s, now);
+    for (let l = 2; l <= s.player.lv; l++) regrant(s, l);
+    s.v = 8;
+    s.migratedTo8 = 1;
   }
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };

@@ -27,12 +27,16 @@ export const SLOT_IDS = SLOTS.map((s) => s.id);
 export const SLOT_BY_ID = Object.fromEntries(SLOTS.map((s) => [s.id, s]));
 
 // Items can have quality tiers (heroes never have rarity).
+// v0.11: one rarity system. The old quality keys stay (saves + tables use them) but now read as
+// Common / Uncommon / Rare / Epic / Legendary, each with its own frame colour.
 export const QUALITY = {
-  worn: { id: 'worn', name: 'Worn', col: '#9a9288', rank: 0 },
-  street: { id: 'street', name: 'Street', col: '#d8cfbf', rank: 1 },
-  tuned: { id: 'tuned', name: 'Tuned', col: '#6fbf73', rank: 2 },
-  custom: { id: 'custom', name: 'Custom', col: '#e0b040', rank: 3 },
+  worn: { id: 'worn', name: 'Common', col: '#a8a39b', rank: 0, lv: 1 },
+  street: { id: 'street', name: 'Uncommon', col: '#5fbf5a', rank: 1, lv: 1 },
+  tuned: { id: 'tuned', name: 'Rare', col: '#4f9be8', rank: 2, lv: 3 },
+  custom: { id: 'custom', name: 'Epic', col: '#b066e8', rank: 3, lv: 6 },
+  legend: { id: 'legend', name: 'Legendary', col: '#f0902a', rank: 4, lv: 10 },
 };
+export const RARITY = QUALITY;
 
 // Stat keys an item can change. Shown in this order on the sheet.
 export const STAT_DEFS = [
@@ -103,10 +107,51 @@ export const ITEMS = {
   dice: { name: 'Lucky Dice', slot: 'trinket', q: 'worn', crit: 3, text: 'Loaded, obviously.' },
   photo: { name: 'Family Photo', slot: 'trinket', q: 'street', hp: 2, text: 'Something worth getting home to.' },
   fang: { name: 'Fang Charm', slot: 'trinket', q: 'tuned', aim: 3, mdmg: 1, text: 'Your first trophy, on a bootlace.' },
+  // ===== v0.11 additions (25) =====
+  smg: { name: 'Alley Sweeper SMG', slot: 'primary', q: 'tuned', wpn: W('SMG', [3, 5], 6, 'rifle'), speed: 1, bp: 1, text: 'Sprays a corridor clean. Accuracy optional.' },
+  huntrifle: { name: 'Bolt-action Hunting Rifle', slot: 'primary', q: 'tuned', wpn: W('Hunting rifle', [5, 7], 10, 'rifle'), aim: 6, bp: 1, text: 'Made for deer. Works on rats.' },
+  lmg: { name: 'Dockyard LMG', slot: 'primary', q: 'custom', wpn: W('LMG', [5, 8], 7, 'rifle'), speed: -2, carry: 2, bp: 1, text: 'Came off a boat in a piano crate.' },
+  goldrifle: { name: 'Gilded Kingpin Rifle', slot: 'primary', q: 'legend', wpn: W('Gilded rifle', [6, 9], 9, 'rifle'), crit: 8, aim: 5, src: 'reward', text: 'Gold-plated, engraved, and absolutely loaded.' },
+  flaregun: { name: 'Flare Pistol', slot: 'sidearm', q: 'street', wpn: W('Flare pistol', [2, 4], 5, 'pistol'), crit: 4, src: 'level', unlockLv: 6, text: 'Meant for boats in trouble. Now it is you.' },
+  machinepistol: { name: 'Machine Pistol', slot: 'sidearm', q: 'tuned', wpn: W('Machine pistol', [2, 5], 5, 'pistol'), speed: 1, bp: 1, text: 'Small, ugly, never stops talking.' },
+  silenced: { name: 'Suppressed .22', slot: 'sidearm', q: 'custom', wpn: W('Suppressed .22', [3, 5], 7, 'pistol'), aim: 8, dodge: 3, bp: 1, text: 'Nobody hears it. Nobody sees you.' },
+  crowbar: { name: 'Crowbar', slot: 'melee', q: 'worn', wpn: W('Crowbar', [3, 5], 1, 'melee'), src: 'level', unlockLv: 2, text: 'Opens doors. And heads.' },
+  cleaver: { name: 'Butcher\'s Cleaver', slot: 'melee', q: 'street', wpn: W('Cleaver', [4, 7], 1, 'melee'), crit: 5, text: 'From the back room at Moretti\'s.' },
+  karambit: { name: 'Karambit', slot: 'melee', q: 'tuned', wpn: W('Karambit', [4, 6], 1, 'melee'), crit: 10, speed: 1, bp: 1, text: 'A claw you can put in your pocket.' },
+  dockhook: { name: 'Docker\'s Hook', slot: 'melee', q: 'custom', wpn: W('Docker\'s hook', [6, 8], 1, 'melee'), mdmg: 1, bp: 1, text: 'Hauled cargo for thirty years. Now it hauls people.' },
+  wolfknux: { name: 'Wolf-Fang Knuckles', slot: 'melee', q: 'legend', wpn: W('Wolf-fang knuckles', [6, 9], 1, 'melee'), crit: 12, speed: 2, src: 'reward', text: 'Silver spikes, filed like teeth. A pack legend.' },
+  balaclava: { name: 'Balaclava', slot: 'head', q: 'street', dodge: 4, text: 'No face, no witness.' },
+  nvgoggles: { name: 'Night-vision Goggles', slot: 'head', q: 'custom', aim: 8, crit: 3, text: 'Army surplus. The dark belongs to you.' },
+  raincoat: { name: 'Rain Mac', slot: 'jacket', q: 'worn', hp: 1, dodge: 2, src: 'level', unlockLv: 4, text: 'It always rains in Fang City.' },
+  bomber: { name: 'Kevlar-lined Bomber', slot: 'jacket', q: 'custom', hp: 3, armor: 1, dodge: 3, src: 'level', unlockLv: 12, text: 'Looks like a jacket. Stops like a vest.' },
+  platecarrier: { name: 'Ceramic Plate Carrier', slot: 'body', q: 'legend', hp: 6, armor: 2, speed: -1, src: 'reward', text: 'Military plates. Ask no questions.' },
+  drivegloves: { name: 'Leather Driving Gloves', slot: 'gloves', q: 'tuned', aim: 5, crit: 3, bp: 1, text: 'For the getaway, and the job before it.' },
+  combatboots: { name: 'Combat Boots', slot: 'boots', q: 'tuned', hp: 2, dodge: 2, src: 'level', unlockLv: 8, text: 'Laced tight. Built for long nights.' },
+  burner: { name: 'Burner Phone', slot: 'acc', q: 'street', speed: 2, text: 'One call, then the canal.' },
+  lighter: { name: 'Brass Lighter', slot: 'acc', q: 'worn', crit: 3, text: 'Click, flame, a promise.' },
+  goldwatch: { name: 'Kingpin\'s Gold Watch', slot: 'acc', q: 'legend', crit: 6, aim: 4, dodge: 4, hp: 2, src: 'reward', text: 'Time is money. This is both.' },
+  smoke: { name: 'Smoke Grenade', slot: 'utility', q: 'tuned', dodge: 8, bp: 1, text: 'Pull, throw, vanish.' },
+  molotov: { name: 'Molotov', slot: 'utility', q: 'street', charges: 1, crit: 2, text: 'Rag, bottle, bad intentions.' },
+  medkitpro: { name: 'Combat Med Kit', slot: 'consumable', q: 'custom', medCarry: 2, hp: 1, bp: 1, text: 'Stolen from a field hospital. Fully stocked.' },
 };
-for (const [id, it] of Object.entries(ITEMS)) it.id = id;
+for (const id of ['pumpgun', 'stabvest', 'machete', 'helmet', 'trench']) ITEMS[id].bp = 1;
+for (const [id, it] of Object.entries(ITEMS)) { it.id = id; it.lv ||= QUALITY[it.q].lv; it.src ||= 'loot'; }
 export const ITEM_IDS = Object.keys(ITEMS);
 export const itemDef = (id) => ITEMS[id] || null;
+export const itemIcon = (id) => `assets/items/${ITEMS[id] || id === 'blueprint' ? id : 'parts'}.webp`;
+export const rarityOf = (id) => QUALITY[(ITEMS[id] || {}).q] || QUALITY.worn;
+// Where an item comes from, in words (item detail view).
+export function sourceText(id) {
+  const it = ITEMS[id]; if (!it) return '';
+  const bits = [];
+  if (it.src === 'level') bits.push(`Unlocked at player Lv ${it.unlockLv}`);
+  else if (it.src === 'reward') bits.push('Won only: Rookie Track, High Stakes and vault crates');
+  else bits.push('Found in op loot and crates');
+  if (it.bp) bits.push('craftable in the Factory with its blueprint');
+  return bits.join(' · ');
+}
+// Items handed out when the player reaches a level.
+export const LEVEL_ITEMS = Object.values(ITEMS).filter((it) => it.src === 'level').map((it) => ({ id: it.id, lv: it.unlockLv }));
 export const slotFits = (slotId, itemId) => { const it = ITEMS[itemId], sl = SLOT_BY_ID[slotId]; return !!(it && sl && it.slot === sl.kind); };
 
 export function modsOf(ids = []) {
@@ -211,6 +256,7 @@ export function equipItem(s, heroId, itemId, slotId) {
   const slot = slotId || targetSlot(rec, itemId, s, heroId);
   if (!slotFits(slot, itemId)) return { ok: false, reason: `${ITEMS[itemId].name} doesn't go in that slot` };
   if (s.player && !slotOpen(s, heroId, slot)) return { ok: false, reason: `${SLOT_BY_ID[slot].short} slot opens at level ${SLOT_UNLOCK[slot]}` };
+  if (s.player && slotLevel(s, heroId) < (ITEMS[itemId].lv || 1)) return { ok: false, reason: `${ITEMS[itemId].name} needs level ${ITEMS[itemId].lv}` };
   if (stashCount(s, itemId) < 1) return { ok: false, reason: 'Not in the stash' };
   const prev = rec.equip[slot];
   s.stash[itemId] -= 1;
@@ -243,9 +289,10 @@ export function previewEquip(s, heroId, itemId, slotId) {
 
 // ---------- loot ----------
 // Drop weights by quality; tables are built from the catalogue so new items join automatically.
-const DROP_W = { worn: 6, street: 5, tuned: 2, custom: 0.6 };
-export function rollItem(holder, { minQ = 0, bonus = 0 } = {}) {
-  const pool = ITEM_IDS.filter((id) => QUALITY[ITEMS[id].q].rank >= minQ);
+const DROP_W = { worn: 6, street: 5, tuned: 2, custom: 0.6, legend: 0.12 };
+export function rollItem(holder, { minQ = 0, bonus = 0, rewards = false } = {}) {
+  // level-unlock items never drop; reward-only items only drop from reward rolls (vault crates)
+  const pool = ITEM_IDS.filter((id) => QUALITY[ITEMS[id].q].rank >= minQ && ITEMS[id].src !== 'level' && (rewards || ITEMS[id].src !== 'reward'));
   const w = pool.map((id) => DROP_W[ITEMS[id].q] * (QUALITY[ITEMS[id].q].rank >= 2 ? 1 + bonus : 1));
   let r = rngNext(holder) * w.reduce((a, b) => a + b, 0);
   for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i]; }
@@ -260,6 +307,26 @@ export function rollBattleLoot(s, kind) {
   addItem(s, id, 1);
   return id;
 }
+// ---------- v0.11 blueprints ----------
+export const BP_ITEMS = ITEM_IDS.filter((id) => ITEMS[id].bp);
+export const hasBlueprint = (s, id) => !!(s.blueprints && s.blueprints[id]);
+// Pick a blueprint the player doesn't own yet (rarer ones less often); null if they have them all.
+export function rollBlueprint(s) {
+  const pool = BP_ITEMS.filter((id) => !hasBlueprint(s, id));
+  if (!pool.length) return null;
+  const w = pool.map((id) => DROP_W[ITEMS[id].q] + 0.5);
+  let r = rngNext(s) * w.reduce((a, b) => a + b, 0);
+  let pick = pool[pool.length - 1];
+  for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) { pick = pool[i]; break; } }
+  s.blueprints ||= {}; s.blueprints[pick] = 1;
+  return pick;
+}
+// After an op/street win: sometimes a blueprint turns up in the loot (Factory must be unlockable).
+export function rollBlueprintLoot(s, kind) {
+  if (kind === 'tutorial' || !s.player || (s.player.lv || 1) < 7) return null;
+  if (rngNext(s) >= (kind === 'street' ? 0.2 : 0.15)) return null;
+  return rollBlueprint(s);
+}
 
 // Mission wins: a first clear always pays out a piece of gear, repeats sometimes do.
 export function rollMissionLoot(s, first) {
@@ -271,7 +338,7 @@ export function rollMissionLoot(s, first) {
 // Ice crates: street crates sometimes include gear, vault crates always do (better odds).
 export function rollCrateLoot(s, kind) {
   if (kind !== 'vault' && rngNext(s) >= 0.35) return null;
-  const id = rollItem(s, kind === 'vault' ? { minQ: 1, bonus: 1 } : {});
+  const id = rollItem(s, kind === 'vault' ? { minQ: 1, bonus: 1, rewards: true } : {});
   addItem(s, id, 1);
   return id;
 }

@@ -28,6 +28,7 @@ import * as IT from '../js/core/items.js';
 import * as TH from '../js/core/themes.js';
 import * as PG from '../js/core/progression.js';
 import * as OPS from '../js/core/ops.js';
+import * as FX from '../js/core/factory.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -302,7 +303,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 7);
+  assert.equal(s.v, 8);
   assert.equal(s.crew, undefined);
   assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
@@ -311,7 +312,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 7 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 8 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
@@ -330,7 +331,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
   const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
   const teeth = s2.teeth, cash0 = s2.cash;
   const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
-  assert.equal(s.v, 7);
+  assert.equal(s.v, 8);
   assert.equal(s.gang, undefined);
   assert.equal(s.crew, undefined);
   assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
@@ -513,7 +514,7 @@ test('v3 save migrates to v5 with Rook and starting ammo', () => {
   delete s3.heroes;
   delete s3.tactics;
   const s = migrate(s3, T0);
-  assert.equal(s.v, 7);
+  assert.equal(s.v, 8);
   assert.ok(s.heroes.owned.rook);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.ok((s.ammo || 0) >= 30);
@@ -525,6 +526,7 @@ test('Armoury, Clinic and Workshop produce ammo, medkits and parts into capped s
   const s = newGame(T0, 8);
   rich(s);
   s.base.buildings[0].lv = 2; // den 2 unlocks armoury + workshop
+  s.player.lv = 5; // v0.11: the Clinic building opens at player Lv 5
   const clinic = place(s, 'clinic').b;
   BS.finishTimers(s, T0 + 1e7);
   const yard = place(s, 'armoury');
@@ -1101,9 +1103,56 @@ test('v0.9 items: 13 slots, quality tiers, equip/unequip moves items between sta
   IT.addItem(s, 'machete'); r = IT.equipItem(s, 'rook', 'machete');
   assert.equal(r.prev, 'tyreiron'); assert.equal(IT.stashCount(s, 'tyreiron'), 1, 'swapped weapon goes back to the stash');
   r = IT.unequipItem(s, 'rook', 'body'); assert.ok(r.ok); assert.equal(IT.stashCount(s, 'gilet'), 1);
-  // loot sources
-  s.parts = 25; const c = IT.craftItem(s); assert.ok(c.ok && IT.ITEMS[c.id]); assert.equal(s.parts, 15);
-  assert.ok(!IT.craftItem({ parts: 3 }).ok);
+});
+
+test('v0.11 rarity, 62 items with art, level gates, sources, blueprints and the Factory', () => {
+  assert.equal(IT.ITEM_IDS.length, 62);
+  assert.deepEqual(Object.values(IT.QUALITY).map((q) => q.name), ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']);
+  for (const id of IT.ITEM_IDS) {
+    const it = IT.ITEMS[id];
+    assert.ok(it.lv >= 1 && it.text && ['loot', 'level', 'reward'].includes(it.src), id);
+    assert.ok(readFileSync(new URL('../' + IT.itemIcon(id), import.meta.url)).length > 1000, id + ' icon');
+    assert.ok(!/[\u{1F300}-\u{1FAFF}]/u.test(it.name), id + ' no emoji');
+  }
+  // level and reward items never drop from normal loot
+  const h = { rng: 5 };
+  for (let i = 0; i < 400; i++) { const id = IT.rollItem(h); assert.ok(!['level', 'reward'].includes(IT.ITEMS[id].src), id); }
+  // item level gate
+  const s = newGame(T0, 21);
+  IT.addItem(s, 'goldrifle'); s.player.lv = 6; s.heroes.owned.rook.lv = 6;
+  assert.match(IT.equipItem(s, 'rook', 'goldrifle').reason, /needs level 10/);
+  // level-up grants
+  PG.setPlayerLevel(s, 8, T0);
+  for (const id of ['crowbar', 'raincoat', 'flaregun', 'combatboots']) assert.ok(IT.stashCount(s, id) >= 1, id);
+  assert.equal(IT.stashCount(s, 'bomber'), 0);
+  // Factory: building gate, blueprint gate, costs, timer, collect, rush
+  assert.equal(FX.canCraft(s, 'smg', T0).reason, 'Build a Factory first');
+  rich(s); assert.ok(place(s, 'factory').ok); BS.finishTimers(s, T0 + 1e7);
+  assert.ok(FX.factoryBuilt(s));
+  assert.equal(FX.canCraft(s, 'smg', T0).reason, 'You need the blueprint');
+  s.blueprints.smg = 1; s.parts = 12; const cash = s.cash;
+  assert.ok(FX.startCraft(s, 'smg', T0).ok);
+  assert.equal(s.parts, 0); assert.equal(s.cash, cash - 800);
+  assert.ok(!FX.collectCraft(s, T0 + 1000).ok);
+  assert.ok(FX.collectCraft(s, T0 + 20 * 60000).ok);
+  assert.equal(IT.stashCount(s, 'smg'), 1); assert.equal(s.stats.crafted, 1);
+  s.parts = 12; FX.startCraft(s, 'smg', T0); const ice = s.teeth;
+  assert.ok(FX.rushCraft(s, T0).ok); assert.ok(s.teeth < ice); assert.equal(IT.stashCount(s, 'smg'), 2);
+  // blueprints turn up until you have them all
+  let got = 0; for (let i = 0; i < 400; i++) if (IT.rollBlueprintLoot(s, 'op')) got++;
+  assert.ok(got > 0); assert.equal(Object.keys(s.blueprints).length, IT.BP_ITEMS.length);
+  // clinic building opens at Lv 5
+  const n = newGame(T0, 22); rich(n);
+  assert.match(BS.unlockInfo(n, 'clinic').reason, /player Lv 5/);
+});
+
+test('v0.11 save migration: v7 saves keep gear and get blueprints, factory and level items', () => {
+  const s = newGame(T0, 23); PG.setPlayerLevel(s, 6, T0);
+  s.v = 7; delete s.blueprints; delete s.factory; delete s.player.itemsGot;
+  for (const id of ['crowbar', 'raincoat', 'flaregun']) delete s.stash[id];
+  const m = migrate(JSON.parse(JSON.stringify(s)), T0);
+  assert.equal(m.v, 8); assert.deepEqual(m.blueprints, {}); assert.equal(m.factory, null);
+  for (const id of ['crowbar', 'raincoat', 'flaregun']) assert.equal(IT.stashCount(m, id), 1, id);
 });
 
 test('v0.9 equipped gear changes Rook\'s stats in battle', () => {
@@ -1239,7 +1288,7 @@ test('v0.9 save migration: v5 saves keep operators, Rook gets his kit, misfit Wo
   delete s5.heroes.owned.ivory.equip;
   s5.kit = {};
   const s = migrate(JSON.parse(serialize(s5)), T0);
-  assert.equal(s.v, 7);
+  assert.equal(s.v, 8);
   assert.ok(s.heroes.owned.ivory, 'unlocked operators are kept');
   const rook = s.heroes.owned.rook;
   assert.equal(rook.lv, 4); assert.deepEqual(rook.perks, ['iron']);
@@ -1433,8 +1482,10 @@ test('v0.10 stockpile (12h cap), operator jobs, clinic beds, Rookie Track', () =
   const cash0 = s.cash;
   assert.ok(PG.collectJob(s, 'rook', T0 + 3600000).ok);
   assert.ok(s.cash > cash0 && PG.isAvailable(s, 'rook', T0 + 3600000));
-  // clinic: 2 beds, the third patient waits for a bed
+  // clinic: needs the building (v0.11); 2 beds, the third patient waits for a bed
   grantHero(s, 'brick');
+  assert.equal(PG.admit(s, 'brick', T0), null, 'no Clinic building, no beds');
+  rich(s); place(s, 'clinic'); BS.finishTimers(s, T0 + 1e7);
   for (const id of ['rook', 'vesper', 'brick']) PG.admit(s, id, T0);
   assert.equal(s.clinic.length, 3);
   assert.equal(s.clinic[2].start, s.clinic[0].end, 'third waits for the first bed');
@@ -1451,7 +1502,7 @@ test('v0.10 save migration: v6 saves get a level from play so far and keep their
   s6.heroes.tutorialDone = true; s6.stats.battles = 12;
   s6.heroes.owned.rook.equip.gloves = 'tape';
   const s = migrate(JSON.parse(serialize(s6)), T0);
-  assert.equal(s.v, 7);
+  assert.equal(s.v, 8);
   assert.ok(s.player.lv >= 3 && s.player.lv <= 10, 'level ' + s.player.lv);
   assert.equal(s.energy.n, 10);
   assert.equal(s.heroes.owned.rook.equip.gloves, 'tape', 'worn kit is kept');

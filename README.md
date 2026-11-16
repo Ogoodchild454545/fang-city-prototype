@@ -31,6 +31,16 @@ factions you fight in Missions.
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
 
+## v0.11.0 (items, rarity, Factory, Clinic building)
+- **One rarity system:** Common (grey), Uncommon (green), Rare (blue), Epic (purple), Legendary (orange) with colour frames; old quality tiers map onto it. Every item has a level requirement (Common/Uncommon 1, Rare 3, Epic 6, Legendary 10).
+- **25 new items** (62 total): guns, sidearms, melee, head, jackets, armour, gloves, boots, accessories, grenades and a med kit. Sources: op loot, **level unlocks** (Crowbar Lv 2, Rain Mac Lv 4, Flare Pistol Lv 6, Combat Boots Lv 8, Kevlar Bomber Lv 12) and **won only** (Gilded Kingpin Rifle, Wolf-Fang Knuckles, Ceramic Plate Carrier, Kingpin's Gold Watch from the Rookie Track, PvP wins and vault crates).
+- **Item art:** painted icons for every item in `assets/items/` (no emoji), rarity glow in the stash, paper doll, result screen and Factory.
+- **Item detail:** rarity, slot, level, all stats, flavour line, where it comes from, and a stat-by-stat compare with what is equipped.
+- **Factory** (base building, player Lv 7): tap it to open the bench. Craft from a blueprint + parts + Cash on a timer (Uncommon 5 min ... Legendary 3 h), Ice to finish now. 15 blueprints drop from op loot (15%), the Rookie Track (Lv 7, Lv 9 steps) and are shown greyed until found. The old random Craft button is gone.
+- **Clinic is a building** (player Lv 5): build it, tap it, and its bed panel opens. No Clinic, no beds. 2 beds, 3 from Clinic level 4. It left the Safehouse tab.
+- Save v8 (v7 saves keep everything and get the level-unlock items they have earned).
+- Tests: `node tests/core.test.js`, `tests/progression.py`, `tests/playthrough.py`, `tests/items_factory.py` (screens at 844x390 / 844x340).
+
 ## v0.10.0 (player levels, energy and pacing)
 
 - **Player level** (account level, separate from each operator's level). XP comes from ops and PvP. The three free tutorial ops take you to Lv 3 in the first session; Lv 10 takes roughly 60–70 ops (a few days).

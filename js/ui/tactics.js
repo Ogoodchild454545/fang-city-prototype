@@ -1,6 +1,6 @@
 // Canvas tactics view: docklands yard, pan/zoom, hitchance, cover, speed queue and PvP timer.
 import { ITEMS, QUALITY } from '../core/items.js';
-import { ITEM_ICO } from './character.js';
+import { itemImg } from './character.js';
 import * as T from '../core/tactics.js';
 import { defOf, classOf, speciesPerk } from '../core/heroes.js';
 import { tile, inB, DIRS4 } from '../core/tmaps.js';
@@ -1348,7 +1348,7 @@ function finish(ctx) {
 
 // End-of-fight screen: landscape two-column card. Left: banner + squad with MVP and KO states.
 // Right: reward tiles (Cash, Rep, trophies, shards) that count up, then the league bar.
-function resultHtml(res, squad) {
+export function resultHtml(res, squad) {
   const mvp = squad.length ? squad.reduce((a, x) => (x.kills > a.kills || (x.kills === a.kills && x.hp > a.hp) ? x : a), squad[0]) : null;
   const sq = squad.map((x) => {
     const d = defOf(x.hero);
@@ -1368,7 +1368,11 @@ function resultHtml(res, squad) {
   }
   if (res.item && ITEMS[res.item]) {
     const it = ITEMS[res.item];
-    tiles.push(`<div class="rt loot" title="${esc(it.text || '')}"><i class="trico">${ITEM_ICO[res.item] || '🎒'}</i><b style="color:${QUALITY[it.q].col}">${esc(it.name)}</b><span>New gear · ${esc(QUALITY[it.q].name)}</span></div>`);
+    tiles.push(`<div class="rt loot q-${it.q}" title="${esc(it.text || '')}"><span class="iframe q-${it.q}">${itemImg(res.item)}</span><b style="color:${QUALITY[it.q].col}">${esc(it.name)}</b><span>New gear · ${esc(QUALITY[it.q].name)}</span></div>`);
+  }
+  if (res.bp && ITEMS[res.bp]) {
+    const it = ITEMS[res.bp];
+    tiles.push(`<div class="rt loot bpt q-${it.q}" title="Craft it at the Factory"><span class="iframe q-${it.q} bpf">${itemImg('blueprint')}<i class="bpmini">${itemImg(res.bp)}</i></span><b style="color:${QUALITY[it.q].col}">${esc(it.name)}</b><span>Blueprint · ${esc(QUALITY[it.q].name)}</span></div>`);
   }
   for (const l of res.lost || []) if (l.items && l.items.length) tiles.push(`<div class="rt troph neg"><i class="trico">🎒</i><b>${l.items.length}</b><span>${esc(l.name)}'s gear taken: ${esc(l.items.map((x) => ITEMS[x]?.name).join(', '))}</span></div>`);
   let league = '';
@@ -1435,7 +1439,7 @@ function playerXpBlock(res) {
     ${up ? `<div class="lvup"><div class="h">Level up! · Player Lv ${px.lv}</div>${unl.length ? `<div class="tiny">Unlocked: ${unl.map((u) => `${u.ico} <b>${esc(u.name)}</b>`).join(' · ')}</div>` : ''}</div>` : ''}
     <div class="tiny"><b>Player</b> +${px.amount} XP · Lv ${px.lv}${res.firstClear ? ' · <span class="gold">first clear</span>' : ''}</div>
     <div class="xpbar"><i style="width:${pct}%"></i></div>
-    ${res.clinic && res.clinic.length ? `<div class="tiny red">🏥 ${res.clinic.map((id) => esc(defOf(id).name)).join(', ')} went to the clinic to patch up (Safehouse).</div>` : ''}
+    ${res.clinic && res.clinic.length ? `<div class="tiny red">🏥 ${res.clinic.map((id) => esc(defOf(id).name)).join(', ')} went to the Clinic to patch up (tap the Clinic in your base).</div>` : ''}
   </div>`;
 }
 

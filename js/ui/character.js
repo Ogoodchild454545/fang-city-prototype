@@ -4,7 +4,7 @@
 import { HEROES, defOf, classOf, speciesPerk } from '../core/heroes.js';
 import {
   SLOTS, SLOT_BY_ID, ITEMS, QUALITY, STAT_DEFS, statsFor, stashList, ensureItems, equipItem, unequipItem,
-  targetSlot, slotFits, craftItem, CRAFT_ITEM_COST, modsOf, equippedIds,
+  targetSlot, slotFits, modsOf, equippedIds, itemIcon, sourceText, hasBlueprint,
   SLOT_UNLOCK, slotOpen, slotLevel, openSlotCount, bestGear, BEST_GEAR_LV,
 } from '../core/items.js';
 import { isUnlocked, unlockLv, playerLv } from '../core/progression.js';
@@ -14,16 +14,11 @@ import { esc } from './fmt.js';
 import * as Audio from './audio.js';
 import { abilityIcon } from './tactics.js';
 
-// Small item glyphs (system emoji in the prototype; quality shows as the frame colour).
-export const ITEM_ICO = {
-  carbine: '🔫', sawnoff: '🔫', pumpgun: '🔫', snub: '🔫', pistol9: '🔫', magnum: '🔫',
-  tyreiron: '🔧', knuckles: '👊', bat: '🏏', machete: '🔪', sledge: '🔨',
-  flatcap: '🧢', beanie: '🧶', helmet: '⛑️', hoodie: '🧥', leather: '🧥', trench: '🥼',
-  gilet: '🦺', stabvest: '🦺', platerig: '🛡️', tape: '🩹', fingerless: '🧤', weighted: '🥊',
-  trainers: '👟', workboots: '🥾', runners: '👟', dogtags: '🏷️', chain: '📿', watch: '⌚', ring: '💍',
-  pipebomb: '💣', bandolier: '🎒', dressings: '🩹', painkillers: '💊', dice: '🎲', photo: '🖼️', fang: '🦷',
-};
-const icoOf = (id) => ITEM_ICO[id] || (ITEMS[id] && SLOTS.find((s) => s.kind === ITEMS[id].slot)?.ico) || '▫️';
+// v0.11: painted item icons (assets/items/{id}.webp), framed by rarity. No emoji for items.
+export const itemImg = (id, cls = '') => `<img class="iimg ${cls}" src="${itemIcon(id)}" alt="" draggable="false" loading="lazy">`;
+// Empty slots show a faded silhouette of a typical piece for that slot.
+const GHOST = { primary: 'carbine', sidearm: 'pistol9', melee: 'tyreiron', head: 'flatcap', jacket: 'hoodie', body: 'gilet', gloves: 'fingerless', boots: 'workboots', acc1: 'watch', acc2: 'ring', utility: 'pipebomb', consumable: 'dressings', trinket: 'dice' };
+const icoOf = (id) => itemImg(id);
 
 function cs(ctx) {
   ctx.sub.char ||= { hero: 'rook', tab: 'gear', sel: null, filter: null, back: 'crew' };
@@ -84,13 +79,35 @@ function itemLines(it) {
   return out;
 }
 
-export function itemCard(id, extra = '') {
+export function itemCard(id, extra = '', s = null) {
   const it = ITEMS[id]; if (!it) return '';
   const q = QUALITY[it.q];
-  const slot = SLOTS.find((s) => s.kind === it.slot);
-  return `<div class="icard"><div class="ihead"><span class="iico q-${it.q}">${icoOf(id)}</span><div><b style="color:${q.col}">${esc(it.name)}</b><div class="tiny dim">${esc(q.name)} · ${esc(slot ? slot.name : it.slot)}</div></div></div>
+  const slot = SLOTS.find((x) => x.kind === it.slot);
+  const bp = s && it.bp ? (hasBlueprint(s, id) ? ' · <span class="green">Blueprint owned</span>' : '') : '';
+  return `<div class="icard q-${it.q}"><div class="ihead"><span class="iframe q-${it.q}">${itemImg(id)}</span><div><b style="color:${q.col}">${esc(it.name)}</b>
+      <div class="tiny"><span class="rar q-${it.q}">${esc(q.name)}</span> <span class="dim">${esc(slot ? slot.name : it.slot)} · Lv ${it.lv}</span></div></div></div>
     <ul class="ilines">${itemLines(it).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-    <div class="tiny dim iflav">${esc(it.text || '')}</div>${extra}</div>`;
+    <div class="tiny dim iflav">“${esc(it.text || '')}”</div>
+    <div class="tiny isrc">${esc(sourceText(id))}${bp}</div>${extra}</div>`;
+}
+
+// Stat-by-stat comparison of a stash item against what is in the slot now.
+const CMP_KEYS = ['dmg', 'range', ...STAT_DEFS.map((d) => d.id), 'charges'];
+function cmpVal(it, k) {
+  if (!it) return 0;
+  if (k === 'dmg') return it.wpn ? (it.wpn.dmg[0] + it.wpn.dmg[1]) / 2 : 0;
+  if (k === 'range') return it.wpn && it.wpn.typ !== 'melee' ? it.wpn.range : 0;
+  return it[k] || 0;
+}
+function compareTable(newId, curId) {
+  const a = ITEMS[newId], b = curId ? ITEMS[curId] : null;
+  const name = (k) => k === 'dmg' ? 'Avg damage' : k === 'range' ? 'Range' : k === 'charges' ? 'Throws' : (STAT_DEFS.find((d) => d.id === k) || {}).name;
+  const rows = CMP_KEYS.map((k) => ({ k, n: cmpVal(a, k), c: cmpVal(b, k) })).filter((r) => r.n || r.c);
+  if (!rows.length) return '';
+  return `<table class="cmpt"><tr><th></th><th>${b ? esc(b.name) : 'Empty'}</th><th>New</th></tr>${rows.map((r) => {
+    const d = r.n - r.c;
+    return `<tr><td>${esc(name(r.k))}</td><td>${r.c}</td><td class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${r.n}${d ? ` ${d > 0 ? '▲' : '▼'}${Math.abs(Math.round(d * 10) / 10)}` : ''}</td></tr>`;
+  }).join('')}</table>`;
 }
 
 function detail(s, c) {
@@ -102,18 +119,19 @@ function detail(s, c) {
   if (sel.from === 'slot') {
     const id = rec.equip[sel.slot];
     if (!id) return `<div class="cdetail tiny dim"><b class="h small">${esc(SLOT_BY_ID[sel.slot].name)}</b> — empty. Matching items in your stash are highlighted.</div>`;
-    return `<div class="cdetail">${itemCard(id, `<div class="row" style="margin-top:4px;gap:4px"><button class="btn sm" data-act="charUnequip" data-slot="${sel.slot}">Take off</button></div>`)}</div>`;
+    return `<div class="cdetail">${itemCard(id, `<div class="row" style="margin-top:4px;gap:4px"><button class="btn sm" data-act="charUnequip" data-slot="${sel.slot}">Take off</button></div>`, s)}</div>`;
   }
   const it = ITEMS[sel.id];
   const fits = SLOTS.filter((sl) => sl.kind === it.slot && slotOpen(s, c.hero, sl.id));
   const tgt = sel.slot || targetSlot(rec, sel.id, s, c.hero);
-  if (!fits.length) return `<div class="cdetail">${itemCard(sel.id, `<div class="tiny cmp red">🔒 ${esc(SLOT_BY_ID[tgt].name)} slot opens at level ${SLOT_UNLOCK[tgt]}.</div>`)}</div>`;
+  if (!fits.length) return `<div class="cdetail">${itemCard(sel.id, `<div class="tiny cmp red">🔒 ${esc(SLOT_BY_ID[tgt].name)} slot opens at level ${SLOT_UNLOCK[tgt]}.</div>`, s)}</div>`;
   const cur = rec.equip[tgt];
+  if (slotLevel(s, c.hero) < it.lv) return `<div class="cdetail">${itemCard(sel.id, `${compareTable(sel.id, cur)}<div class="tiny cmp red">🔒 Needs level ${it.lv} (${esc(HEROES[c.hero].name)} or your player level).</div>`, s)}</div>`;
   const btns = fits.length > 1
     ? fits.map((sl) => `<button class="btn sm ${sl.id === tgt ? 'gold' : ''}" data-act="charEquip" data-id="${sel.id}" data-slot="${sl.id}">Equip · ${esc(sl.short)} ${sl.id.slice(-1)}</button>`).join('')
     : `<button class="btn sm gold" data-act="charEquip" data-id="${sel.id}" data-slot="${tgt}">Equip</button>`;
-  const vs = cur ? `<div class="tiny cmp">Replaces <b style="color:${QUALITY[ITEMS[cur].q].col}">${esc(ITEMS[cur].name)}</b>: ${esc(itemLines(ITEMS[cur]).join(', ') || 'no stats')}</div>` : `<div class="tiny cmp green">${esc(SLOT_BY_ID[tgt].name)} slot is empty.</div>`;
-  return `<div class="cdetail">${itemCard(sel.id, `${vs}<div class="row" style="margin-top:4px;gap:4px;flex-wrap:wrap">${btns}</div>`)}</div>`;
+  const vs = (cur ? `<div class="tiny cmp">Replaces <b style="color:${QUALITY[ITEMS[cur].q].col}">${esc(ITEMS[cur].name)}</b></div>` : `<div class="tiny cmp green">${esc(SLOT_BY_ID[tgt].name)} slot is empty.</div>`) + compareTable(sel.id, cur);
+  return `<div class="cdetail">${itemCard(sel.id, `${vs}<div class="row" style="margin-top:4px;gap:4px;flex-wrap:wrap">${btns}</div>`, s)}</div>`;
 }
 
 function slotBtn(s, rec, c, sl) {
@@ -127,7 +145,7 @@ function slotBtn(s, rec, c, sl) {
   const fit = selItem && selItem.slot === sl.kind;
   const sel = c.sel && c.sel.from === 'slot' && c.sel.slot === sl.id;
   return `<button class="cslot ${it ? 'has q-' + it.q : 'empty'} ${fit ? 'fit' : ''} ${sel ? 'sel' : ''}" data-act="charSlot" data-slot="${sl.id}" data-drop-slot="${sl.id}" ${it ? `draggable="true" data-drag-slot="${sl.id}" data-tip-item="${id}"` : ''} title="${esc(it ? it.name : sl.name)}">
-    <span class="sico">${it ? icoOf(id) : `<i>${sl.ico}</i>`}</span><span class="slab">${esc(it ? it.name : sl.short)}</span></button>`;
+    <span class="sico">${it ? icoOf(id) : itemImg(GHOST[sl.id], 'ghost')}</span><span class="slab">${esc(it ? it.name : sl.short)}</span></button>`;
 }
 
 function bestBtn(s, c) {
@@ -145,10 +163,10 @@ function stashGrid(s, c) {
   return `<div class="cstash" data-drop-stash="1">
     <div class="stashhead"><div class="sect" style="margin:0">Stash</div><span class="tiny dim">${list.reduce((a, x) => a + x.n, 0)} items · ${s.parts || 0} parts</span>
       ${bestBtn(s, c)}
-      ${isUnlocked(s, 'crafting') ? `<button class="btn sm" data-act="charCraft" title="Workshop: turn ${CRAFT_ITEM_COST} parts into a random piece of street gear">🔨 Craft · ${CRAFT_ITEM_COST}</button>` : ''}</div>
+</div>
     ${chips}
     <div class="sgridi">${list.length ? list.map(({ id, n, item }) => `<button class="sitem q-${item.q} ${c.sel && c.sel.from === 'stash' && c.sel.id === id ? 'sel' : ''} ${selSlotKind && item.slot === selSlotKind ? 'fit' : ''}" data-act="charItem" data-id="${id}" draggable="true" data-drag-item="${id}" data-tip-item="${id}" title="${esc(item.name)}">
-        <span class="sico">${icoOf(id)}</span>${n > 1 ? `<span class="sn">×${n}</span>` : ''}<span class="slab">${esc(item.name)}</span></button>`).join('') : '<div class="tiny dim" style="padding:6px">Nothing here. Win fights, clear missions, open crates or craft at the Workshop.</div>'}</div>
+        <span class="sico">${icoOf(id)}</span>${n > 1 ? `<span class="sn">×${n}</span>` : ''}<span class="slab">${esc(item.name)}</span></button>`).join('') : '<div class="tiny dim" style="padding:6px">Nothing here. Win ops, open crates, level up or craft at the Factory.</div>'}</div>
   </div>`;
 }
 
@@ -309,12 +327,4 @@ export const actions = {
     ctx.save(); ctx.render();
   },
   charUnequip(ctx, el) { doUnequip(ctx, el.dataset.slot); },
-  charCraft(ctx) {
-    const r = craftItem(ctx.state);
-    if (!r.ok) return ctx.toast(r.reason);
-    Audio.play('collect');
-    ctx.toast(`Workshop made: ${r.item.name} (${QUALITY[r.item.q].name})`);
-    cs(ctx).sel = { from: 'stash', id: r.id };
-    ctx.save(); ctx.render();
-  },
 };

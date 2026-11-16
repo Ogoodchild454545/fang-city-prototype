@@ -141,6 +141,7 @@ export const builtLevel = (b) => b.lv; // level currently in effect (0 while fir
 export function unlockInfo(state, type) {
   const d = BUILDINGS[type];
   const dl = denLevel(state);
+  if (d.plv && ((state.player && state.player.lv) || 1) < d.plv) return { ok: false, reason: `Unlocks at player Lv ${d.plv}` };
   if (dl < d.unlock) return { ok: false, reason: `Needs The Den level ${d.unlock}` };
   if (d.req && state.districts[d.req]?.owner !== 'player') {
     const dist = DISTRICTS.find((x) => x.id === d.req);

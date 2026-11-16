@@ -5,7 +5,7 @@ import { fmt, money, rewardText, rewardTextPlain, ico, dur, esc } from './fmt.js
 import * as P from '../core/progression.js';
 import { HEROES } from '../core/heroes.js';
 
-// v0.10 Safehouse: Hideout stockpile (Lv 3), clinic (Lv 5) and operator jobs (Lv 7), then the
+// v0.10 Safehouse: Hideout stockpile (Lv 3) and operator jobs (Lv 7); the clinic is a base building since v0.11, then the
 // daily pay-out. Locked panels show a one-line "Unlocks at Lv X" teaser only.
 const lockedPanel = (id, title, ico2) => `<div class="shpanel locked"><div class="shhead"><span class="shico">${ico2}</span><b class="h">${title}</b></div><div class="tiny dim">🔒 Unlocks at player level ${P.unlockLv(id)}</div></div>`;
 const left = (end, now) => `<span data-until="${end}">${dur(Math.max(0, (end - now) / 1000))}</span>`;
@@ -18,17 +18,6 @@ function stockPanel(s, now) {
     <div class="bar"><i data-live-bar="stock" style="width:${(p.hours / P.STOCK_CAP_H) * 100}%"></i></div>
     <div class="tiny dim">Piles up while you are away · full after ${P.STOCK_CAP_H}h${p.full ? ' · <span class="red">FULL</span>' : ''}</div>
     <button class="btn red block" data-act="collectStock" ${p.cash < 1 && p.ammo < 1 ? 'disabled' : ''}>Collect</button></div>`;
-}
-
-function clinicPanel(s, now) {
-  if (!P.isUnlocked(s, 'clinic')) return lockedPanel('clinic', 'Clinic', '🏥');
-  P.tickClinic(s, now);
-  const beds = P.clinicSlots(s);
-  const rows = s.clinic.map((p) => `<div class="shrow"><img src="${HEROES[p.hero]?.thumb || HEROES[p.hero]?.portrait}" alt=""><div class="grow"><b class="small">${esc(HEROES[p.hero]?.name || p.hero)}</b>
-      <div class="tiny dim">${p.start > now ? 'Waiting for a bed' : 'Patching up'} · ${left(p.end, now)}</div></div>
-      <button class="btn sm gold" data-act="rushPatient" data-id="${p.hero}">Rush · ${ico('teeth')} ${P.RUSH_ICE}</button></div>`).join('');
-  return `<div class="shpanel"><div class="shhead"><span class="shico">🏥</span><b class="h">Clinic</b><span class="tiny dim">${beds} beds · ${P.CLINIC_MIN} min each</span></div>
-    ${rows || '<div class="tiny dim">Everyone is fit. Operators knocked out in ops come here to recover; they sit out ops until they are patched up.</div>'}</div>`;
 }
 
 function jobsPanel(s, now) {
@@ -57,7 +46,7 @@ export function live(ctx, now) {
     const b = document.querySelector('[data-live="stockammo"]'); if (b) b.textContent = p.ammo;
     const bar = document.querySelector('[data-live-bar="stock"]'); if (bar) bar.style.width = (p.hours / P.STOCK_CAP_H) * 100 + '%';
   }
-  if (s.opJobs.some((j) => j.end <= now && !ctx.sub.jobDoneShown?.[j.hero + j.end]) || (s.clinic.length && s.clinic[0].end <= now)) {
+  if (s.opJobs.some((j) => j.end <= now && !ctx.sub.jobDoneShown?.[j.hero + j.end])) {
     ctx.sub.jobDoneShown ||= {};
     for (const j of s.opJobs) if (j.end <= now) ctx.sub.jobDoneShown[j.hero + j.end] = 1;
     ctx.render();
@@ -70,8 +59,8 @@ export function render(ctx) {
   const ds = M.dailyStatus(s, now);
   const passTier = Math.floor(s.passXp / 100);
   return `
-  <div class="title"><span class="h">Safehouse</span><span class="sub">/ Stockpile · Clinic · Jobs</span></div>
-  <div class="shgrid">${stockPanel(s, now)}${clinicPanel(s, now)}${jobsPanel(s, now)}</div>
+  <div class="title"><span class="h">Safehouse</span><span class="sub">/ Stockpile · Jobs</span></div>
+  <div class="shgrid">${stockPanel(s, now)}${jobsPanel(s, now)}</div>
   <div class="sect">Daily</div>
   <div class="tagline">Show up every day. The family notices.</div>
   <div class="sect">Daily pay-out · streak ${ds.streak}</div>
@@ -98,7 +87,6 @@ export function render(ctx) {
 
 export const actions = {
   collectStock(ctx) { const r = P.collectStockpile(ctx.state, ctx.now()); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`Collected ${money(r.cash)}${r.ammo ? ` and ${r.ammo} ammo` : ''}${r.lost > 0 ? ` · ${money(r.lost)} left in the pile (storage full)` : ''}`); ctx.render(); },
-  rushPatient(ctx, el) { const r = P.rushPatient(ctx.state, el.dataset.id, ctx.now()); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`${HEROES[el.dataset.id].name} is patched up`); ctx.render(); },
   collectOpJob(ctx, el) { const r = P.collectJob(ctx.state, el.dataset.id, ctx.now()); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`${HEROES[el.dataset.id].name} is back: ${rewardLine(ctx.state, r.got)}`); ctx.render(); },
   pickJob(ctx, el) {
     const s = ctx.state, now = ctx.now(), job = P.OP_JOBS.find((j) => j.id === el.dataset.id);

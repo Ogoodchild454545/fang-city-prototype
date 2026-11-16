@@ -1,5 +1,5 @@
 # v0.10 progression playthrough (844x390 and 844x340): Lv 1 home, tutorial ops, energy,
-# level-ups, Rookie Track, gear slots / Best gear, Safehouse (stockpile, clinic, jobs), ?level=N.
+# level-ups, Rookie Track, gear slots / Best gear, Safehouse (stockpile, jobs), Clinic building, ?level=N.
 import asyncio, os, sys
 from playwright.async_api import async_playwright
 
@@ -48,7 +48,7 @@ async def main():
         await close_modal(page)
         s = await ev(page, "(()=>{const s=window.__game.state; return {lv:s.player.lv, e:s.energy.n, v:s.v, eq:s.heroes.owned.rook.equip}})()")
         print('new game', s)
-        assert s['lv'] == 1 and s['e'] == 10 and s['v'] == 7 and len(s['eq']) == 4
+        assert s['lv'] == 1 and s['e'] == 10 and s['v'] == 8 and len(s['eq']) == 4
         # Lv 1: Cash only, locked tabs are greyed teasers, energy in the header
         assert await page.locator('.res.cash').count() == 1
         assert await page.locator('.res.inf').count() == 0 and await page.locator('.res.teeth').count() == 0
@@ -135,6 +135,9 @@ async def main():
         await page.locator('[data-act="charBack"]').click(); await page.wait_for_timeout(200)
         # KO Vesper in an op -> clinic; send Rook... keep one home; send Vesper? she is in clinic, so give a 3rd operator
         await ev(page, "(()=>{const s=window.__game.state; s.heroes.owned.brick={xp:0,lv:1,stars:1,shards:0,perks:[],gear:null}; s.heroes.squad=['rook','vesper','brick'];})()")
+        # v0.11: the clinic only works once the Clinic building is up
+        await ev(page, """(async()=>{const BS=await import('./js/core/base.js'); const g=window.__game, s=g.state; s.cash=Math.max(s.cash,5000);
+            const sp=BS.findFreeSpot(s.base,'clinic'); const r=BS.startBuild(s,'clinic',sp.x,sp.y,g.now()); BS.finishTimers(s,g.now()+1e8); if(!r.ok) console.error('clinic '+r.reason);})()""")
         await page.locator('#nav [data-act="nav"][data-tab="missions"]').click(); await page.wait_for_timeout(300)
         await shot(page, '08-ops-lv10')
         await page.locator('[data-act="startOp"][data-id="o14"]').click()

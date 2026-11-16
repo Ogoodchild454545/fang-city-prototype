@@ -10,7 +10,7 @@ import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, 
 import { mapFromJson } from './mapfmt.js';
 import { propDef } from './catalog.js';
 import { findMatch, pvpStake, settlePvp, opponentLabel } from './pvp.js';
-import { statsFor, defaultEquip, rollBattleLoot, ITEMS } from './items.js';
+import { statsFor, defaultEquip, rollBattleLoot, rollBlueprintLoot, rollItem, addItem, ITEMS } from './items.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
 
@@ -1076,6 +1076,7 @@ export function resolveTactics(s, b) {
       res.item = rollBattleLoot(s, 'tutorial');
     } else if (b.kind !== 'tutorial') {
       res.item = rollBattleLoot(s, b.kind);
+      res.bp = rollBlueprintLoot(s, b.kind);
     }
   }
   if (b.pvp && b.kind === 'street') {
@@ -1085,6 +1086,8 @@ export function resolveTactics(s, b) {
     res.league = pv.league;
     res.opponent = pv.opponent;
     if (b.status === 'win' && pv.shardDrop) res.shardDrop = pv.shardDrop;
+    // PvP wins sometimes pay out a Rare-or-better piece, reward-only gear included
+    if (b.status === 'win' && !res.item && rngNext(s) < 0.12) { res.item = rollItem(s, { minQ: 2, rewards: true }); addItem(s, res.item, 1); }
   }
   for (const u of b.units.filter((x) => x.side === 'player')) {
     const rec = s.heroes.owned[u.hero];
