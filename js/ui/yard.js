@@ -134,10 +134,10 @@ export function propHeight(t) {
   if (d === 'container') return t.stack >= 2 ? 45 : 22;
   if (d === 'van' || d === 'van2' || d === 'wreck' || d === 'wreck2' || d === 'car' || d === 'car2') return 18;
   if (d === 'barrier') return 12;
-  if (d === 'crate') return 14;
+  if (d === 'crate') return 16;
   if (d === 'desk') return 10;
   if (d === 'shelf') return 22;
-  if (d === 'barrel' || d === 'barrelWreck' || d === 'barrel-shelf' || d === 'burn') return 14;
+  if (d === 'barrel' || d === 'barrelWreck' || d === 'barrel-shelf' || d === 'burn') return 12;
   if (d === 'lamp') return 54;
   if (d === 'fence') return 30;
   if (d === 'boat') return 14;
@@ -458,19 +458,19 @@ function drawCrate(g, t, sx, sy, z) {
   }
   box(g, sx, sy, z, -0.38, -0.34, 0.38, 0.34, 0, 2.4, pal);
   if (v === 0) {
-    crateBox(g, sx, sy, z, -0.34, -0.3, 0.06, 0.3, 2.4, 13, '#8a6a3e');
-    crateBox(g, sx, sy, z, 0.08, -0.3, 0.34, 0.02, 2.4, 10, '#7a5c36');
-    crateBox(g, sx, sy, z, 0.08, 0.06, 0.34, 0.3, 2.4, 9, '#93734a');
+    crateBox(g, sx, sy, z, -0.34, -0.3, 0.06, 0.3, 2.4, 15.5, '#8a6a3e');
+    crateBox(g, sx, sy, z, 0.08, -0.3, 0.34, 0.02, 2.4, 12, '#7a5c36');
+    crateBox(g, sx, sy, z, 0.08, 0.06, 0.34, 0.3, 2.4, 10.5, '#93734a');
   } else {
     // shrink-wrapped sacks
     const w = palOf('#7c7a70', 0.95, 0.7, 0.52);
-    const f = box(g, sx, sy, z, -0.34, -0.3, 0.34, 0.3, 2.4, 14, w);
+    const f = box(g, sx, sy, z, -0.34, -0.3, 0.34, 0.3, 2.4, 16, w);
     for (const F of [f.L, f.R]) onFace(g, F, () => {
       g.fillStyle = 'rgba(255,255,255,0.12)';
       for (let k = 0; k < 3; k++) g.fillRect(0, 0.1 + k * 0.3, 1, 0.08);
       g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(0.48, 0, 0.04, 1);
     });
-    line(g, P(sx, sy, z, -0.34, 0.3, 14), P(sx, sy, z, 0.34, 0.3, 14), 'rgba(255,255,255,0.25)', 0.7 * z);
+    line(g, P(sx, sy, z, -0.34, 0.3, 16), P(sx, sy, z, 0.34, 0.3, 16), 'rgba(255,255,255,0.25)', 0.7 * z);
   }
 }
 
@@ -487,7 +487,7 @@ function drawBarrier(g, sx, sy, z) {
 
 function drawBarrel(g, sx, sy, z, kind, now) {
   const p = P(sx, sy, z, 0, 0);
-  const rx = 7.2 * z, ry = 3.6 * z, H = 15 * z;
+  const rx = 6.2 * z, ry = 3.1 * z, H = 12.5 * z;
   const wreck = kind === 'wreck';
   const col = kind === 'burn' ? '#5a3a26' : kind === 'drum' ? '#44525a' : wreck ? '#2a2420' : '#a2281e';
   const c = hex2(col);
@@ -509,8 +509,8 @@ function drawBarrel(g, sx, sy, z, kind, now) {
   if (kind === 'barrel') {
     // hazard diamond
     g.fillStyle = '#e8c23a';
-    g.beginPath(); g.moveTo(p[0], p[1] - 10 * z); g.lineTo(p[0] + 3 * z, p[1] - 7 * z); g.lineTo(p[0], p[1] - 4 * z); g.lineTo(p[0] - 3 * z, p[1] - 7 * z); g.closePath(); g.fill();
-    g.fillStyle = '#1a1a1a'; g.fillRect(p[0] - 0.5 * z, p[1] - 8.5 * z, 1 * z, 2.4 * z);
+    g.beginPath(); g.moveTo(p[0], p[1] - 8.6 * z); g.lineTo(p[0] + 2.6 * z, p[1] - 6 * z); g.lineTo(p[0], p[1] - 3.4 * z); g.lineTo(p[0] - 2.6 * z, p[1] - 6 * z); g.closePath(); g.fill();
+    g.fillStyle = '#1a1a1a'; g.fillRect(p[0] - 0.45 * z, p[1] - 7.3 * z, 0.9 * z, 2 * z);
   }
   // lid
   g.fillStyle = wreck ? '#0e0c0a' : kind === 'burn' ? '#1a1210' : rgb(c, 0.75);
@@ -876,8 +876,8 @@ function footprints(t) {
     if (c.W) out.push([-0.5, -th, 0, th, H]); if (c.E) out.push([0, -th, 0.5, th, H]);
   } else if (d === 'van' || d === 'wreck' || d === 'car') out.push([-0.42, -0.34, 1.42, 0.34, 18]);
   else if (d === 'barrier') out.push([-0.44, -0.18, 0.44, 0.18, 12]);
-  else if (d === 'crate') out.push([-0.36, -0.32, 0.36, 0.32, 13]);
-  else if (d === 'barrel' || d === 'burn' || d === 'barrelWreck') out.push([-0.15, -0.15, 0.15, 0.15, 14]);
+  else if (d === 'crate') out.push([-0.36, -0.32, 0.36, 0.32, 15]);
+  else if (d === 'barrel' || d === 'burn' || d === 'barrelWreck') out.push([-0.13, -0.13, 0.13, 0.13, 12]);
   else if (d === 'desk') out.push([-0.4, -0.24, 0.4, 0.24, 8]);
   else if (d === 'shelf') out.push([-0.4, -0.16, 0.4, 0.16, 22]);
   else if (d === 'lamp') out.push([-0.04, -0.04, 0.04, 0.04, 54]);

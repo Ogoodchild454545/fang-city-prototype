@@ -1,4 +1,4 @@
-# Unit scale (v0.6.2)
+# Unit scale (v0.6.2, retuned in v0.6.3)
 
 Feedback: the map's buildings are about the right size, but the creatures are far too big. Buildings and props stay as they are; only the units change.
 
@@ -65,3 +65,46 @@ The research behind this is standard small-sprite and HD-2D practice. You can't 
 - At full zoom-out (pinch), faces become unreadable. Silhouette, ring and rim still identify the unit.
 - Speech bubbles, damage numbers and the hit-chance label are still sized for the old units and can overlap when the squad is bunched up.
 - The rim shadow adds some draw cost per unit. That's fine on GPUs, but noticeable in headless software rendering.
+
+## v0.6.3 retune (units were overshot)
+
+v0.6.2 made the units too small: explosive barrels and crate stacks stood almost as tall as a wolf, and the rings, bars and badges swamped the bodies. We re-checked against real-world rules of thumb:
+
+| Thing | Real | Rule vs a 1.8 m wolf | v0.6.2 | v0.6.3 |
+|---|---|---|---|---|
+| Explosive barrel | 0.9 m | hip/waist (~0.5x) | 15 px (0.71x) | **12.5 px (0.46x)** |
+| Crate stack on pallet | ~1.2 m | chest (~0.65x) | 15.4 px (0.73x) | **18 px (0.67x)** |
+| Door lintel | 2.1 m | ~1.15x | 31 (1.48x) | 31 (**1.15x**) |
+| Room wall | ~2.6 m+ | ~1.4x | 40 | 40 (1.48x) |
+| Single container | 2.6 m | ~1.4x | 21.5 | 21.5 (0.8x, unchanged) |
+
+The door, room walls, barrel and crate all agree on about 14.5 px per metre, which puts a 1.8 m wolf at **27 px**. New species heights, with the same ratios as before:
+
+| Species | px |
+|---|---|
+| Wolf / Fox / Snake | 27 |
+| Badger | 28 |
+| Croc | 31 |
+| Bear | 32 |
+| Rat (Pip) | 20 |
+
+Props: barrels are 12.5 px tall (rx 6.2), down from 15. Crate stacks go up from 13 to 15.5 px plus the pallet, and sack stacks up from 14 to 16. Buildings, walls, doors and containers are unchanged.
+
+**Known compromise:** single containers are deliberately drawn squat at 21.5 px (that's the look Oliver likes), so a wolf stands a little taller than a one-high box. A one-high box is 0.8x a wolf, not the 1.4x of a real container; a two-high stack (45 px) is 1.7x. Making single boxes about 38 px would fix the ratio but changes the container look, so it's left for a decision.
+
+### Overlays sized to the units
+- **Team ring:** about the size of the footprint (8 x 3.5 z), with a 0.75 z line (1.3 z for the acting unit) and a fainter fill.
+- **HP bar:** 12 x 1.8 z, 8 z above the head. The ammo count is a tiny chip at the bar's right end, and the AP pips (r 1.5 z) sit just above the bar.
+- **Hit-chance tag:**
+  - 7.5 z Oswald, with a 0.7x shield/flank badge and a 4.8 z cover word.
+  - The breakdown is in a 5.6 z font.
+  - Tags are laid out after all units: one that would cover another unit's HP bar or another tag moves up, with a thin leader line back to its unit.
+- **Speech bubbles:** 5.8 z, with a minimum of 9 CSS px. They are queued and placed nearest-first, and step upward past each other, HP bars and tags, again with a leader line.
+- **Damage numbers:** 10 / 11.5 / 13 z. Numbers that land on the same spot within 0.5 s stack instead of overprinting. HIT/MISS/CRIT callouts are 9 / 11 z.
+- Hit sparks, tracers, damage numbers and callouts are positioned from the target's actual height, not a fixed 40 px.
+
+Images:
+- `screenshots/126-v063-scale-vs-barrel-crate-container.png` (before/after close-up)
+- `screenshots/127-v063-battle-default.png`
+- `screenshots/128-v063-combat-labels.png`
+- `screenshots/129-v063-combat-bubbles.png`

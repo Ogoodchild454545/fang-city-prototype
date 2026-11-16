@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.6.2)
+# Fang City: Animal Gangs (playable prototype v0.6.3)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,11 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.6.3 (unit scale retune)
+
+- Units are back up to 27 px for a wolf or fox, with the same species ratios: Bear 32, Croc 31, Badger 28, Pip 20. That's 1.8 m against the doors and walls. Explosive barrels are smaller (12.5 px, hip height) and crate stacks a little taller (chest height). Buildings and containers are unchanged.
+- The rings are slimmer and the size of the footprint. HP bars, the ammo chip, AP pips, hit-chance tags, speech bubbles, damage numbers and callouts are all scaled to the units. Bubbles and hit-chance tags move up instead of overlapping when units are bunched.
 
 ## v0.6.2 (unit scale)
 

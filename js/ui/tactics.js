@@ -66,7 +66,7 @@ function safeRect(cv) {
 // World-space box of a unit: feet tile plus head/HP bar above (actors are ~16-25 tall).
 function unitBox(un) {
   const p = toWorld(un.x, un.y);
-  return { minX: p.x - 30, maxX: p.x + 30, minY: p.y - 58, maxY: p.y + 16 };
+  return { minX: p.x - 30, maxX: p.x + 30, minY: p.y - 46, maxY: p.y + 16 };
 }
 function boxOf(list) {
   const B = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
@@ -312,9 +312,97 @@ function drawOverwatchCone(g, x, y, z, facing, now) {
   g.restore();
 }
 
+function drawChanceTag(g, cx, ly, z, tw, prev, showParts) {
+  const label = `${prev.chance}%`;
+  g.font = `bold ${Math.round(7.5 * z)}px Oswald, sans-serif`;
+  g.textAlign = 'center';
+  g.fillStyle = 'rgba(10,8,8,0.82)';
+  g.beginPath(); g.roundRect(cx - tw / 2, ly - 7.5 * z, tw, 9.5 * z, 2.5 * z); g.fill();
+  g.fillStyle = chanceColor(prev.chance);
+  g.fillText(label, cx, ly);
+  const badgeY = ly - 3 * z;
+  drawShieldBadge(g, cx - tw / 2 - 5 * z, badgeY, z * 0.7, prev.cover);
+  if (prev.flanked) drawFlankBadge(g, cx + tw / 2 + 5 * z, badgeY, z * 0.7);
+  const cov = prev.flanked ? 'FLANK' : prev.cover >= 2 ? 'FULL' : prev.cover === 1 ? 'HALF' : 'OPEN';
+  g.font = `bold ${Math.round(4.8 * z)}px Inter, sans-serif`;
+  g.fillStyle = prev.flanked ? '#f0c040' : prev.cover >= 1 ? '#c8e4ff' : '#a0a0a8';
+  g.fillText(cov, cx, ly - 9.5 * z);
+  if (showParts) drawChanceBreakdown(g, cx, ly - 16 * z, z, prev);
+  g.textAlign = 'left';
+}
+const overlaps = (a, b, gap = 0) => a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap;
+// Hit-chance tags: nudge each one up past any HP bar (other than its own unit's) or earlier tag it would cover.
+function drawTags(g, q, bars, z) {
+  const placed = [];
+  for (const t of q.sort((a, c) => c.y - a.y)) {
+    let dy = 0;
+    for (let k = 0; k < 10; k++) {
+      const r = { x: t.x, y: t.y + dy, w: t.w, h: t.h };
+      const hit = bars.filter((o) => o.uid !== t.uid).concat(placed).find((o) => overlaps(r, o, z));
+      if (!hit) break;
+      dy = hit.y - t.h - z - t.y;
+    }
+    t.y += dy; placed.push(t);
+    g.save();
+    if (dy < -3 * z) {
+      g.strokeStyle = 'rgba(240,230,210,0.55)'; g.lineWidth = 0.7 * z;
+      g.beginPath(); g.moveTo(t.cx, t.y + t.h); g.lineTo(t.cx, t.by - 0.5 * z); g.stroke();
+    }
+    t.draw(dy); g.restore();
+  }
+}
+
+// Speech bubbles for small units: compact, and laid out greedily so bunched quips stack
+// upward instead of overprinting each other (or the HP bars beneath them).
+function drawBubbles(g, q, z, now, avoid = []) {
+  if (!q.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const fs = Math.max(9 * dpr, 5.8 * z);
+  const pad = fs * 0.55, th = fs * 1.6, gap = 2 * dpr;
+  g.save();
+  g.font = `600 ${Math.round(fs)}px Inter, sans-serif`;
+  g.textAlign = 'center';
+  const boxes = q.map((it) => {
+    const tw = Math.min(170 * dpr, g.measureText(it.bub.text).width + pad * 2);
+    return { ...it, tw, bx: it.x - tw / 2, by: it.y - 5 * dpr - th };
+  }).sort((a, c) => c.y - a.y); // nearest (lowest on screen) first keeps its spot
+  const placed = [];
+  for (const bx of boxes) {
+    for (let k = 0; k < 8; k++) {
+      const r = { x: bx.bx, y: bx.by, w: bx.tw, h: th };
+      const hit = placed.map((o) => ({ x: o.bx, y: o.by, w: o.tw, h: th })).concat(avoid).find((o) => overlaps(r, o, gap));
+      if (!hit) break;
+      bx.by = hit.y - th - gap;
+    }
+    placed.push(bx);
+  }
+  for (const it of placed) {
+    const age = now - it.bub.t;
+    const enter = Math.min(1, age / 160);
+    const pop = enter < 1 ? 1.12 * (1 - Math.pow(1 - enter, 3)) : 1;
+    const fade = Math.min(1, (it.bub.until - now) / 280);
+    const cxp = it.bx + it.tw / 2, base = it.by + th;
+    g.save();
+    g.globalAlpha = fade;
+    // leader from the bubble down to the speaker (tail when unshifted)
+    g.strokeStyle = it.side === 'player' ? 'rgba(111,168,255,0.7)' : 'rgba(255,90,72,0.7)';
+    g.lineWidth = 1 * dpr;
+    if (base < it.y - 6 * dpr) { g.beginPath(); g.moveTo(cxp, base); g.lineTo(it.x, it.y - 1 * dpr); g.stroke(); }
+    g.translate(cxp, base); g.scale(pop, pop);
+    g.fillStyle = 'rgba(14,12,10,0.94)';
+    g.lineWidth = 1.2 * dpr;
+    g.beginPath(); g.roundRect(-it.tw / 2, -th, it.tw, th, 4 * dpr); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(-3 * dpr, 0); g.lineTo(3 * dpr, 0); g.lineTo(0, 4.5 * dpr); g.closePath(); g.fill();
+    g.fillStyle = '#f3e7c9';
+    g.fillText(it.bub.text, 0, -th * 0.3, it.tw - pad);
+    g.restore();
+  }
+  g.restore();
+}
+
 function drawApPips(g, cx, y, z, cur, max, cost) {
   const n = Math.max(1, max || 1);
-  const r = 2.5 * z, gap = 6.6 * z;
+  const r = 1.5 * z, gap = 4.2 * z;
   const totalW = (n - 1) * gap;
   for (let i = 0; i < n; i++) {
     const x = cx - totalW / 2 + i * gap;
@@ -384,11 +472,11 @@ function drawChanceBreakdown(g, cx, y, z, prev) {
     return `${sign}${p.val}  ${p.label}`;
   });
   body.push(`=  ${prev.chance}%`);
-  const fs = Math.round(7.5 * z);
+  const fs = Math.round(5.6 * z);
   g.font = `${fs}px Inter, sans-serif`;
   let maxW = 0;
   for (const s of body) maxW = Math.max(maxW, g.measureText(s).width);
-  const pad = 5 * z, lh = 10 * z;
+  const pad = 3.5 * z, lh = 7.4 * z;
   const w = maxW + pad * 2, h = body.length * lh + pad * 0.6;
   const x = cx - w / 2, top = y - h;
   g.fillStyle = 'rgba(8,7,8,0.88)';
@@ -542,6 +630,7 @@ function draw(ctx) {
   };
   sprites.sort((a, c) => a.depth - c.depth || (a.typ === 'unit' ? 1 : 0) - (c.typ === 'unit' ? 1 : 0));
 
+  const bubQ = [], tagQ = [], barR = [];
   for (const sp of sprites) {
     if (sp.typ === 'prop') {
       const p = toWorld(sp.x, sp.y);
@@ -597,16 +686,16 @@ function draw(ctx) {
     // rings for actors (feet/head hint of who is up)
     if (Actors.hasActor(un.hero) && !dead) {
       // XCOM-style team disc under the feet: blue for your crew, red for the rivals.
-      g.fillStyle = un.side === 'player' ? 'rgba(77,143,224,0.24)' : 'rgba(224,64,52,0.28)';
-      g.beginPath(); g.ellipse(sx, sy, 10 * z, 4.4 * z, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = un.side === 'player' ? 'rgba(77,143,224,0.18)' : 'rgba(224,64,52,0.2)';
+      g.beginPath(); g.ellipse(sx, sy, 8 * z, 3.5 * z, 0, 0, Math.PI * 2); g.fill();
       g.strokeStyle = un.overwatch ? '#e0c15a' : acting ? '#f0d060' : un.side === 'player' ? 'rgba(120,186,255,0.9)' : 'rgba(255,92,72,0.9)';
-      g.lineWidth = (acting ? 2 : 1.2) * z;
-      g.beginPath(); g.ellipse(sx, sy, 10 * z, 4.4 * z, 0, 0, Math.PI * 2); g.stroke();
+      g.lineWidth = (acting ? 1.3 : 0.75) * z;
+      g.beginPath(); g.ellipse(sx, sy, 8 * z, 3.5 * z, 0, 0, Math.PI * 2); g.stroke();
     }
-    const bw = 17 * z, bh = 2.6 * z;
-    const barY = Actors.hasActor(un.hero) ? cy - 9 * z : cy + r + 2 * z;
+    const bw = 12 * z, bh = 1.8 * z;
+    const barY = Actors.hasActor(un.hero) ? cy - 8 * z : cy + r + 2 * z;
     g.fillStyle = un.side === 'player' ? 'rgba(10,20,34,0.8)' : 'rgba(40,8,6,0.8)';
-    g.fillRect(cx - bw / 2 - z, barY - z, bw + 2 * z, bh + 2 * z);
+    g.fillRect(cx - bw / 2 - 0.6 * z, barY - 0.6 * z, bw + 1.2 * z, bh + 1.2 * z);
     g.fillStyle = un.side === 'player'
       ? (un.hp / un.maxHp > 0.5 ? '#5dba6a' : un.hp / un.maxHp > 0.25 ? '#e0c15a' : '#d4544a')
       : (un.hp / un.maxHp > 0.25 ? '#ff5a48' : '#ff9a3a');
@@ -614,89 +703,52 @@ function draw(ctx) {
     if (!dead && un.side === 'player' && b.side === 'player' && (acting || (sel && sel.uid === un.uid))) {
       const defn = def || defOf(un.hero);
       const cost = (u.abilityHover && u.abilityHover.ap) || modeApCost(u.mode, defn);
-      drawApPips(g, cx, barY + 8 * z, z, un.ap, un.maxAp, acting || (sel && sel.uid === un.uid) ? cost : 0);
+      drawApPips(g, cx, barY - 3.5 * z, z, un.ap, un.maxAp, acting || (sel && sel.uid === un.uid) ? cost : 0);
     }
     if (!dead) {
-      g.font = `bold ${Math.round(5.4 * z)}px Inter, sans-serif`;
+      g.font = `bold ${Math.round(4.2 * z)}px Inter, sans-serif`;
       g.textAlign = 'left';
       const ammoTxt = (un.ammo || 0) > 0 ? String(un.ammo) : '×';
-      const aw = g.measureText(ammoTxt).width + 4.4 * z;
-      const ax = cx + (Actors.hasActor(un.hero) ? 9.5 * z : r - 2 * z);
-      const ay = barY + 10 * z;
+      const aw = g.measureText(ammoTxt).width + 2.4 * z;
+      const ax = cx + (Actors.hasActor(un.hero) ? bw / 2 + 1.4 * z : r - 2 * z);
+      const ay = barY + 2.2 * z;
       g.fillStyle = (un.ammo || 0) > 0 ? 'rgba(20,24,16,0.85)' : 'rgba(60,18,14,0.9)';
-      g.beginPath(); g.roundRect(ax, ay - 6 * z, aw, 7.4 * z, 1.6 * z); g.fill();
+      g.beginPath(); g.roundRect(ax, ay - 4 * z, aw, 5 * z, 1.1 * z); g.fill();
       g.fillStyle = (un.ammo || 0) > 0 ? '#f3e7c9' : '#e07a6a';
-      g.fillText(ammoTxt, ax + 2.2 * z, ay);
+      g.fillText(ammoTxt, ax + 1.2 * z, ay - 0.3 * z);
     }
     if (un.overwatch && un.hp > 0) {
-      drawOverwatchEye(g, cx, barY - 8 * z, z);
+      drawOverwatchEye(g, cx, barY - 6 * z, z * 0.7);
     }
     if (sel && u.mode === 'breach' && u.hover && un.hp > 0 && Math.abs(un.x - u.hover.x) + Math.abs(un.y - u.hover.y) <= T.CHARGE.radius && T.previewCharge(b, sel, u.hover.x, u.hover.y).ok) {
       // Into-the-Breach style damage preview on everyone in the blast, friend or foe.
       const txt = `-${T.CHARGE.dmg}`;
-      g.font = `600 ${Math.round(12 * z)}px Oswald, sans-serif`;
-      const tw = g.measureText(txt).width + 8 * z;
+      g.font = `600 ${Math.round(8 * z)}px Oswald, sans-serif`;
+      const tw = g.measureText(txt).width + 5 * z;
       g.fillStyle = un.side === 'player' ? 'rgba(201,48,44,.95)' : 'rgba(255,140,40,.95)';
-      g.beginPath(); g.roundRect(cx - tw / 2, barY - 26 * z, tw, 15 * z, 3 * z); g.fill();
+      g.beginPath(); g.roundRect(cx - tw / 2, barY - 13 * z, tw, 10 * z, 2.5 * z); g.fill();
       g.fillStyle = '#fff'; g.textAlign = 'center';
-      g.fillText(txt, cx, barY - 14.5 * z); g.textAlign = 'left';
+      g.fillText(txt, cx, barY - 5.5 * z); g.textAlign = 'left';
     }
     if (sel && u.mode !== 'breach' && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
       const prev = T.previewShot(b, sel, un, u.mode === 'aimed' ? 'aimed' : u.mode === 'melee' || u.mode === 'knife' || u.mode === 'roll' ? u.mode : u.mode === 'venom' ? 'venom' : u.mode === 'suppress' ? 'suppress' : 'shot');
       if (prev && prev.ok) {
-        const label = `${prev.chance}%`;
-        g.font = `bold ${Math.round(11 * z)}px Oswald, sans-serif`;
-        g.textAlign = 'center';
-        const tw = g.measureText(label).width + 10 * z;
-        const ly = barY - 16 * z;
-        g.fillStyle = 'rgba(10,8,8,0.82)';
-        g.beginPath(); g.roundRect(cx - tw / 2, ly - 11 * z, tw, 14 * z, 4 * z); g.fill();
-        g.fillStyle = chanceColor(prev.chance);
-        g.fillText(label, cx, ly);
-        const badgeY = ly - 16 * z;
-        drawShieldBadge(g, cx - tw / 2 - 8 * z, badgeY, z, prev.cover);
-        if (prev.flanked) drawFlankBadge(g, cx + tw / 2 + 8 * z, badgeY, z);
-        const cov = prev.flanked ? 'FLANK' : prev.cover >= 2 ? 'FULL' : prev.cover === 1 ? 'HALF' : 'OPEN';
-        g.font = `bold ${Math.round(7 * z)}px Inter, sans-serif`;
-        g.fillStyle = prev.flanked ? '#f0c040' : prev.cover >= 1 ? '#c8e4ff' : '#a0a0a8';
-        g.fillText(cov, cx, ly - 22 * z);
-        if (u.hover && u.hover.uid === un.uid && prev.parts && prev.parts.length) {
-          drawChanceBreakdown(g, cx, ly - 38 * z, z, prev);
-        }
+        // queued: laid out after all units so it never sits on a neighbour's HP bar
+        const showParts = !!(u.hover && u.hover.uid === un.uid && prev.parts && prev.parts.length);
+        g.font = `bold ${Math.round(7.5 * z)}px Oswald, sans-serif`;
+        const tw = g.measureText(`${prev.chance}%`).width + 6 * z;
+        const ly0 = barY - 3.5 * z;
+        tagQ.push({ uid: un.uid, cx, by: barY, x: cx - tw / 2 - 10 * z, y: ly0 - 13 * z, w: tw + 20 * z, h: 15 * z, hover: showParts, draw: (dy) => drawChanceTag(g, cx, ly0 + dy, z, tw, prev, showParts) });
       }
     }
-    // speech bubble with pop and a tail
+    // speech bubble: queued, laid out after all units so bunched quips never overprint
     const bub = (u.bubbles || []).find((bb) => bb.uid === un.uid && now < bb.until);
-    if (bub) {
-      const age = now - bub.t;
-      const enter = Math.min(1, age / 160);
-      const pop = enter < 1 ? 1.15 * (1 - Math.pow(1 - enter, 3)) : 1;
-      const fade = Math.min(1, (bub.until - now) / 280);
-      g.save();
-      // Keep quips legible when the camera is zoomed out: floor the font at ~11 CSS px.
-      const dpr = window.devicePixelRatio || 1;
-      const fs = Math.max(11 * dpr, 8.5 * z);
-      const pad = fs * 0.6;
-      g.translate(cx, cy - r - 16 * z);
-      g.scale(pop, pop);
-      g.globalAlpha = fade;
-      g.font = `600 ${Math.round(fs)}px Inter, sans-serif`;
-      g.textAlign = 'center';
-      const tw = Math.min(240 * dpr, g.measureText(bub.text).width + pad * 2);
-      const th = fs * 1.7;
-      const team = un.side === 'player' ? '#6fa8ff' : '#ff5a48';
-      g.fillStyle = 'rgba(14,12,10,0.94)';
-      g.strokeStyle = team;
-      g.lineWidth = 1.5 * dpr;
-      g.beginPath(); g.roundRect(-tw / 2, -th, tw, th, 5 * dpr); g.fill(); g.stroke();
-      g.beginPath();
-      g.moveTo(-4 * dpr, 0); g.lineTo(4 * dpr, 0); g.lineTo(0, 6 * dpr); g.closePath(); g.fill();
-      g.fillStyle = '#f3e7c9';
-      g.fillText(bub.text, 0, -th * 0.3, tw - pad);
-      g.restore();
-    }
+    if (bub) bubQ.push({ bub, x: cx, y: barY - 4 * z, side: un.side });
+    if (!dead) barR.push({ uid: un.uid, x: cx - bw / 2 - z, y: barY - 4.5 * z, w: bw + 9 * z, h: 7 * z });
     g.restore();
   }
+  drawTags(g, tagQ, barR, z);
+  drawBubbles(g, bubQ, z, now, barR.concat(tagQ));
 
   Vfx.draw(g, fx, z);
 
@@ -726,13 +778,15 @@ function draw(ctx) {
     g.globalAlpha = 1 - k * k;
     // Floats are stored at the zoom they were spawned at; rescale if a camera pan zoomed since.
     const rs = f.z0 ? z / f.z0 : 1;
-    const fy = f.y * rs - k * 28 * z;
+    // stack numbers that land on the same spot at nearly the same time
+    const n = u.floats.filter((o) => o !== f && o.t < f.t && f.t - o.t < 500 && Math.abs(o.x - f.x) < 16 * z && Math.abs(o.y - f.y) < 12 * z).length;
+    const fy = f.y * rs - k * 16 * z - n * 10 * z;
     g.translate(f.x * rs, fy);
     g.scale(pop, pop);
-    g.font = `bold ${Math.round((f.crit ? 21 : f.dmg ? 18 : 15) * z)}px Oswald, sans-serif`;
+    g.font = `bold ${Math.round((f.crit ? 13 : f.dmg ? 11.5 : 10) * z)}px Oswald, sans-serif`;
     g.textAlign = 'center';
     g.lineJoin = 'round';
-    g.lineWidth = 3 * z;
+    g.lineWidth = 2.2 * z;
     g.strokeStyle = 'rgba(10,8,8,0.8)';
     g.fillStyle = f.heal ? '#8fe08f' : f.miss ? '#d0d0d0' : (f.crit ? '#ffd23a' : '#ff6a52');
     g.strokeText(f.text, 0, 0);
@@ -918,10 +972,11 @@ async function playEvents(ctx, events) {
         const an = Actors.ensureAnim(att);
         const gx = an.gunX != null ? an.gunX : (a.x * zz);
         const gy = an.gunY != null ? an.gunY : ((a.y - 16) * zz);
-        const tx = tw.x * zz, ty = (tw.y - 14) * zz;
+        const tH = Actors.actorHeight((b.units.find((x) => x.uid === ev.target) || {}).hero);
+        const tx = tw.x * zz, ty = (tw.y - tH * 0.55) * zz;
         const fac = an.facing || 1;
         if (!melee) {
-          Vfx.spawnTracer(u.fx, gx, gy, ev.hit ? tx : tx + fac * 18 * zz, ev.hit ? ty : ty - 8 * zz, { miss: !ev.hit });
+          Vfx.spawnTracer(u.fx, gx, gy, ev.hit ? tx : tx + fac * 14 * zz, ev.hit ? ty : ty - 6 * zz, { miss: !ev.hit });
           Vfx.spawnCasings(u.fx, gx, gy, fac, ev.mode === 'aimed' ? 1 : 1);
         }
         await wait(melee ? 60 : 90);
@@ -931,12 +986,12 @@ async function playEvents(ctx, events) {
           Actors.playClip(def, ev.ko ? 'ko' : 'hit');
           Vfx.spawnSparks(u.fx, tx, ty, ev.crit ? 16 : 10);
           // Callout word above the head, damage number lower and off to the side so they never overprint.
-          Vfx.spawnCallout(u.fx, tx, ty - 76 * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
-          u.floats.push({ t: performance.now(), x: tx + fac * 18 * zz, y: (tw.y - 40) * zz, z0: zz, text: ev.crit ? `-${ev.dmg}!` : `-${ev.dmg}`, heal: 0, crit: ev.crit, dmg: 1 });
+          Vfx.spawnCallout(u.fx, tx, (tw.y - tH - 22) * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
+          u.floats.push({ t: performance.now(), x: tx + fac * 13 * zz, y: (tw.y - tH * 0.7) * zz, z0: zz, text: ev.crit ? `-${ev.dmg}!` : `-${ev.dmg}`, heal: 0, crit: ev.crit, dmg: 1 });
           if (ev.ko) say(u, b, ev.target, 'ko');
           await wait(Math.max(0, u.hitstop - performance.now() + 40));
         } else {
-          Vfx.spawnCallout(u.fx, tx, ty - 76 * zz, 'MISS', 'miss');
+          Vfx.spawnCallout(u.fx, tx, (tw.y - tH - 22) * zz, 'MISS', 'miss');
         }
         await wait(240);
       }
@@ -945,7 +1000,7 @@ async function playEvents(ctx, events) {
       const def = b.units.find((x) => x.uid === ev.target);
       if (def) {
         const t = toWorld(def.x, def.y);
-        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1, z0: u.cam.z });
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - Actors.actorHeight(def.hero) * 0.7) * u.cam.z, text: `+${ev.heal}`, heal: 1, z0: u.cam.z });
         Audio.play('collect');
         await wait(280);
       }
@@ -954,7 +1009,7 @@ async function playEvents(ctx, events) {
       const def = b.units.find((x) => x.uid === ev.target);
       if (def) {
         const t = toWorld(def.x, def.y);
-        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `+${ev.heal}`, heal: 1, z0: u.cam.z });
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - Actors.actorHeight(def.hero) * 0.7) * u.cam.z, text: `+${ev.heal}`, heal: 1, z0: u.cam.z });
         say(u, b, ev.uid, 'revive');
         Actors.playClip(def, 'revive');
         const medic = b.units.find((x) => x.uid === ev.uid);
@@ -996,7 +1051,7 @@ async function playEvents(ctx, events) {
       const un = b.units.find((x) => x.uid === ev.uid);
       if (un) {
         const t = toWorld(un.x, un.y);
-        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - 18) * u.cam.z, text: `-${ev.dmg}`, heal: 0, dmg: 1, z0: u.cam.z });
+        u.floats.push({ t: performance.now(), x: t.x * u.cam.z, y: (t.y - Actors.actorHeight(un.hero) * 0.7) * u.cam.z, text: `-${ev.dmg}`, heal: 0, dmg: 1, z0: u.cam.z });
         Actors.playClip(un, un.hp <= 0 ? 'ko' : 'hit');
         if (un.hp <= 0) say(u, b, ev.uid, 'ko');
         u.hitstop = performance.now() + 70;

@@ -331,14 +331,14 @@ export function draw(g, fx, z) {
       const pop = enter < 1 ? 0.6 + 0.7 * (1 - Math.pow(1 - enter, 3)) : 1 - 0.08 * u;
       const fade = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
       g.save();
-      g.translate(b.x, b.y - 18 * z * u);
+      g.translate(b.x, b.y - 10 * z * u);
       g.scale(pop, pop);
       g.globalAlpha = fade;
-      const fontPx = Math.round((b.kind === 'crit' || b.kind === 'overwatch' ? 16 : 13) * z);
+      const fontPx = Math.round((b.kind === 'crit' || b.kind === 'overwatch' ? 11 : 9) * z);
       g.font = `bold ${fontPx}px Oswald, Impact, sans-serif`;
       g.textAlign = 'center';
       g.lineJoin = 'round';
-      g.lineWidth = 3.2 * z;
+      g.lineWidth = 2.2 * z;
       g.strokeStyle = 'rgba(8,6,6,0.85)';
       g.fillStyle = b.kind === 'miss' ? '#c8d0d8' : b.kind === 'crit' ? '#ffe27a' : b.kind === 'overwatch' ? '#e0c15a' : '#f4f0e4';
       g.strokeText(b.text, 0, 0);

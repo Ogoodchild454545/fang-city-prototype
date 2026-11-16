@@ -284,7 +284,7 @@ function poseOf(unit, now) {
 // painted reference sizes; on the map a 1.8 m wolf or fox stands 21 px — about 0.7 of a
 // door (31 px) and half a full room wall (40 px). Bigger species a little taller, rats shorter.
 // See docs/unit-scale.md.
-const SPECIES_H = { Wolf: 21, Fox: 21, Badger: 22, Bear: 25, Croc: 24, Snake: 21, Rat: 16 };
+const SPECIES_H = { Wolf: 27, Fox: 27, Badger: 28, Bear: 32, Croc: 31, Snake: 27, Rat: 20 };
 function worldHeight(id) {
   let sp = '';
   try { sp = (defOf(id) || {}).species || ''; } catch (e) { sp = ''; }
