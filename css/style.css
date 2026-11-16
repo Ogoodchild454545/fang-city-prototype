@@ -874,3 +874,11 @@ em.up{color:#7bd36a}em.dn{color:#ff6b5e}
 .hsab.locked{opacity:.5}
 .hsbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 @media (max-height:420px){.heroshow{grid-template-columns:minmax(130px,34%) minmax(0,1fr)}.hsname .h{font-size:20px}}
+
+/* v0.9.2 — Settings: theme picker */
+.muter.gear{margin-left:2px}
+.themegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.themeopt{display:flex;flex-direction:column;gap:3px;text-align:left;padding:6px;border:1px solid var(--line2);border-radius:8px;background:var(--th-cell2,#120e0d);color:var(--text)}
+.themeopt.on{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 12px rgba(224,165,38,.3)}
+.tsw{display:flex;height:22px;border-radius:5px;overflow:hidden;border:1px solid rgba(0,0,0,.5)}
+.tsw i{flex:1}

@@ -25,6 +25,7 @@ import * as CAT from '../js/core/catalog.js';
 import { BUILTIN_MAPS, BUILTIN_BY_ID } from '../js/core/maps/index.js';
 import * as CM from '../js/core/custommaps.js';
 import * as IT from '../js/core/items.js';
+import * as TH from '../js/core/themes.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -1277,6 +1278,27 @@ test('v0.9.1 hero-only crew: new game has no troops; troop fights refuse cleanly
   const back = deserialize(serialize(old), T0);
   assert.equal(C.armyCount(back), 7);
   assert.ok(M.startMission(back, 0, 0, T0).ok);
+});
+
+test('v0.9.2 themes: Settings list, Rainy Night Cop default, saved choice, battles stay unthemed, CSS exists for every theme', () => {
+  const mem = () => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); } }; };
+  assert.equal(TH.DEFAULT_THEME, 'rainy');
+  assert.equal(TH.THEMES.length, 10);
+  assert.deepEqual([...new Set(TH.THEME_IDS)].sort(), ['dark', 'evidence', 'graffiti', 'luxe', 'modern', 'neon', 'novel', 'rainy', 'rust', 'sepia']);
+  const ls = mem();
+  assert.equal(TH.loadTheme(ls), 'rainy', 'new and existing players default to Rainy Night Cop');
+  assert.equal(TH.saveTheme(ls, 'luxe'), 'luxe');
+  assert.equal(TH.loadTheme(ls), 'luxe');
+  assert.equal(TH.saveTheme(ls, 'bogus'), 'rainy', 'unknown ids fall back');
+  assert.equal(TH.loadTheme({ getItem: () => { throw new Error('blocked'); } }), 'rainy');
+  assert.equal(TH.themeAttr('rainy', 'crew'), 'rainy');
+  assert.equal(TH.themeAttr('dark', 'crew'), null, 'original dark = no attribute');
+  for (const tab of ['battle', 'tactics']) assert.equal(TH.themeAttr('rainy', tab), null, tab + ' stays unthemed');
+  for (const tab of ['base', 'crew', 'hero', 'missions', 'city', 'jobs', 'shop', 'heroes', 'loadout', 'editor']) assert.equal(TH.themeAttr('neon', tab), 'neon');
+  const css = readFileSync(new URL('../css/themes.css', import.meta.url), 'utf8');
+  for (const t of TH.THEMES) { assert.equal(t.sw.length, 4); if (t.id !== 'dark') assert.ok(css.includes(`[data-theme="${t.id}"]{`), 'css for ' + t.id); }
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('fangcity.theme') && html.includes('"rainy"'), 'index.html applies the saved theme before first paint');
 });
 
 console.log(`\n${pass} tests passed`);

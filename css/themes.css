@@ -29,6 +29,21 @@
 [data-theme] .bslot.own,[data-theme] .crewcol .opslot.sel,[data-theme] .hsport{border-color:var(--gold)}
 [data-theme] .abil .aico{background:var(--th-slot);border-color:var(--gold)}
 
+/* v0.9.2: themes cover every menu screen (Settings picker). Battles drop the data-theme attribute entirely. */
+[data-theme] .sheet{background:var(--th-app);color:var(--text);border-color:var(--accent)}
+[data-theme] .overlay.center .sheet{border-color:var(--accent)}
+[data-theme] .sheet .card,[data-theme] .hcard,[data-theme] .mcard,[data-theme] .loadslot,[data-theme] .edopt,[data-theme] .edli,[data-theme] .themeopt,[data-theme] .day,[data-theme] .pack,[data-theme] .featured,[data-theme] .gangcard,[data-theme] .xpbox{background:var(--th-panel);color:var(--text)}
+[data-theme] .mstage,[data-theme] .mn,[data-theme] .loadrow select,[data-theme] .edname,[data-theme] .edsel,[data-theme] .edq,[data-theme] .edjson,[data-theme] .loadfoot .hstakes,[data-theme] .seg button{background:var(--th-cell2,var(--th-cell));color:var(--text)}
+[data-theme] .objcard,[data-theme] .selbar,[data-theme] .pillbtn,[data-theme] .edstatus,[data-theme] .edzoom button{background:var(--th-panel);color:var(--text)}
+[data-theme] .act2,[data-theme] .edtool,[data-theme] .edlen{background:var(--th-slot);color:var(--text);border-color:var(--line2)}
+[data-theme] .act2 .c{color:var(--dim)}
+[data-theme] .edtool.on,[data-theme] .edlen.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+[data-theme] .edscr,[data-theme] .loadfoot{background:var(--th-app)}
+[data-theme] .edtop,[data-theme] .edtools{background:var(--th-bar);border-color:var(--th-bar-line,var(--line))}
+[data-theme] .edgrp{color:var(--accent)}
+[data-theme] .mstage.open .mn{background:var(--accent);color:var(--on-accent)}
+[data-theme] .hcard img{background:var(--th-cell)}
+
 /* (a) NEON NOIR — dark city, lighter slate panels, hot pink + teal trim */
 [data-theme="neon"]{
   --bg:#0d0f1c; --panel:#1d2136; --panel2:#262b45; --line:#38406a; --line2:#4b5590;
@@ -60,7 +75,7 @@
 /* (c) GRAPHIC NOVEL — cream paper panels, heavy ink outlines, muted purple + teal */
 [data-theme="novel"]{
   --bg:#2b2238; --panel:#efe4cc; --panel2:#f6eedb; --line:#1b1420; --line2:#1b1420;
-  --text:#1d1622; --dim:#5a4c5e; --faint:#857586; --red:#a2344a; --red2:#7a2236; --gold:#2f7f86; --green:#3c7a3a;
+  --text:#f1e6cf; --dim:#cfc3d8; --faint:#a093ab; --ink:#1d1622; --ink-dim:#5a4c5e; --ink-faint:#857586; --red:#a2344a; --red2:#7a2236; --gold:#2f7f86; --green:#3c7a3a;
   --accent:#2f7f86; --on-accent:#f6eedb; --on-gold:#f6eedb;
   --th-app:radial-gradient(circle at 1px 1px,rgba(255,255,255,.07) 1px,transparent 1.5px) 0 0/6px 6px,linear-gradient(160deg,#3a2c4a,#22303a);
   --th-bar:linear-gradient(#2a1f36,#1f1828); --th-bar-line:#0e0a12; --th-nav-on:linear-gradient(90deg,rgba(47,127,134,.5),transparent);
@@ -106,9 +121,9 @@
 /* (e) POLAROID EVIDENCE BOARD — corkboard, pinned photos, red string, manila tags, typewriter */
 [data-theme="evidence"]{
   --bg:#8a6440; --panel:#f3ead2; --panel2:#fbf5e4; --line:#6b5034; --line2:#8c6c48;
-  --text:#231a12; --dim:#5e4a36; --faint:#8a7660; --red:#b0201c; --red2:#7e1512; --gold:#b0201c; --green:#3d6b2c;
+  --text:#fff6e6; --dim:#ead9bd; --faint:#cdb995; --ink:#231a12; --ink-dim:#5e4a36; --ink-faint:#8a7660; --red:#b0201c; --red2:#7e1512; --gold:#b0201c; --green:#3d6b2c;
   --accent:#b0201c; --on-accent:#fff6e6; --on-gold:#fff6e6;
-  --th-app:radial-gradient(circle at 20% 30%,rgba(0,0,0,.18) 1px,transparent 1.6px) 0 0/7px 9px,radial-gradient(circle at 70% 60%,rgba(255,230,190,.15) 1px,transparent 1.8px) 0 0/11px 8px,linear-gradient(135deg,#a47a4f,#87603b);
+  --th-app:radial-gradient(circle at 20% 30%,rgba(0,0,0,.18) 1px,transparent 1.6px) 0 0/7px 9px,radial-gradient(circle at 70% 60%,rgba(255,230,190,.15) 1px,transparent 1.8px) 0 0/11px 8px,linear-gradient(135deg,#8a6440,#6c4c2e);
   --th-bar:linear-gradient(#2c241d,#1f1914); --th-bar-line:#120d09; --th-nav-on:linear-gradient(90deg,rgba(176,32,28,.45),transparent);
   --th-panel:linear-gradient(#fbf5e4,#efe4c8); --th-slot:linear-gradient(#e8d6a8,#d9c38e); --th-cell:#efe3c4; --th-cell2:#f7efda;
   --th-btn:linear-gradient(#e8d6a8,#d6be86); --th-btn-hot:linear-gradient(#c22a24,#8e1814); --th-btn-gold:linear-gradient(#f2d36b,#d4ab2e); --th-glow:rgba(0,0,0,.25);
@@ -173,7 +188,7 @@
 /* (h) SEPIA PROHIBITION — warm whisky amber, aged paper, art-deco lines */
 [data-theme="sepia"]{
   --bg:#2a1a0e; --panel:#ead7b0; --panel2:#f3e4c2; --line:#7a5a32; --line2:#a07a44;
-  --text:#2b1a0b; --dim:#634a2c; --faint:#8e7450; --red:#8c2a12; --red2:#64190a; --gold:#a8701a; --green:#4c6b25;
+  --text:#f3e4c2; --dim:#d8c39a; --faint:#ae9870; --ink:#2b1a0b; --ink-dim:#634a2c; --ink-faint:#8e7450; --red:#c4532c; --red2:#64190a; --gold:#a8701a; --green:#4c6b25;
   --accent:#a8701a; --on-accent:#fff4dc; --on-gold:#2b1a0b;
   --th-app:repeating-linear-gradient(90deg,rgba(255,200,120,.05) 0 1px,transparent 1px 22px),radial-gradient(70% 60% at 50% 20%,rgba(214,140,50,.45),transparent 70%),linear-gradient(#4a2c14,#26170b);
   --th-bar:linear-gradient(#1f140a,#150d06); --th-bar-line:#c9973f; --th-nav-on:linear-gradient(90deg,rgba(201,151,63,.4),transparent);
@@ -196,7 +211,7 @@
 /* (i) CLEAN MODERN MAFIA — charcoal frame, bright white cards, one bold red */
 [data-theme="modern"]{
   --bg:#202124; --panel:#ffffff; --panel2:#ffffff; --line:#d9d9de; --line2:#c4c4cc;
-  --text:#16171a; --dim:#5d6068; --faint:#90939b; --red:#e0161e; --red2:#a80f15; --gold:#e0161e; --green:#1d8a3a;
+  --text:#f2f2f4; --dim:#b9bbc2; --faint:#8a8d95; --ink:#16171a; --ink-dim:#5d6068; --ink-faint:#90939b; --red:#e0161e; --red2:#a80f15; --gold:#e0161e; --green:#1d8a3a;
   --accent:#e0161e; --on-accent:#fff; --on-gold:#fff;
   --th-app:linear-gradient(#26272b,#1c1d20);
   --th-bar:#121315; --th-bar-line:#121315; --th-nav-on:linear-gradient(90deg,rgba(224,22,30,.3),transparent);
@@ -230,3 +245,20 @@
 [data-theme="evidence"] .heroshow::after{z-index:1;width:360px;transform:rotate(-14deg)}
 [data-theme="evidence"] .hsport{z-index:2}
 [data-theme="evidence"] .crewcol .opslot{position:relative;z-index:0}
+[data-theme] .slot{background-color:var(--th-cell)}
+
+/* v0.9.2 readability: paper/white-card themes use light text on the dark backdrop and dark "ink" inside light surfaces. */
+:is([data-theme="novel"],[data-theme="sepia"],[data-theme="modern"],[data-theme="evidence"]) :is(.card,.heroshow,.bslot,.cslot,.sitem,.cstats,.cstash,.cdetail,.abil,.hsst,.hsab,.hcard,.mcard,.mstage,.loadslot,.edopt,.edli,.themeopt,.day,.pack,.featured,.gangcard,.objcard,.selbar,.pillbtn,.xpbox,.chip:not(.on),.edtool:not(.on),.edlen:not(.on),.act2,.btn:not(.red):not(.gold),select,input,textarea,.edname,.edsel,.edq,.edjson,.edstatus,.edzoom button,.loadfoot .hstakes,.seg button){--text:var(--ink);--dim:var(--ink-dim);--faint:var(--ink-faint);color:var(--text)}
+:is([data-theme="novel"],[data-theme="sepia"],[data-theme="evidence"]) .res{--text:var(--ink);--dim:var(--ink-dim);--faint:var(--ink-faint);color:var(--text)}
+[data-theme] .mshade{--text:#fff;color:#fff}
+[data-theme] .loadfoot .loadmap select{background:var(--th-cell2,var(--th-cell));color:var(--text)}
+[data-theme="sepia"] .sect,[data-theme="sepia"] .title .sub{color:#e6b65a}
+[data-theme="sepia"] :is(.card,.heroshow,.cstats,.cstash,.cdetail,.hcard,.mcard,.themeopt) .sect{color:#8a5a12}
+[data-theme="novel"] .title .sub{color:#e8899b}
+[data-theme="novel"] .sect{color:#7fd0d4}
+[data-theme="novel"] :is(.card,.heroshow,.cstats,.cstash,.cdetail,.hcard,.mcard,.themeopt) .sect{color:#1f6b72}
+[data-theme="evidence"] #screen,[data-theme="evidence"] .sheet,[data-theme="evidence"] .charscr{text-shadow:0 1px 2px rgba(0,0,0,.75)}
+[data-theme="evidence"] :is(.card,.heroshow,.bslot,.cslot,.sitem,.cstats,.cstash,.cdetail,.abil,.hcard,.mcard,.loadslot,.themeopt,.day,.btn,.chip,.objcard,.selbar,.edopt,.edli,select,input){text-shadow:none}
+[data-theme="evidence"] .sect{color:#ffd0c4}
+[data-theme="evidence"] :is(.card,.heroshow,.cstats,.cstash,.cdetail,.hcard,.mcard,.themeopt) .sect{color:#b0201c}
+[data-theme="evidence"] .title .sub{color:#ffb4a6}

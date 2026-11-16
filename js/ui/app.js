@@ -22,6 +22,7 @@ import * as Loadout from './loadout.js';
 import * as Editor from './editor.js';
 import * as Character from './character.js';
 import { formatDrop } from '../core/shards.js';
+import { THEMES, loadTheme, saveTheme, themeAttr } from '../core/themes.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
@@ -57,6 +58,7 @@ function topbar() {
     <div class="res cash"><span class="ico">${ico('cash')}</span><div class="col grow"><b data-live="cash">${money(s.cash)}</b><div class="capbar"><i data-live-bar="cash" style="width:${Math.min(100, (s.cash / cap.cash) * 100)}%"></i></div></div><span class="cap tiny" data-live="capcash">/${fmt(cap.cash)}</span>${vip}</div>
     <div class="res inf"><span class="ico">${ico('influence')}</span><div class="col grow"><b data-live="influence">${fmt(Math.floor(s.influence))}</b><div class="capbar"><i data-live-bar="influence" style="width:${Math.min(100, (s.influence / cap.influence) * 100)}%"></i></div></div><span class="cap tiny" data-live="capinf">/${fmt(cap.influence)}</span></div>
     <div class="res teeth" data-act="nav" data-tab="shop"><span class="ico">${ico('teeth')}</span><b data-live="teeth">${fmt(s.teeth)}</b><span class="plus">+</span></div>
+    <button class="muter gear" data-act="openSettings" title="Settings">⚙️</button>
     ${Audio.muteButton()}`;
 }
 
@@ -76,6 +78,7 @@ function render() {
   if (s.tactics && ctx.tab !== 'tactics') ctx.tab = 'tactics';
   else if (s.battle && ctx.tab !== 'battle') ctx.tab = 'battle';
   const scr = SCREENS[ctx.tab];
+  applyTheme();
   const inBattle = ctx.tab === 'battle' || ctx.tab === 'tactics' || ctx.tab === 'editor' || ctx.tab === 'hero';
   $('#topbar').style.display = inBattle ? 'none' : '';
   $('#nav').style.display = inBattle ? 'none' : '';
@@ -95,6 +98,24 @@ function render() {
   live();
   flushTips();
 }
+
+// ---------------------------------------------------------------- theme (Settings)
+let theme = loadTheme(window.localStorage);
+function applyTheme() {
+  const a = themeAttr(theme, ctx.tab), root = document.documentElement;
+  if (a) root.dataset.theme = a; else delete root.dataset.theme;
+}
+function settingsHtml() {
+  return `<div class="h" style="font-size:22px">Settings</div>
+    <div class="sect">Theme <span class="tiny dim" style="text-transform:none;letter-spacing:0">· menus and screens; battles keep their own look</span></div>
+    <div class="themegrid">${THEMES.map((t) => `<button class="themeopt ${t.id === theme ? 'on' : ''}" data-act="setTheme" data-id="${t.id}">
+      <span class="tsw">${t.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</span>
+      <b class="h small">${esc(t.name)}${t.id === theme ? ' ✓' : ''}</b><span class="tiny dim">${esc(t.blurb)}</span></button>`).join('')}</div>
+    <div class="sect">Sound</div>
+    <button class="btn" data-act="toggleMute">${Audio.isMuted() ? '🔇 Sound off' : '🔊 Sound on'}</button>
+    <div class="tiny faint" style="margin-top:8px">Fang City v${GAME.version}</div>`;
+}
+function refreshSettings() { const el = document.querySelector('.overlay .sheet'); if (el && el.querySelector('.themegrid')) el.innerHTML = '<button class="x" data-act="closeModal">✕</button>' + settingsHtml(); }
 
 function live() {
   const s = ctx.state, now = ctx.now();
@@ -178,7 +199,9 @@ function handleBaseEvents(ev) {
 const GLOBAL_ACTIONS = {
   nav: (c, el) => c.go(el.dataset.tab),
   closeModal: (c, el) => { if (el && el.dataset && el.dataset.then) c.sub.afterBattle = el.dataset.then; closeModal(); },
-  toggleMute: () => { Audio.toggleMute(); render(); },
+  toggleMute: () => { Audio.toggleMute(); render(); refreshSettings(); },
+  openSettings: (c) => c.modal(settingsHtml(), { cls: 'wide' }),
+  setTheme: (c, el) => { theme = saveTheme(window.localStorage, el.dataset.id); applyTheme(); refreshSettings(); },
   openHero: (c, el, e) => { if (e && e.target && e.target.closest('button') && e.target.closest('button') !== el) return; c.closeModal && c.closeModal(); Character.openCharacter(c, el.dataset.id); },
   openEditor: (c, el) => { c.sub.editorBack = c.tab === 'editor' ? (c.sub.editorBack || 'heroes') : c.tab; c.closeModal && c.closeModal(); Editor.openEditor(c, el && el.dataset && el.dataset.id); },
 };
