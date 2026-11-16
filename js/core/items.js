@@ -216,6 +216,7 @@ export function equipItem(s, heroId, itemId, slotId) {
   if (!s.stash[itemId]) delete s.stash[itemId];
   if (prev) addItem(s, prev, 1);
   rec.equip[slot] = itemId;
+  if (s.stats) s.stats.equips = (s.stats.equips || 0) + 1;
   return { ok: true, slot, prev: prev || null };
 }
 export function unequipItem(s, heroId, slotId) {

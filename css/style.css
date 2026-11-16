@@ -851,3 +851,26 @@ em.up{color:#7bd36a}em.dn{color:#ff6b5e}
 }
 .wrow b{white-space:normal;line-height:1.15}
 .tcoach.top{top:62px;bottom:auto}
+
+/* v0.9.1 — hero-only My Crew: operator showcase */
+.crewcol .opslot.sel{border-color:var(--gold);box-shadow:0 0 12px rgba(224,165,38,.3)}
+.crewcol .bslot.locked .bpor{display:grid;place-items:center;font:700 22px var(--font);color:var(--faint);background:var(--panel2);border-radius:6px;height:52px}
+.heroshow{display:grid;grid-template-columns:minmax(150px,min(38%,300px)) minmax(0,1fr);gap:10px;background:var(--hs-bg,linear-gradient(160deg,#1d1714,#0f0c0b));border:1px solid var(--line2);border-radius:10px;padding:8px;align-items:start}
+.hsport{position:relative;aspect-ratio:1;width:100%;max-height:calc(100dvh - 150px);background:#000 center/cover no-repeat;border:1px solid #8a6b1e;border-radius:8px;box-shadow:0 0 18px rgba(0,0,0,.6),inset 0 -40px 40px -20px rgba(0,0,0,.7);cursor:pointer;padding:0}
+.hsport:hover{border-color:var(--gold)}
+.hslv{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.75);border:1px solid var(--gold);color:var(--gold);border-radius:4px;padding:1px 6px;font:700 12px var(--font)}
+.hsbody{min-width:0;display:flex;flex-direction:column;gap:3px}
+.hsname{display:flex;flex-direction:column;line-height:1.1}
+.hsname .h{font-size:24px;letter-spacing:.04em}
+.hsstats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin-top:3px}
+.hsst{background:var(--hs-cell,#0e0b0a);border:1px solid var(--line);border-radius:5px;padding:2px 3px;text-align:center;display:flex;flex-direction:column}
+.hsst span{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+.hsst b{font-size:14px}
+.hsgear{display:flex;flex-direction:column;gap:1px;margin-top:2px}
+.hsabil{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.hsab{display:inline-flex;align-items:center;gap:4px;background:var(--hs-cell,#0e0b0a);border:1px solid var(--line2);border-radius:14px;padding:1px 8px 1px 3px;font-size:11px}
+.hsab svg{width:18px;height:18px}
+.hsab em{font-style:normal}
+.hsab.locked{opacity:.5}
+.hsbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+@media (max-height:420px){.heroshow{grid-template-columns:minmax(130px,34%) minmax(0,1fr)}.hsname .h{font-size:20px}}

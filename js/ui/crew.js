@@ -1,14 +1,19 @@
-// "My Crew" army screen: your operators on the left (a new crew has only Rook; bosses are retired from this screen), trained troops + housing, the training queue,
-// troop types to train, and the Armoury upgrades tab. Rules live in core/crew.js.
+// "My Crew" screen: hero operators only (a new crew has just Rook). Operator list on the left, the selected
+// operator's showcase (portrait, stats, gear, abilities) on the right. Troop training, housing and the Armoury
+// tab are dormant (v0.9.1): the code below (armyTab, trainCard, upgradesTab, troop actions) is kept so troop
+// hiring can return from the base later — flip TROOPS_UI to true to bring it back. Rules live in core/crew.js.
 import { SPECIES, ROLES, TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER, BOSS_SLOTS, DEPLOY_CAP, GEAR } from '../core/data.js';
 import * as C from '../core/crew.js';
 import * as BS from '../core/base.js';
 import { fmt, money, dur, esc, ico } from './fmt.js';
 import { HEROES, HERO_ORDER, classOf } from '../core/heroes.js';
-import { statsFor, ensureItems, equippedIds } from '../core/items.js';
-import { rankName } from '../core/progress.js';
+import { statsFor, ensureItems, equippedIds, ITEMS, STAT_DEFS } from '../core/items.js';
+import { abilityIcon } from './tactics.js';
+import { rankName, xpToNext } from '../core/progress.js';
 
 const img = (t) => SPECIES[TROOPS[t].species].img;
+// Troop training / hiring UI is parked until hiring moves to the base. Data + rules stay live for old saves.
+export const TROOPS_UI = false;
 
 function bossSlot(ctx, id, i) {
   const s = ctx.state, now = ctx.now();
@@ -26,17 +31,67 @@ function bossSlot(ctx, id, i) {
 }
 
 // Left column: your operators. A new crew has exactly one — Rook. Tap to open his character sheet.
-function opSlot(ctx, id) {
+function opSlot(ctx, id, on) {
   const s = ctx.state, d = HEROES[id], rec = s.heroes.owned[id];
   const st = statsFor(id, { stars: rec.stars, lv: rec.lv, perks: rec.perks, gear: rec.gear, equip: rec.equip || {} });
   const n = equippedIds(rec).length;
-  return `<button class="bslot own opslot" data-act="openHero" data-id="${id}" title="Open ${esc(d.name)}'s gear and abilities">
+  return `<button class="bslot own opslot ${on ? 'sel' : ''}" data-act="${on ? 'openHero' : 'crewPick'}" data-id="${id}" title="${on ? `Open ${esc(d.name)}'s gear and abilities` : `Show ${esc(d.name)}`}">
     <div class="bpor" style="background-image:url(${d.thumb || d.portrait})"><span class="blv">${rec.lv || 1}</span></div>
     <div class="bmeta"><b class="h small">${esc(d.name)}</b>
       <span class="tiny gold">${esc(d.species)} · ${esc((classOf(d) || {}).name || d.role)} · ${esc(rankName(rec.lv || 1))}</span>
       <span class="tiny dim">HP ${st.hp} · ${st.mel ? esc(st.mel.name) : esc(st.gun ? st.gun.name : '')} · ${n} gear</span>
       ${rec.pendingPerk ? '<span class="tiny green">Perk ready</span>' : '<span class="tiny faint">Tap for inventory</span>'}</div>
   </button>`;
+}
+
+// Main panel: the selected operator, big. Tap the portrait or "Gear & abilities" for the full sheet.
+function heroShow(ctx, id) {
+  const s = ctx.state, d = HEROES[id], rec = s.heroes.owned[id];
+  const st = statsFor(id, { stars: rec.stars, lv: rec.lv, perks: rec.perks, gear: rec.gear, equip: rec.equip || {} });
+  const lv = rec.lv || 1;
+  const need = xpToNext(lv), pct = need ? Math.min(100, ((rec.xp || 0) / need) * 100) : 100;
+  const cls = classOf(d) || {};
+  const show = ['hp', 'armor', 'aim', 'crit', 'dodge', 'move'];
+  const stat = (k) => { const sd = STAT_DEFS.find((x) => x.id === k); return `<div class="hsst"><span>${esc(sd.short)}</span><b>${st[k] ?? 0}${sd.pct ? '%' : ''}</b></div>`; };
+  const w = (x) => x ? `${esc(x.name)} <span class="dim">${x.dmg[0]}–${x.dmg[1]}</span>` : '<span class="faint">—</span>';
+  const eq = equippedIds(rec).map((i) => ITEMS[i]).filter(Boolean);
+  const armour = eq.filter((it) => ['head', 'jacket', 'body', 'gloves', 'boots'].includes(it.slot)).slice(0, 4).map((it) => esc(it.name));
+  const abil = (d.abilities || []).filter((a) => a.unlock);
+  return `<div class="heroshow">
+    <button class="hsport" data-act="openHero" data-id="${id}" style="background-image:url(${d.portrait})" title="Open ${esc(d.name)}'s gear and abilities"><span class="hslv">Lv ${lv}</span></button>
+    <div class="hsbody">
+      <div class="hsname"><span class="h">${esc(d.name)}</span><span class="tiny gold">${esc(d.species)} · ${esc(cls.name || d.role)} · ${esc(rankName(lv))}</span></div>
+      <div class="xpbar" title="Experience"><i style="width:${pct}%"></i></div>
+      <div class="tiny dim">${need ? `${rec.xp || 0}/${need} XP to level ${lv + 1}` : 'Max rank'}${rec.pendingPerk ? ' · <span class="green">Perk ready</span>' : ''}</div>
+      <div class="hsstats">${show.map(stat).join('')}</div>
+      <div class="hsgear tiny"><div><span class="faint">Melee</span> ${w(st.mel)}</div><div><span class="faint">Gun</span> ${w(st.gun)}</div>
+        <div class="dim">${armour.length ? armour.join(' · ') : 'No armour yet'}${eq.length ? ` · ${eq.length} items equipped` : ''}</div></div>
+      <div class="hsabil">${abil.map((a) => `<span class="hsab ${lv < a.unlock ? 'locked' : ''}" title="${esc(a.name)}${lv < a.unlock ? ` · unlocks at level ${a.unlock}` : ''}">${abilityIcon(a.kind)}<em>${lv < a.unlock ? 'Lv ' + a.unlock : esc(a.name)}</em></span>`).join('')}</div>
+      <div class="hsbtns">
+        <button class="btn red" data-act="openHero" data-id="${id}">Gear &amp; abilities</button>
+        ${s.heroes.tutorialDone ? `<button class="btn" data-act="startStreet">⚔ Docklands fight</button>` : '<button class="btn gold" data-act="startTutorial">⚔ Street lesson</button>'}
+      </div>
+    </div>
+  </div>`;
+}
+
+// Hero-only crew screen (v0.9.1).
+function heroTab(ctx) {
+  const s = ctx.state;
+  ensureItems(s);
+  const ops = HERO_ORDER.filter((id) => s.heroes.owned[id]);
+  let sel = ctx.sub.crewHero;
+  if (!ops.includes(sel)) sel = ops[0];
+  const more = HERO_ORDER.length - ops.length;
+  return `
+  <div class="armyscr heroonly">
+    <div class="bosscol crewcol"><div class="sect" style="margin-top:0">Operators ${ops.length}</div>
+      ${ops.map((id) => opSlot(ctx, id, id === sel)).join('')}
+      ${more ? `<button class="bslot locked" data-act="nav" data-tab="heroes"><div class="bpor" style="background-image:none">?</div><div class="bmeta"><b class="h small">Recruit</b><span class="tiny faint">${more} more with shards</span></div></button>` : ''}
+      <div class="tiny faint" style="padding:4px 2px">Troops will be hired at the base later.</div>
+    </div>
+    <div class="armymain">${sel ? heroShow(ctx, sel) : '<div class="tiny dim">No operators.</div>'}</div>
+  </div>`;
 }
 
 function troopChip(ctx, t, n) {
@@ -112,6 +167,9 @@ function upgradesTab(ctx) {
 }
 
 export function render(ctx) {
+  if (!TROOPS_UI) return `
+  <div class="tabs crewtabs">${[['army', 'My Crew'], ['ops', 'Operators']].map(([x, l]) => `<button class="${x === 'army' ? 'on' : ''}" data-act="crewTab" data-t="${x}">${l}</button>`).join('')}</div>
+  ${heroTab(ctx)}`;
   const t = ctx.sub.crewTab || 'army';
   return `
   <div class="tabs crewtabs">${[['army', 'My Crew'], ['upgrades', 'Upgrades'], ['ops', 'Operators']].map(([x, l]) => `<button class="${t === x ? 'on' : ''}" data-act="crewTab" data-t="${x}">${l}</button>`).join('')}</div>
@@ -166,6 +224,7 @@ function bossModal(ctx, id) {
 const reopen = (ctx, html) => { const el = document.querySelector('.overlay .sheet'); if (el) el.innerHTML = '<button class="x" data-act="closeModal">✕</button>' + html; };
 
 export const actions = {
+  crewPick(ctx, el) { ctx.sub.crewHero = el.dataset.id; ctx.render(); },
   crewTab(ctx, el) { if (el.dataset.t === 'ops') return ctx.go('heroes'); ctx.sub.crewTab = el.dataset.t; ctx.render(); },
   train(ctx, el, e) {
     e?.stopPropagation?.();

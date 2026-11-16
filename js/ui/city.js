@@ -51,6 +51,7 @@ export function render(ctx) {
       <div class="bar gold" style="margin-top:6px"><i style="width:${next ? ((s.rep - tier.min) / (next.min - tier.min)) * 100 : 100}%"></i></div>
     </div>
     <div class="sect">Rival bases to raid <span class="pill" style="margin-left:4px">simulated</span></div>
+    ${C.lineup(s, ctx.now()).length ? '' : '<div class="card tiny dim troopnote">🔒 Raids and turf wars need troops. Troop hiring at the base is coming soon.</div>'}
     ${s.rivals.map((r) => `<div class="card rival" style="grid-template-columns:44px 1fr auto">
       <div class="portrait" style="width:44px;height:44px;background-image:url(${gangImg(r.gang)})"></div>
       <div class="grow"><div class="h">${esc(r.name)} <span class="lvtag">Den ${r.denLv}</span></div>
@@ -83,14 +84,14 @@ export const actions = {
           <div class="small">+${Math.round(d.bonus * 100)}% income forever · ${ico('influence')} ${d.influencePerHour} Rep/hour${unlocks.length ? ` · unlocks <b>${unlocks.join(', ')}</b> at the Hideout` : ''}</div>
           <div class="small">Win: ${money(rw.cash)} · ${ico('influence')} ${rw.influence} Rep · ${ico('teeth')} ${rw.teeth} · +${rw.rep} Reputation · 60% gear drop</div></div>
         <div class="tiny dim">Your crew: power ${fmt(C.lineupPower(s, ctx.now()))} (${C.lineup(s, ctx.now()).length} fighters).</div>
-        ${st === 'locked' ? `<button class="btn block off" style="margin-top:8px">Take the previous district first</button>` : `<button class="btn red block" style="margin-top:8px" data-act="startDistrict" data-id="${d.id}">Start turf war</button>`}`;
+        ${st === 'locked' ? `<button class="btn block off" style="margin-top:8px">Take the previous district first</button>` : !C.lineup(s, ctx.now()).length ? `<button class="btn block off" style="margin-top:8px">Needs troops. Troop hiring at the base is coming soon.</button>` : `<button class="btn red block" style="margin-top:8px" data-act="startDistrict" data-id="${d.id}">Start turf war</button>`}`;
     }
     ctx.modal(`<div class="h" style="font-size:24px">${d.name}</div><div class="tiny dim">${d.desc}</div>${body}`, { center: true });
   },
   startDistrict(ctx, el) {
     const r = M.startDistrictBattle(ctx.state, el.dataset.id, ctx.now());
     ctx.closeModal(true);
-    if (!r.ok) return ctx.toast(r.reason === 'squad' ? 'No troops. Train some in My Crew.' : 'Cannot start');
+    if (!r.ok) return ctx.toast(r.reason === 'squad' ? 'No troops yet. Troop hiring at the base is coming soon.' : 'Cannot start');
     ctx.sub.battle = null;
     ctx.go('battle');
   },
@@ -108,7 +109,7 @@ export const actions = {
   raid(ctx, el) {
     ctx.closeModal(true);
     const r = M.startRaid(ctx.state, el.dataset.id, ctx.now());
-    if (!r.ok) return ctx.toast(r.reason === 'squad' ? 'No troops. Train some in My Crew.' : 'Cannot start raid');
+    if (!r.ok) return ctx.toast(r.reason === 'squad' ? 'No troops yet. Troop hiring at the base is coming soon.' : 'Cannot start raid');
     ctx.sub.battle = null;
     ctx.go('battle');
   },

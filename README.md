@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.9.0)
+# Fang City: Animal Gangs (playable prototype v0.9.1)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,14 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.9.1 (hero-only crew, tougher Rook, theme mockups)
+
+- **My Crew is for hero operators only.** New games start with just Rook and no troops. The Crew tab shows the operator list plus a big showcase for the selected operator (portrait, XP, key stats, weapons, armour, ability unlocks, "Gear & abilities" and Street lesson / Docklands fight buttons). Troop training, the training queue, housing and the Armoury upgrades tab are hidden (`TROOPS_UI = false` in `js/ui/crew.js`); the troop code and data stay dormant so hiring can come back from the base later.
+- **Troop modes lock gracefully.** Gang missions, raids and turf wars show a "Troop hiring at the base is coming soon" note and won't start without troops. Older saves keep their troops and can still play them.
+- **Objectives follow Rook.** Hideout objectives that asked you to train troops, raid, take turf or hire a boss now track the street lesson, equipping gear, Docklands wins, Rook's level and trophies.
+- **Tougher Rook portrait:** scarred, heavier brawler in a battered leather jacket with a tyre iron over his shoulder (same outfit as his battle rig).
+- **Optional colour themes (not live):** `css/themes.css` adds Neon Noir (`neon`), Rusted Dockyard (`rust`), Graphic Novel (`novel`) and Gangster Luxe (`luxe`) via CSS variables. They do nothing unless `<html data-theme="…">` is set; the game still ships the original dark theme.
 
 ## v0.9.0 (Rook the Bruiser, inventory and wolf abilities)
 

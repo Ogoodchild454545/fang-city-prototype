@@ -23,7 +23,7 @@ export function newGame(now, seed = newSeed()) {
     ammo: 30, medkits: 2, parts: 0, kit: {},
     cred: 0, credEarned: 0, prestiges: 0, tickets: 0,
     base: newBase(seed), boosts: { adIncomeUntil: 0, adsToday: 0, adsDay: '' },
-    army: { rat: 4, fox: 3 }, queue: [], queueAt: 0, troopLv: {}, research: null, bosses: {}, extraBench: 0, extraHousing: 0,
+    army: {} /* v0.9.1: hero-only start; troops are hired at the base later, old saves keep theirs */, queue: [], queueAt: 0, troopLv: {}, research: null, bosses: {}, extraBench: 0, extraHousing: 0,
     missions: {},
     districts: {},
     daily: { lastClaim: '', streak: 0 },

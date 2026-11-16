@@ -46,6 +46,9 @@ function beefArmy(s, { den = 3, yard = 5, lv = 4, boss = true } = {}) {
   return s;
 }
 
+// v0.9.1: new games start hero-only (no troops). Troop rules stay dormant for base hiring later; these tests use the old starting army.
+const troopGame = (t, seed) => { const s = newGame(t, seed); s.army = { rat: 4, fox: 3 }; return s; };
+
 test('new game: JSON round-trip, wasteland map with a shack and junk', () => {
   const s = newGame(T0, 123);
   assert.deepEqual(deserialize(serialize(s), T0), s);
@@ -168,7 +171,7 @@ test('offline: lieutenants bank, tills fill, builds finish, capped at 8h', () =>
 });
 
 test('troops: unlock by Training Yard, queue trains into the army, housing caps it, Armoury upgrades a type', () => {
-  const s = newGame(T0, 7);
+  const s = troopGame(T0, 7);
   s.cash = 1e6; s.influence = 1e4; s.teeth = 1e5;
   assert.equal(C.armyUsed(s), 10);
   assert.equal(C.armyCap(s), 10, 'Den 1 houses 10');
@@ -228,7 +231,7 @@ test('daily reward streak and jobs', () => {
 });
 
 test('turf battle: landscape grid, validated actions, deterministic replay', () => {
-  const s = newGame(T0, 5);
+  const s = troopGame(T0, 5);
   assert.ok(M.startDistrictBattle(s, 'rail', T0).ok);
   const b = s.battle;
   assert.equal(b.w, B.W); assert.equal(b.h, B.H); assert.ok(b.w > b.h, 'wide board for landscape');
@@ -335,7 +338,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
 });
 
 test('missions: locked by Den and previous stage, first clear pays more, progress saves', () => {
-  const s = newGame(T0, 8);
+  const s = troopGame(T0, 8);
   assert.equal(M.missionStatus(s, 1, 0).locked, true, 'Iron Claw needs Den 2');
   assert.ok(!M.missionStatus(s, 0, 0).locked);
   assert.equal(M.missionStatus(s, 0, 1).locked, true, 'stage 2 waits on stage 1');
@@ -375,7 +378,7 @@ test('balance (info): AI-vs-AI turf and raid win rates', () => {
     let wins = 0; const N = 40;
     const e = M.districtEnemy(d);
     for (let i = 0; i < N; i++) {
-      const s = newGame(T0, 1000 + i);
+      const s = troopGame(T0, 1000 + i);
       if (d.tier > 1) beefArmy(s, { den: Math.max(2, d.tier), yard: 7, lv: Math.max(3, e.level - 2) });
       for (const p of DISTRICTS.filter((x) => x.tier < d.tier)) s.districts[p.id].owner = 'player';
       M.startDistrictBattle(s, d.id, T0); autoplay(s.battle);
@@ -386,7 +389,7 @@ test('balance (info): AI-vs-AI turf and raid win rates', () => {
   for (let L = 1; L <= 6; L++) {
     let wins = 0, stars = 0; const N = 20;
     for (let i = 0; i < N; i++) {
-      const s = newGame(T0, 2000 + i);
+      const s = troopGame(T0, 2000 + i);
       beefArmy(s, { den: L, yard: Math.max(1, L + 1), lv: 2 + L });
       M.refreshRivals(s, T0, true); M.startRaid(s, s.rivals[1].id); autoplay(s.battle);
       if (s.battle.result === 'win') wins++; stars += B.raidStars(s.battle).stars;
@@ -1252,6 +1255,28 @@ test('v0.9 save migration: v5 saves keep operators, Rook gets his kit, misfit Wo
   assert.equal(again.heroes.owned.rook.equip.melee, 'tyreiron', 'worn starter kit is left on him');
 });
 
+test('v0.9.1 hero-only crew: new game has no troops; troop fights refuse cleanly; objectives follow Rook; old saves keep troops', () => {
+  const s = newGame(T0, 4);
+  assert.deepEqual(s.army, {});
+  assert.equal(C.armyCount(s), 0);
+  assert.equal(C.lineup(s, T0).length, 0);
+  assert.equal(M.startMission(s, 0, 0, T0).reason, 'squad');
+  assert.equal(M.startDistrictBattle(s, 'rail', T0).reason, 'squad');
+  M.refreshRivals(s, T0, true);
+  assert.equal(M.startRaid(s, s.rivals[0].id, T0).reason, 'squad');
+  assert.equal(s.battle, null);
+  for (const o of M.OBJECTIVES) assert.ok(!/train troops|turf war|raid a rival|hire ma grey|training yard to level/i.test(o.text), 'objective needs troops: ' + o.text);
+  // the Rook objectives are reachable
+  const eq = M.OBJECTIVES.find((o) => /Equip new gear/.test(o.text));
+  assert.equal(eq.check(s), false);
+  const id = Object.keys(s.stash).find((i) => IT.targetSlot(s.heroes.owned.rook, i));
+  assert.ok(IT.equipItem(s, 'rook', id).ok);
+  assert.equal(eq.check(s), true);
+  // a save that already had troops keeps them and can still fight missions
+  const old = troopGame(T0, 4);
+  const back = deserialize(serialize(old), T0);
+  assert.equal(C.armyCount(back), 7);
+  assert.ok(M.startMission(back, 0, 0, T0).ok);
+});
+
 console.log(`\n${pass} tests passed`);
-
-

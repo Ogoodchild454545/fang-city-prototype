@@ -43,6 +43,7 @@ export function render(ctx) {
   const line = C.lineup(s, now);
   return `
   <div class="title"><span class="h">Missions</span><span class="sub">/ The four gangs</span></div>
+  ${line.length ? '' : '<div class="card tiny dim troopnote">🔒 Gang missions are fought by troops. Troop hiring at the base is coming soon — for now take Rook into Docklands fights from <b>My Crew</b>.</div>'}
   <div class="tiny dim" style="margin:-6px 0 8px">One city, four turf wars. Unlock the later districts by upgrading The Den. Your crew: ${line.length} fighter${line.length === 1 ? '' : 's'} · power ${fmt(C.lineupPower(s, now))}.</div>
   <div class="mcamp">${MISSIONS.map((m, gi) => campaign(ctx, m, gi, den)).join('')}</div>`;
 }
@@ -68,12 +69,12 @@ export const actions = {
       <div class="card"><div class="tiny red h">${st.done ? 'Rematch payout (first-clear already taken)' : 'Win and you get'}</div>
         <div class="small">${money(r.cash)} · ${ico('influence')} ${fmt(r.influence)} Rep${r.teeth ? ` · ${ico('teeth')} ${r.teeth}` : ''} · +${r.rep} Reputation</div></div>
       <div class="tiny dim">Your crew: ${line.length} fighters · power ${fmt(C.lineupPower(ctx.state, ctx.now()))}. Knocked-out troops are lost.</div>
-      ${line.length ? `<button class="btn red block" style="margin-top:8px" data-act="startMission" data-gi="${gi}" data-si="${si}">${st.done ? 'Rematch' : 'Start mission'}</button>` : `<button class="btn block off" style="margin-top:8px">No troops. Train some in My Crew.</button>`}`, { center: true });
+      ${line.length ? `<button class="btn red block" style="margin-top:8px" data-act="startMission" data-gi="${gi}" data-si="${si}">${st.done ? 'Rematch' : 'Start mission'}</button>` : `<button class="btn block off" style="margin-top:8px">Gang missions need troops. Troop hiring at the base is coming soon.</button>`}`, { center: true });
   },
   startMission(ctx, el) {
     ctx.closeModal(true);
     const r = M.startMission(ctx.state, +el.dataset.gi, +el.dataset.si, ctx.now());
-    if (!r.ok) return ctx.toast(r.reason === 'squad' ? 'No troops. Train some in My Crew.' : r.reason === 'locked' ? 'That mission is locked' : 'Cannot start');
+    if (!r.ok) return ctx.toast(r.reason === 'squad' ? 'No troops yet. Troop hiring at the base is coming soon.' : r.reason === 'locked' ? 'That mission is locked' : 'Cannot start');
     ctx.sub.battle = null;
     ctx.go('battle');
   },

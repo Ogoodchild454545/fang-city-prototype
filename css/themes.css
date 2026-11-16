@@ -1,0 +1,100 @@
+/* Fang City — optional UI colour themes (v0.9.1). DORMANT: nothing here applies unless <html data-theme="…"> is set.
+   The live game ships with the original dark theme (no data-theme). To try one in the browser console:
+     document.documentElement.dataset.theme = 'neon'   // or 'rust', 'novel', 'luxe'; delete it to go back
+   Each theme re-points the :root variables and the handful of panels that paint their own gradients
+   (top bar, nav, cards, crew operator cards, character sheet slots/stash/stats/abilities). */
+
+/* ---------- shared hooks: panels that hardcode dark gradients read these when a theme is on ---------- */
+[data-theme] #app{background:var(--th-app)}
+[data-theme] .topbar{background:var(--th-bar);border-color:var(--th-bar-line,var(--line))}
+[data-theme] .nav{background:var(--th-bar);border-color:var(--th-bar-line,var(--line))}
+[data-theme] .nav button.on{background:var(--th-nav-on);box-shadow:inset 3px 0 0 var(--accent)}
+[data-theme] .nav button .i{filter:none}
+[data-theme] .res{background:var(--th-cell);border-color:var(--line2)}
+[data-theme] .card{background:var(--th-panel)}
+[data-theme] .sect{color:var(--accent)}
+[data-theme] .tabs button.on{border-color:var(--accent)}
+[data-theme] .bslot,[data-theme] .cslot,[data-theme] .sitem{background:var(--th-slot)}
+[data-theme] .heroshow{background:var(--th-panel)}
+[data-theme] .hsst,[data-theme] .hsab,[data-theme] .cstats,[data-theme] .cstash{background:var(--th-cell)}
+[data-theme] .cdetail,[data-theme] .abil,[data-theme] .csel{background:var(--th-cell2,var(--th-cell))}
+[data-theme] .charscr{background:var(--th-app)}
+[data-theme] .chip{background:var(--th-cell)}
+[data-theme] .chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+[data-theme] .btn{background:var(--th-btn);border-color:var(--line2);color:var(--text)}
+[data-theme] .btn.red{background:var(--th-btn-hot);border-color:var(--accent);color:var(--on-accent);box-shadow:0 2px 12px var(--th-glow)}
+[data-theme] .btn.gold{background:var(--th-btn-gold);color:var(--on-gold,#1a1200)}
+[data-theme] .bslot.own,[data-theme] .crewcol .opslot.sel,[data-theme] .hsport{border-color:var(--gold)}
+[data-theme] .abil .aico{background:var(--th-slot);border-color:var(--gold)}
+
+/* (a) NEON NOIR — dark city, lighter slate panels, hot pink + teal trim */
+[data-theme="neon"]{
+  --bg:#0d0f1c; --panel:#1d2136; --panel2:#262b45; --line:#38406a; --line2:#4b5590;
+  --text:#f1f3ff; --dim:#a9b0d6; --faint:#7881b0; --red:#ff3d8b; --red2:#c21f66; --gold:#2ee6d6; --green:#7dff9a;
+  --accent:#ff3d8b; --on-accent:#fff; --on-gold:#062421;
+  --th-app:radial-gradient(90% 70% at 15% 0%,rgba(255,61,139,.18),transparent 60%),radial-gradient(80% 60% at 100% 100%,rgba(46,230,214,.14),transparent 60%),#0d0f1c;
+  --th-bar:linear-gradient(90deg,#161a2e,#11142a); --th-bar-line:#ff3d8b; --th-nav-on:linear-gradient(90deg,rgba(255,61,139,.32),transparent);
+  --th-panel:linear-gradient(170deg,#2a3050,#1d2138); --th-slot:linear-gradient(#2c3253,#1e2238); --th-cell:#181c30; --th-cell2:#20253f;
+  --th-btn:linear-gradient(#323a62,#252b4a); --th-btn-hot:linear-gradient(#ff4f98,#c41e68); --th-btn-gold:linear-gradient(#3ff0e0,#13a99c); --th-glow:rgba(255,61,139,.45);
+}
+[data-theme="neon"] .tabs button.on,[data-theme="neon"] .h{text-shadow:0 0 8px rgba(255,61,139,.45)}
+[data-theme="neon"] .card,[data-theme="neon"] .heroshow,[data-theme="neon"] .bslot{box-shadow:0 0 0 1px rgba(46,230,214,.12) inset}
+
+/* (b) RUSTED DOCKYARD — weathered steel plates, orange rust, hazard stripes */
+[data-theme="rust"]{
+  --bg:#1b1d1f; --panel:#3a3d40; --panel2:#4a4d50; --line:#5b5f63; --line2:#787c80;
+  --text:#f2ede4; --dim:#c3bcb0; --faint:#958d82; --red:#ff7a1a; --red2:#b8500c; --gold:#ffcc1f; --green:#9ad35a;
+  --accent:#ff7a1a; --on-accent:#1c1206; --on-gold:#1c1606;
+  --th-app:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 64px),repeating-linear-gradient(90deg,rgba(0,0,0,.18) 0 1px,transparent 1px 120px),radial-gradient(60% 50% at 80% 10%,rgba(186,84,20,.35),transparent 70%),linear-gradient(#2b2e31,#1b1d1f);
+  --th-bar:repeating-linear-gradient(135deg,#ffcc1f 0 10px,#1c1c1c 10px 20px) bottom/100% 4px no-repeat,linear-gradient(#45494d,#2d3033); --th-bar-line:#151617; --th-nav-on:linear-gradient(90deg,rgba(255,122,26,.35),transparent);
+  --th-panel:radial-gradient(40% 50% at 95% 5%,rgba(170,72,18,.45),transparent 70%),radial-gradient(30% 40% at 5% 100%,rgba(140,60,16,.35),transparent 70%),linear-gradient(170deg,#55595d,#3b3e42);
+  --th-slot:linear-gradient(#4d5155,#34373a); --th-cell:#2a2d30; --th-cell2:#34373a;
+  --th-btn:linear-gradient(#5d6166,#43464a); --th-btn-hot:linear-gradient(#ff8a2e,#c4560c); --th-btn-gold:repeating-linear-gradient(135deg,#ffcc1f 0 8px,#e0a800 8px 16px); --th-glow:rgba(255,122,26,.4);
+}
+[data-theme="rust"] .card,[data-theme="rust"] .heroshow,[data-theme="rust"] .bslot,[data-theme="rust"] .cstats,[data-theme="rust"] .cstash{border:2px solid #24272a;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.35)}
+[data-theme="rust"] .heroshow{background-image:repeating-linear-gradient(135deg,#ffcc1f 0 9px,#1c1c1c 9px 18px),var(--th-panel);background-size:100% 5px,auto;background-repeat:no-repeat;background-position:top,0 0}
+[data-theme="rust"] .sect{color:var(--gold)}
+
+/* (c) GRAPHIC NOVEL — cream paper panels, heavy ink outlines, muted purple + teal */
+[data-theme="novel"]{
+  --bg:#2b2238; --panel:#efe4cc; --panel2:#f6eedb; --line:#1b1420; --line2:#1b1420;
+  --text:#1d1622; --dim:#5a4c5e; --faint:#857586; --red:#a2344a; --red2:#7a2236; --gold:#2f7f86; --green:#3c7a3a;
+  --accent:#2f7f86; --on-accent:#f6eedb; --on-gold:#f6eedb;
+  --th-app:radial-gradient(circle at 1px 1px,rgba(255,255,255,.07) 1px,transparent 1.5px) 0 0/6px 6px,linear-gradient(160deg,#3a2c4a,#22303a);
+  --th-bar:linear-gradient(#2a1f36,#1f1828); --th-bar-line:#0e0a12; --th-nav-on:linear-gradient(90deg,rgba(47,127,134,.5),transparent);
+  --th-panel:radial-gradient(circle at 1px 1px,rgba(60,40,30,.07) 1px,transparent 1.4px) 0 0/5px 5px,#efe4cc;
+  --th-slot:#f6eedb; --th-cell:#e6d8bb; --th-cell2:#efe4cc;
+  --th-btn:#f6eedb; --th-btn-hot:#a2344a; --th-btn-gold:#2f7f86; --th-glow:rgba(0,0,0,.0);
+}
+[data-theme="novel"] .topbar,[data-theme="novel"] .nav{color:#f1e6cf}
+[data-theme="novel"] .nav button{color:#cbbfd6}
+[data-theme="novel"] .nav button.on{color:#fff}
+[data-theme="novel"] .res{background:#f1e6cf;border:2px solid #0e0a12}
+[data-theme="novel"] .card,[data-theme="novel"] .heroshow,[data-theme="novel"] .bslot,[data-theme="novel"] .cslot,[data-theme="novel"] .sitem,
+[data-theme="novel"] .cstats,[data-theme="novel"] .cstash,[data-theme="novel"] .cdetail,[data-theme="novel"] .abil,[data-theme="novel"] .hsst,[data-theme="novel"] .btn{border:2.5px solid #120c16;box-shadow:3px 3px 0 #120c16}
+[data-theme="novel"] .btn.red{color:#fff8ea;box-shadow:3px 3px 0 #120c16}
+[data-theme="novel"] .hsport,[data-theme="novel"] .dpor img,[data-theme="novel"] .bpor{border:2.5px solid #120c16;box-shadow:3px 3px 0 #120c16;filter:contrast(1.1) saturate(.8)}
+[data-theme="novel"] .tabs button,[data-theme="novel"] .charhead,[data-theme="novel"] .charhead .dim,[data-theme="novel"] .crewcol>.tiny,[data-theme="novel"] .crewcol>.sect{color:#efe4cc}
+[data-theme="novel"] .tabs button.on{color:#fff;border-color:#2f7f86}
+[data-theme="novel"] .crewcol>.sect{color:#7fd0d4}
+[data-theme="novel"] .h{letter-spacing:.06em}
+[data-theme="novel"] .gold{color:#1f6b72}
+[data-theme="novel"] .chip{color:#1d1622;border:2px solid #120c16}
+[data-theme="novel"] .xpbar{background:#d8c8a8;border-color:#120c16}
+
+/* (d) GANGSTER LUXE — deep green felt, brass and gold trim, cream type */
+[data-theme="luxe"]{
+  --bg:#0b2219; --panel:#123426; --panel2:#174130; --line:#6f5a2a; --line2:#a8873f;
+  --text:#f4ead2; --dim:#cbbd98; --faint:#93875f; --red:#b3262e; --red2:#7d1820; --gold:#e3bf5b; --green:#8fd18f;
+  --accent:#d4ac4a; --on-accent:#1a1404; --on-gold:#1a1404;
+  --th-app:radial-gradient(70% 60% at 50% 30%,rgba(40,110,72,.45),transparent 70%),repeating-linear-gradient(45deg,rgba(0,0,0,.05) 0 2px,transparent 2px 4px),#0b2219;
+  --th-bar:linear-gradient(#0a1712,#06100c); --th-bar-line:#a8873f; --th-nav-on:linear-gradient(90deg,rgba(212,172,74,.28),transparent);
+  --th-panel:repeating-linear-gradient(45deg,rgba(0,0,0,.05) 0 2px,transparent 2px 4px),linear-gradient(170deg,#1a4a35,#113323);
+  --th-slot:linear-gradient(#184432,#0f2e21); --th-cell:#0d2a1e; --th-cell2:#123526;
+  --th-btn:linear-gradient(#1d4d38,#123526); --th-btn-hot:linear-gradient(#e9c768,#a8822c); --th-btn-gold:linear-gradient(#e9c768,#a8822c); --th-glow:rgba(227,191,91,.35);
+}
+[data-theme="luxe"] .card,[data-theme="luxe"] .heroshow,[data-theme="luxe"] .bslot,[data-theme="luxe"] .cstats,[data-theme="luxe"] .cstash,[data-theme="luxe"] .abil{border:1px solid #a8873f;box-shadow:inset 0 0 0 3px rgba(0,0,0,.25),inset 0 0 0 4px rgba(212,172,74,.35)}
+[data-theme="luxe"] .h{font-family:'Playfair Display',Georgia,'Times New Roman',serif;letter-spacing:.08em}
+[data-theme="luxe"] .sect{color:var(--gold)}
+[data-theme="novel"] .res b,[data-theme="novel"] .res.cash b{color:#1d1622}
+[data-theme="novel"] .res.inf b{color:#a2344a}

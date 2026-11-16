@@ -360,44 +360,14 @@ async def main():
         await center(page, sn); await tap_item(page, sn)
         await shot(page, '17-defence-selected')
 
-        # ---- My Crew: army screen, train a Rat Runner, unlock Wolf Bruisers, hire Ma Grey
+        # ---- My Crew (v0.9.1): hero operators only — no troops, training queue or Armoury tab
         await tap(page, '[data-act="nav"][data-tab="crew"]')
-        await page.wait_for_selector('.armyscr')
+        await page.wait_for_selector('.armyscr.heroonly .heroshow')
         await shot(page, '18-crew-roster')
-        # Wolf Bruiser is still locked at Yard 1
-        assert await page.locator('.tcard.locked[data-t="wolf"]').count(), 'wolf should be locked at yard 1'
-        await tap(page, '[data-act="train"][data-t="rat"]')
-        await page.wait_for_timeout(200)
-        qn = await ev(page, "window.__game.state.queue.length")
-        assert qn >= 1, 'training did not start: ' + str(await page.locator('.toast').all_inner_texts())
-        await shot(page, '19-crew-training')
-        if await page.locator('[data-act="skipQueue"]').count():
-            await tap(page, '[data-act="skipQueue"]')
-        print('army', await ev(page, "JSON.stringify(window.__game.state.army)"))
-        # upgrade the Training Yard to 2 so Wolf Bruisers unlock
-        gym = await ev(page, "window.__game.state.base.buildings.find(b=>b.t==='gym').id")
-        await tap(page, '[data-act="nav"][data-tab="shop"]'); await tap(page, '[data-act="dbgCash"]'); await tap(page, '[data-act="nav"][data-tab="base"]')
-        await page.wait_for_timeout(200)
-        await center(page, gym); await tap_item(page, gym)
-        await tap(page, '#selpanel [data-act="upgrade"]'); await tap(page, '#selpanel [data-act="speed"]')
-        assert await ev(page, "window.__game.state.base.buildings.find(b=>b.t==='gym').lv") >= 2, 'yard upgrade failed'
-        await tap(page, '[data-act="nav"][data-tab="crew"]')
-        await page.wait_for_selector('.tcard[data-t="wolf"]')
-        assert await page.locator('.tcard[data-t="wolf"]:not(.locked)').count(), 'wolf did not unlock at yard 2'
-        await shot(page, '32-wolf-unlocked')
-        await tap(page, '[data-act="train"][data-t="wolf"]')
-        if await page.locator('[data-act="skipQueue"]').count():
-            await tap(page, '[data-act="skipQueue"]')
-        # Armoury upgrades tab
-        await tap(page, '[data-act="crewTab"][data-t="upgrades"]')
-        await page.wait_for_timeout(200)
-        await shot(page, '20-armoury')
-        if await page.locator('[data-act="research"][data-t="fox"]:not([disabled])').count():
-            await tap(page, '[data-act="research"][data-t="fox"]')
-        await tap(page, '[data-act="crewTab"][data-t="army"]')
-        # v0.9: the crew column holds only Rook; tap him for the character sheet and equip a stash item
+        assert await page.locator('.tcard, .tchip, [data-act="train"], [data-act="crewTab"][data-t="upgrades"]').count() == 0, 'troop UI should be hidden'
         assert await page.locator('.crewcol .opslot').count() == 1, 'crew column should show only Rook'
         assert await page.locator('.bslot[data-act="bossInfo"]').count() == 0, 'no bosses on the crew screen'
+        assert await ev(page, "Object.keys(window.__game.state.army).length") == 0, 'new game should have no troops'
         await tap(page, '.crewcol .opslot[data-id="rook"]')
         await page.wait_for_selector('.charscr')
         await tap(page, '.sitem[data-id="gilet"]')
@@ -406,6 +376,16 @@ async def main():
         await shot(page, '23-rook-inventory')
         await tap(page, '[data-act="charBack"]')
         await page.wait_for_selector('.armyscr')
+        # gang missions are locked gracefully without troops
+        await tap(page, '[data-act="nav"][data-tab="missions"]')
+        await page.wait_for_selector('.troopnote')
+        await tap(page, '[data-act="missionInfo"][data-gi="0"][data-si="0"]')
+        await page.wait_for_selector('.overlay')
+        assert await page.locator('.overlay [data-act="startMission"]').count() == 0, 'mission should not start without troops'
+        await shot(page, '33b-missions-no-troops')
+        await tap(page, '.overlay [data-act="closeModal"]')
+        # the rest of this run plays the troop modes as an older save that still has troops
+        await ev(page, "(()=>{window.__game.state.army={rat:4,fox:3,wolf:2};window.__game.render();return 1})()")
 
         # ---- shop + jobs
         await tap(page, '[data-act="nav"][data-tab="shop"]')

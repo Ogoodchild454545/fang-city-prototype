@@ -8,6 +8,7 @@ import { TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER } from '../core/data.js';
 import { BaseView, preload, tileToWorld } from './iso.js';
 import { fmt, money, dur, esc, rewardText, rewardTextPlain, resName, ico } from './fmt.js';
 import * as Audio from './audio.js';
+import { TROOPS_UI } from './crew.js';
 
 let view = null;
 const ui = (ctx) => (ctx.sub.base ||= { sel: null, place: null, cam: null, cat: 'money' });
@@ -195,7 +196,7 @@ function buildingPanel(ctx, b, now) {
   }
   if (d.produce && b.lv > 0 && b.till >= 1) btns.push(`<button class="act2" data-act="collectB" data-id="${b.id}"><span class="i">${ico(d.produce.res)}</span>Collect<span class="c" data-live="till">${d.produce.res === 'cash' ? money(b.till) : fmt(b.till)}</span></button>`);
   if (d.produce && b.lv > 0 && !b.lt) btns.push(`<button class="act2" data-act="hireLt" data-id="${b.id}"><span class="i">🕴</span>Lieutenant<span class="c">${money(BS.lieutenantCost(b))}</span></button>`);
-  if (b.t === 'gym' || b.t === 'bunk') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="army"><span class="i">🐾</span>Crew<span class="c">train</span></button>`);
+  if ((b.t === 'gym' || b.t === 'bunk') && TROOPS_UI) btns.push(`<button class="act2" data-act="gotoCrew" data-sub="army"><span class="i">🐾</span>Crew<span class="c">train</span></button>`);
   if (b.t === 'armoury') btns.push(`<button class="act2" data-act="gotoCrew" data-sub="upgrades"><span class="i">🔫</span>Troops<span class="c">upgrade</span></button>`);
   if (b.t === 'family') btns.push(`<button class="act2" data-act="family"><span class="i">🤝</span>Family<span class="c">soon</span></button>`);
   if (d.turret || b.t === 'den') btns.push(`<button class="act2" data-act="gotoCity"><span class="i">⚔</span>Raid<span class="c">rivals</span></button>`);

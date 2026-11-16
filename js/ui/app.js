@@ -64,7 +64,7 @@ function nav() {
   const s = ctx.state, now = ctx.now();
   const dot = {
     jobs: !M.dailyStatus(s, now).claimedToday || s.jobs.list.some((j) => !j.claimed && M.jobProgress(s, j).done),
-    crew: C.armyCount(s) === 0 && !s.queue.length,
+    crew: Object.values(s.heroes?.owned || {}).some((h) => h.pendingPerk),
     base: !!(M.currentObjective(s)?.done),
   };
   return NAV.map(([id, ico, label]) => `<button data-act="nav" data-tab="${id}" class="${ctx.tab === id ? 'on' : ''}"><span class="i">${ico}</span>${label}${dot[id] ? '<span class="dotn"></span>' : ''}</button>`).join('');
