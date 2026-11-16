@@ -1,4 +1,5 @@
 // Pre-battle loadout: pick up to four operators, load ammo and medkits, assign gear, opt into High Stakes.
+import { isUnlocked, unlockLv, isAvailable } from '../core/progression.js';
 import { HEROES, setSquad } from '../core/heroes.js';
 import { startStreet } from '../core/tactics.js';
 import { defaultLoadout, commitLoadout, carryOf, medCarry, KIT, KIT_ORDER, craftKit, equipGear, inventoryCount, kitFits } from '../core/loadout.js';
@@ -29,8 +30,8 @@ export function render(ctx) {
     <div class="loadbody">
     <div class="armyhead">
       <div>
-        <div class="h">${d.highStakes ? 'High Stakes loadout' : 'Street fight loadout'}</div>
-        <div class="tiny dim">Pick up to four operators — any mix of classes is allowed, including two of the same. You are matched with a crew near your trophy count. Unused ammo comes back; spent rounds are gone.</div>
+        <div class="h">${d.highStakes ? 'High Stakes loadout' : 'PvP vs copy · loadout'}</div>
+        <div class="tiny dim">Pick up to four operators — any mix of classes. You fight an AI-run copy of a crew near your trophy count. Long fight. Unused ammo comes back; spent rounds are gone. <b>Live PvP</b> opens at Lv ${unlockLv('livepvp')} (coming soon).</div>
       </div>
       <button class="btn dim" data-act="nav" data-tab="heroes">Back</button>
     </div>
@@ -64,10 +65,10 @@ export function render(ctx) {
         </select>
         <button class="btn sm" data-act="openEditor">Edit maps</button>
       </div>
-      <label class="hstakes ${d.highStakes ? 'on' : ''}">
+      ${isUnlocked(s, 'highstakes') ? `<label class="hstakes ${d.highStakes ? 'on' : ''}">
         <input type="checkbox" data-act="toggleHighStakes" ${d.highStakes ? 'checked' : ''}>
         <span><b>High Stakes</b> — triple rewards. If an operator is KO'd they stay in the crew, but their level resets and any gear they carried is taken. Normal fights have no such penalty.</span>
-      </label>
+      </label>` : ''}
       <button class="btn red" data-act="confirmLoadout">${d.highStakes ? 'Confirm High Stakes' : 'Start fight'}</button>
     </div>
   </div>`;
@@ -77,7 +78,7 @@ function slot(ctx, d, i) {
   const s = ctx.state;
   const id = d.squad[i];
   if (!id) {
-    const rest = Object.keys(s.heroes.owned).filter((h) => !d.squad.includes(h));
+    const rest = Object.keys(s.heroes.owned).filter((h) => !d.squad.includes(h) && isAvailable(s, h, ctx.now()));
     return `<article class="loadslot empty"><div class="tiny dim">Empty slot</div>
       ${rest.map((h) => `<button class="btn sm" data-act="addLoadHero" data-id="${h}">+ ${esc(HEROES[h].name)}</button>`).join('') || '<span class="tiny dim">No more operators</span>'}
     </article>`;
@@ -184,6 +185,8 @@ export const actions = {
   },
   confirmLoadout(ctx) {
     const d = ensure(ctx);
+    const busy = d.squad.find((id) => !isAvailable(ctx.state, id, ctx.now()));
+    if (busy) return ctx.toast(`${HEROES[busy].name} is busy (job or clinic). Swap them out.`);
     const r = commitLoadout(ctx.state, d);
     if (!r.ok) return ctx.toast(r.reason);
     if (d.mapId && d.mapId !== 'docklands') r.map = battleMapFor(d.mapId);

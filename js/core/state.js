@@ -9,11 +9,12 @@ import { rollClearDrop } from './shards.js';
 import { ensurePvp } from './pvp.js';
 import { ensureItems } from './items.js';
 import { kitFits } from './loadout.js';
+import { ensureProgress, estimateLevel, trimSquad } from './progression.js';
 setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 export function newGame(now, seed = newSeed()) {
   const s = {
@@ -39,6 +40,7 @@ export function newGame(now, seed = newSeed()) {
   for (const d of DISTRICTS) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
   s.stash = {};
   ensureItems(s); // Rook's starter kit on, spare starter pieces in the stash
+  ensureProgress(s, now);
   return s;
 }
 
@@ -126,6 +128,19 @@ export function migrate(s, now = Date.now()) {
     ensureItems(s);
     s.v = 6;
   }
+  if (s.v === 6 && s.base) {
+    // v0.10: account level + energy + stockpile. Existing crews get a level from what they have
+    // already played (capped at 10), full energy, and keep everything they own and wear.
+    ensureHeroes(s);
+    ensureProgress(s, now);
+    const est = estimateLevel(s);
+    s.player.lv = est.lv; s.player.xp = est.xp;
+    if (s.heroes.tutorialDone) s.ops.cleared.t1 = 1;
+    if (est.lv >= 3) { s.ops.cleared.t2 = 1; s.ops.cleared.t3 = 1; }
+    trimSquad(s);
+    s.v = 7;
+    s.migratedTo7 = 1;
+  }
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
   s.missions ||= {}; s.bosses ||= {}; s.troopLv ||= {}; s.queue ||= []; s.army ||= {}; s.extraHousing ||= 0;
@@ -136,6 +151,7 @@ export function migrate(s, now = Date.now()) {
   ensureHeroes(s);
   ensureItems(s);
   ensurePvp(s);
+  ensureProgress(s, now);
   return s;
 }
 

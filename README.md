@@ -31,6 +31,18 @@ factions you fight in Missions.
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
 
+## v0.10.0 (player levels, energy and pacing)
+
+- **Player level** (account level, separate from each operator's level). XP comes from ops and PvP. The three free tutorial ops take you to Lv 3 in the first session; Lv 10 takes roughly 60–70 ops (a few days).
+- **Unlocks by level:** Lv 1 Rook, tutorial ops, 4 gear slots, Cash only · Lv 3 Rookie Track, Hideout stockpile, Maul, Ice & Market · Lv 5 Vesper (free medic), 2 v 2, Howl, Clinic · Lv 7 3 v 3, operator jobs, crafting, Rep · Lv 10 4 v 4, all 13 slots, Best gear · Lv 15 High Stakes, PvP vs AI copies · Lv 20 live PvP (coming soon). Locked tabs and buttons show a greyed "Lv X" teaser.
+- **Energy:** 10 max, 1 per op (tutorial ops free), +1 every 10 minutes from timestamps, shown in the header. Refill for 20 Ice from Lv 3.
+- **Ops tab:** 20 short ops (1–4 foes, both sides start close on the ready-made maps; AI sims end in 3–8 rounds). Long 4 v 4 fights stay in PvP. Story ops replace this list in roadmap step 3.
+- **Rookie Track:** 20 goals with small rewards plus a level road of what unlocks next; Lv badge in the header or the Track button.
+- **Gear slots** open with operator level (or player level if higher): 4 at the start, all 13 by Lv 10. **Best gear** auto-equips from Lv 10.
+- **Safehouse tab:** stockpile (cash + ammo, 12 h cap, one-tap collect also on the Hideout), clinic (2 beds, 10 min per KO'd operator, rush with Ice), operator jobs (1–8 h, operator is away meanwhile).
+- **Debug:** `?level=N` jumps the player level, `?energy=N` sets energy.
+- Save version 7: older saves get a level from what they have played (capped at 10) and keep everything.
+
 ## v0.9.3 (Operators screen for phone landscape)
 
 - **Operators screen redesigned** for iPhone landscape with browser bars (~844x340): one-line header with Squad / universal shards / weekly feature / pin as small chips, the explanation behind an (i) pop-up, and big operator cards (portrait, name, stars, class, level and XP, one perk line, key stats, Gear & abilities / squad buttons) that scroll sideways. Lesson, Docklands PvP and Maps are compact buttons.

@@ -60,8 +60,10 @@ export const HEROES = {
       base: { crit: 5, dodge: 0 },
       slots: ['primary', 'sidearm', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
       start: {
-        equip: { melee: 'tyreiron', sidearm: 'snub', jacket: 'hoodie', boots: 'trainers', gloves: 'tape', consumable: 'dressings' },
-        stash: ['flatcap', 'gilet', 'chain', 'pipebomb'],
+        // v0.10: four slots are open at the start (melee, sidearm, jacket, boots); the rest open
+        // as Rook levels up, so the tape and dressings wait in the stash.
+        equip: { melee: 'tyreiron', sidearm: 'snub', jacket: 'hoodie', boots: 'trainers' },
+        stash: ['tape', 'dressings', 'flatcap', 'gilet', 'chain', 'pipebomb'],
       },
     },
     bio: "A dock-road bruiser who walked out of a Grey Pack setup with a tyre iron, a borrowed revolver and a younger cousin to look after. He talks little, goes in first, and does not leave crew on the ground.",

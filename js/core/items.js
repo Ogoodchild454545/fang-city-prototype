@@ -197,10 +197,10 @@ export function stashList(s) {
 }
 export function firstSlotFor(itemId) { const it = ITEMS[itemId]; return it ? (SLOTS.find((sl) => sl.kind === it.slot) || {}).id : null; }
 // Slot an item would go into: the first empty matching socket, else the first matching one.
-export function targetSlot(rec, itemId) {
+export function targetSlot(rec, itemId, s, heroId) {
   const it = ITEMS[itemId]; if (!it) return null;
   const fits = SLOTS.filter((sl) => sl.kind === it.slot).map((sl) => sl.id);
-  return fits.find((sl) => !(rec.equip || {})[sl]) || fits[0];
+  return fits.find((sl) => !(rec.equip || {})[sl] && (!s || slotOpen(s, heroId, sl))) || (s && fits.find((sl) => slotOpen(s, heroId, sl))) || fits[0];
 }
 
 export function equipItem(s, heroId, itemId, slotId) {
@@ -208,8 +208,9 @@ export function equipItem(s, heroId, itemId, slotId) {
   if (!rec) return { ok: false, reason: 'Not in the crew' };
   ensureItems(s);
   if (!ITEMS[itemId]) return { ok: false, reason: 'Unknown item' };
-  const slot = slotId || targetSlot(rec, itemId);
+  const slot = slotId || targetSlot(rec, itemId, s, heroId);
   if (!slotFits(slot, itemId)) return { ok: false, reason: `${ITEMS[itemId].name} doesn't go in that slot` };
+  if (s.player && !slotOpen(s, heroId, slot)) return { ok: false, reason: `${SLOT_BY_ID[slot].short} slot opens at level ${SLOT_UNLOCK[slot]}` };
   if (stashCount(s, itemId) < 1) return { ok: false, reason: 'Not in the stash' };
   const prev = rec.equip[slot];
   s.stash[itemId] -= 1;
@@ -281,5 +282,53 @@ export function craftItem(s) {
   s.parts -= CRAFT_ITEM_COST;
   const id = rollItem(s, {});
   addItem(s, id, 1);
+  if (s.stats) s.stats.crafted = (s.stats.crafted || 0) + 1;
   return { ok: true, id, item: ITEMS[id] };
+}
+
+// ---------- v0.10 slot unlocks + Best gear ----------
+// Four slots are open at the start; the rest open with the operator's level (or the player's
+// account level, whichever is higher), so every slot is open by level 10.
+export const SLOT_UNLOCK = { melee: 1, sidearm: 1, jacket: 1, boots: 1, gloves: 2, head: 2, consumable: 3, body: 4, primary: 5, acc1: 6, utility: 7, acc2: 8, trinket: 10 };
+export const slotLevel = (s, heroId) => Math.max((s.heroes.owned[heroId] || {}).lv || 1, (s.player && s.player.lv) || 1);
+export const slotOpen = (s, heroId, slotId) => slotLevel(s, heroId) >= (SLOT_UNLOCK[slotId] || 1);
+export const openSlotCount = (s, heroId) => SLOT_IDS.filter((sl) => slotOpen(s, heroId, sl)).length;
+export const BEST_GEAR_LV = 10;
+
+// One number per item for auto-equip. Weapons count their damage; everything else its stats.
+export function itemScore(heroId, itemId) {
+  const it = ITEMS[itemId]; if (!it) return -1e9;
+  const d = defOf(heroId) || {};
+  const melee = (d.weapon && d.weapon.typ === 'melee') || d.classId === 'bruiser';
+  let v = 0;
+  if (it.wpn) {
+    const avg = (it.wpn.dmg[0] + it.wpn.dmg[1]) / 2;
+    v += avg * (it.slot === 'melee' ? (melee ? 2.2 : 1) : (melee ? 1.4 : 2.2)) + (it.slot === 'melee' ? 0 : it.wpn.range * 0.25);
+  }
+  v += (it.hp || 0) * 1 + (it.armor || 0) * 3 + (it.mdmg || 0) * (melee ? 2.5 : 1) + (it.rdmg || 0) * (melee ? 1 : 2.5)
+    + (it.aim || 0) * 0.25 + (it.crit || 0) * 0.15 + (it.dodge || 0) * 0.25 + (it.speed || 0) * 0.6 + (it.move || 0) * 1.5
+    + (it.carry || 0) * 0.3 + (it.medCarry || 0) * 1 + (it.charges || 0) * 1.5 + (it.range || 0) * 0.8;
+  return v + QUALITY[it.q].rank * 0.05;
+}
+export function bestGear(s, heroId) {
+  const rec = s.heroes.owned[heroId];
+  if (!rec) return { ok: false, reason: 'Not in the crew' };
+  if (((s.player && s.player.lv) || 1) < BEST_GEAR_LV) return { ok: false, reason: `Best gear unlocks at Lv ${BEST_GEAR_LV}` };
+  ensureItems(s);
+  const before = { ...rec.equip };
+  // take everything off the open slots into the pool, then fill each slot with the best piece
+  for (const sl of SLOT_IDS) if (slotOpen(s, heroId, sl) && rec.equip[sl]) { addItem(s, rec.equip[sl], 1); delete rec.equip[sl]; }
+  for (const sl of SLOT_IDS) {
+    if (!slotOpen(s, heroId, sl)) continue;
+    const cands = Object.keys(s.stash).filter((id) => s.stash[id] > 0 && slotFits(sl, id));
+    if (!cands.length) continue;
+    cands.sort((a, b) => itemScore(heroId, b) - itemScore(heroId, a));
+    const pick = cands[0];
+    if (itemScore(heroId, pick) <= 0 && !ITEMS[pick].wpn) continue;
+    s.stash[pick] -= 1; if (!s.stash[pick]) delete s.stash[pick];
+    rec.equip[sl] = pick;
+  }
+  const changed = SLOT_IDS.filter((sl) => (before[sl] || null) !== (rec.equip[sl] || null)).length;
+  if (s.stats) s.stats.bestGear = (s.stats.bestGear || 0) + 1;
+  return { ok: true, changed };
 }

@@ -299,29 +299,16 @@ export const PASS_TIERS = Array.from({ length: 30 }, (_, i) => ({
 // ---------------------------------------------------------------- guided objectives (first-session flow)
 const rookLv = (s) => s.heroes?.owned?.rook?.lv || 1;
 const has = (s, t, lv = 1) => s.base.buildings.some((b) => b.t === t && b.lv >= lv);
+// v0.10: Boss's orders are the first-session guide (Lv 1–2, Cash rewards only). From Lv 3 the
+// Rookie Track (core/progression.js) takes over on the home screen.
+const opDone = (s, id) => !!(s.ops && s.ops.cleared && s.ops.cleared[id]);
 export const OBJECTIVES = [
+  { text: 'Win Rook\'s street lesson (Next op button)', check: (s) => !!s.heroes?.tutorialDone, reward: { cash: 100 } },
   { text: 'Build a Knock-off Stall (BUILD button)', check: (s) => has(s, 'stall'), reward: { cash: 100 } },
   { text: 'Collect cash from your stall when the bubble appears', check: (s) => s.stats.collects >= 1, reward: { cash: 100 } },
-  { text: 'Clear 3 pieces of junk to free up land', check: (s) => (s.stats.cleared || 0) >= 3, reward: { teeth: 10 } },
-  { text: 'Build a Pirate Radio to earn Rep', check: (s) => has(s, 'radio'), reward: { influence: 50 } },
-  { text: 'Build a Strongbox to hold more cash', check: (s) => has(s, 'strongbox'), reward: { cash: 200 } },
-  // v0.9.1: the hero-only crew (troops are hired at the base later), so these steps follow Rook, not troops.
-  { text: 'Win Rook\'s street lesson (My Crew tab)', check: (s) => !!s.heroes?.tutorialDone, reward: { influence: 40 } },
-  { text: 'Equip new gear on Rook (tap him in My Crew)', check: (s) => (s.stats.equips || 0) >= 1, reward: { teeth: 10 } },
-  { text: 'Win a Docklands fight with Rook (My Crew tab)', check: (s) => (s.pvp?.wins || 0) >= 1, reward: { cash: 400 } },
-  { text: 'Upgrade the Knock-off Stall to level 3', check: (s) => has(s, 'stall', 3), reward: { cash: 300 } },
-  { text: 'Upgrade The Den to level 2', check: (s) => has(s, 'den', 2), reward: { teeth: 20 } },
-  { text: 'Put up a Sniper Nest to defend the base', check: (s) => has(s, 'sniper'), reward: { influence: 60 } },
-  { text: 'Get Rook to level 2', check: (s) => rookLv(s) >= 2, reward: { teeth: 20 } },
-  { text: 'Win 3 Docklands fights', check: (s) => (s.pvp?.wins || 0) >= 3, reward: { teeth: 20 } },
-  { text: 'Hire a lieutenant so a building collects by itself', check: (s) => s.base.buildings.some((b) => b.lt), reward: { influence: 40 } },
-  { text: 'Upgrade The Den to level 3 (unlocks Barricades)', check: (s) => has(s, 'den', 3), reward: { teeth: 30 } },
-  { text: 'Get Rook to level 3 (unlocks Maul)', check: (s) => rookLv(s) >= 3, reward: { influence: 50 } },
-  { text: 'Reach 100 trophies in Docklands fights', check: (s) => (s.pvp?.trophies || 0) >= 100, reward: { teeth: 20 } },
-  { text: 'Get Rook to level 5 (unlocks Howl)', check: (s) => rookLv(s) >= 5, reward: { teeth: 30 } },
-  { text: 'Unlock a second operator (30 shards)', check: (s) => Object.keys(s.heroes?.owned || {}).length >= 2, reward: { teeth: 40 } },
-  { text: 'Win 15 Docklands fights', check: (s) => (s.pvp?.wins || 0) >= 15, reward: { teeth: 50 } },
-  { text: 'Reach 300 trophies', check: (s) => (s.pvp?.trophies || 0) >= 300, reward: { teeth: 100 } },
+  { text: 'Equip new gear on Rook (tap him in My Crew)', check: (s) => (s.stats.equips || 0) >= 1, reward: { cash: 150 } },
+  { text: 'Clear the op “Late payment”', check: (s) => opDone(s, 't2'), reward: { cash: 150 } },
+  { text: 'Clear the op “Crate snatch”', check: (s) => opDone(s, 't3'), reward: { cash: 200 } },
 ];
 export function currentObjective(state) {
   const o = OBJECTIVES[state.tutorial];

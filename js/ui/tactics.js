@@ -1108,7 +1108,7 @@ async function playEvents(ctx, events) {
     if (ev.typ === 'shot' || ev.typ === 'overwatch' || ev.mode) {
       const att = b.units.find((x) => x.uid === ev.uid);
       const def = b.units.find((x) => x.uid === ev.target);
-      if (att && def && cv) {
+      if (att && def && cv && u.cam) {
         const a = toWorld(att.x, att.y), tw = toWorld(def.x, def.y);
         const zz = u.cam.z;
         const melee = ev.mode === 'melee' || ev.mode === 'knife' || ev.mode === 'lunge' || ev.mode === 'roll' || ev.mode === 'pounce' || ev.mode === 'maul' || (ev.typ === 'shot' && !T.gunOf(att));
@@ -1338,11 +1338,11 @@ function finish(ctx) {
   const res = T.resolveTactics(ctx.state, fight);
   ctx.save();
   ctx.sub.tactics = null;
-  if (!res) { ctx.go('city'); return; }
+  if (!res) { ctx.go('base'); return; }
   if (res.win) Audio.play('win'); else Audio.play('lose');
   const back = ctx.sub.afterBattle;
   ctx.sub.afterBattle = null;
-  const el = ctx.modal(resultHtml(res, squad), { center: true, backdrop: false, cls: 'resultov', onClose: () => { const to = ctx.sub.afterBattle || back || (res.kind === 'tutorial' ? 'base' : 'city'); ctx.sub.afterBattle = null; ctx.go(to); } });
+  const el = ctx.modal(resultHtml(res, squad), { center: true, backdrop: false, cls: 'resultov', onClose: () => { const to = ctx.sub.afterBattle || back || (res.kind === 'tutorial' ? 'base' : res.opId ? 'missions' : 'city'); ctx.sub.afterBattle = null; ctx.go(to); } });
   if (el) animateResult(el);
 }
 
@@ -1402,6 +1402,7 @@ function resultHtml(res, squad) {
       ${lossTip}
       ${league}
       ${res.tutorial && res.shardDrop ? '<p class="small gold">Collect 30 shards to unlock an operator.</p>' : ''}
+      ${playerXpBlock(res)}
       ${xpBlock(res)}
     </div>
   </div>`;
@@ -1421,6 +1422,21 @@ function animateResult(root) {
   requestAnimationFrame(step);
   const bar = root.querySelector('.rlgbar i[data-to]');
   if (bar) setTimeout(() => { bar.style.width = bar.dataset.to + '%'; }, 450);
+}
+
+// v0.10 account XP + level-up banner + clinic note.
+function playerXpBlock(res) {
+  const px = res.playerXp;
+  if (!px) return '';
+  const pct = px.need ? Math.min(100, (px.xp / px.need) * 100) : 100;
+  const up = px.levels && px.levels.length;
+  const unl = up ? px.unlocks.filter((u) => !/^squad[23]$/.test(u.id)) : [];
+  return `<div class="pxbox ${up ? 'up' : ''}">
+    ${up ? `<div class="lvup"><div class="h">Level up! · Player Lv ${px.lv}</div>${unl.length ? `<div class="tiny">Unlocked: ${unl.map((u) => `${u.ico} <b>${esc(u.name)}</b>`).join(' · ')}</div>` : ''}</div>` : ''}
+    <div class="tiny"><b>Player</b> +${px.amount} XP · Lv ${px.lv}${res.firstClear ? ' · <span class="gold">first clear</span>' : ''}</div>
+    <div class="xpbar"><i style="width:${pct}%"></i></div>
+    ${res.clinic && res.clinic.length ? `<div class="tiny red">🏥 ${res.clinic.map((id) => esc(defOf(id).name)).join(', ')} went to the clinic to patch up (Safehouse).</div>` : ''}
+  </div>`;
 }
 
 function xpBlock(res) {
@@ -1443,7 +1459,7 @@ function xpBlock(res) {
   const lost = (res.lost || []).map((l) =>
     `<div class="xprow loss"><b>${esc(l.name)}</b> was KO'd. Level reset to Rookie (was ${esc(l.rank)}); ${l.gear ? 'carried gear was taken.' : 'no gear was carried.'}</div>`
   ).join('');
-  const ret = res.returned
+  const ret = res.returned && !res.opId
     ? `<div class="tiny dim">Unused loadout returned: ${res.returned.ammo || 0} ammo, ${res.returned.medkits || 0} medkits. Spent rounds and kits are gone.</div>`
     : '';
   if (!hs && !rows && !lost) return '';

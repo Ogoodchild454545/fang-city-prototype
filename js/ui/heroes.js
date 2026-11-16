@@ -1,4 +1,5 @@
 // Operators roster: unique collectable heroes, shard progress, pin-a-target, squad of up to 4.
+import { squadCap, isUnlocked, unlockLv, isAvailable } from '../core/progression.js';
 import { HERO_ORDER, HEROES, unlockHint, setSquad, synergiesFor, classOf, speciesPerk, CLASSES } from '../core/heroes.js';
 import { startTutorial } from '../core/tactics.js';
 import { money, fmt, ico, esc } from './fmt.js';
@@ -27,7 +28,7 @@ export function render(ctx) {
       <span class="h opstitle">Operators</span>
       <button class="infob" data-act="opsInfo" title="How operators work" aria-label="How operators work">i</button>
       <div class="opschips">
-        <span class="opchip" title="Squad for Docklands fights">👥 Squad <b>${squad.length}/4</b></span>
+        <span class="opchip" title="Squad size grows with your player level">👥 Squad <b>${squad.length}/${squadCap(s)}</b></span>
         <span class="opchip" title="Universal shards: spend on any operator">💠 <b>${s.heroes.universal || 0}</b> universal</span>
         <span class="opchip" title="Weekly featured operator drops more often">⭐ <b>${esc(HEROES[feat].name)}</b> ${days}d</span>
         <span class="opchip" title="Pinned target gets boosted shard drops">📌 ${s.heroes.pin ? `<b>${esc(HEROES[s.heroes.pin].name)}</b>` : 'No pin'}</span>
@@ -35,7 +36,8 @@ export function render(ctx) {
       </div>
       <div class="opsbtns">
         ${s.heroes.tutorialDone ? '' : '<button class="btn sm gold" data-act="startTutorial">Lesson</button>'}
-        <button class="btn sm red" data-act="startStreet" ${squad.length ? '' : 'disabled'}>⚔ Docklands PvP</button>
+        <button class="btn sm red" data-act="nav" data-tab="missions">🎯 Ops</button>
+        ${isUnlocked(s, 'pvpcopy') ? `<button class="btn sm" data-act="startStreet" ${squad.length ? '' : 'disabled'}>⚔ PvP</button>` : `<button class="btn sm off" data-act="lockedFeature" data-id="pvpcopy">🔒 PvP · Lv ${unlockLv('pvpcopy')}</button>`}
         <button class="btn sm" data-act="openEditor" title="Map editor">🗺 Maps</button>
       </div>
     </div>
@@ -166,7 +168,7 @@ export const actions = {
         <li>Operators level up with XP from fights and unlock abilities and perk picks.</li>
         <li>More operators join with <b>30 shards</b> from bushes, missions and Ice crates. Extra shards add stars.</li>
         <li><b>Pin</b> a locked operator to boost their shard drops. This week's featured operator is <b>${esc(HEROES[feat].name)}</b>.</li>
-        <li>Your <b>squad</b> (up to 4) goes into Docklands PvP fights. Universal shards can be spent on anyone.</li>
+        <li>Your <b>squad</b> goes into ops: 1 operator at first, 2 at player level 5, 3 at 7 and 4 at 10. Universal shards can be spent on anyone.</li>
       </ul>`, { center: true });
   },
   recruitList(ctx) {
@@ -183,7 +185,9 @@ export const actions = {
       if (squad.length === 1) return ctx.toast('You need at least one operator in the squad.');
       squad.splice(i, 1);
     } else {
-      if (squad.length >= 4) return ctx.toast('Squad is full (4). Drop someone first.');
+      const cap = squadCap(ctx.state);
+      if (!isAvailable(ctx.state, id, ctx.now())) return ctx.toast(`${HEROES[id].name} is busy (job or clinic).`);
+      if (squad.length >= cap) return ctx.toast(cap < 4 ? `Squad is full (${cap}). Bigger squads at player level ${cap === 1 ? 5 : cap === 2 ? 7 : 10}.` : 'Squad is full (4). Drop someone first.');
       squad.push(id);
     }
     const r = setSquad(ctx.state, squad);
@@ -234,6 +238,7 @@ export const actions = {
     ctx.go('tactics');
   },
   startStreet(ctx) {
+    if (!isUnlocked(ctx.state, 'pvpcopy')) return ctx.toast(`PvP opens at player level ${unlockLv('pvpcopy')}`);
     if (!ctx.state.heroes.squad.length) return ctx.toast('Pick a squad first.');
     openLoadout(ctx);
   },

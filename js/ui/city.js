@@ -1,4 +1,5 @@
 // City screen: turf map (PvE districts) + rival bases to raid (async PvP, simulated in the prototype).
+import { unlockLv } from '../core/progression.js';
 import { DISTRICTS, GANGS, SPECIES, REP_TIERS } from '../core/data.js';
 import { BUILDINGS, turretOf } from '../core/buildings.js';
 import * as C from '../core/crew.js';
@@ -39,7 +40,7 @@ export function render(ctx) {
   <div>
     ${(() => { const pv = ensurePvp(s); const lg = leagueOf(pv.trophies); return `
     <div class="card" style="margin-top:4px">
-      <div class="row"><div class="grow"><div class="tiny red h">Docklands PvP</div>
+      <div class="row"><div class="grow"><div class="tiny red h">PvP vs copies · Live PvP at Lv ${unlockLv('livepvp')} (coming soon)</div>
         <div class="small">${esc(lg.name)} · ${pv.trophies} trophies${lg.next ? ` · ${lg.next.min - pv.trophies} to ${esc(lg.next.name)}` : ''}. Any mix of classes is allowed. Matched against a crew near your trophies${s.heroes.tutorialDone ? '' : ' · lesson still open'}.</div>
       </div>
       <div class="col"><button class="btn sm" data-act="nav" data-tab="heroes">Operators</button>

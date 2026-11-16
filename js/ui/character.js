@@ -5,7 +5,9 @@ import { HEROES, defOf, classOf, speciesPerk } from '../core/heroes.js';
 import {
   SLOTS, SLOT_BY_ID, ITEMS, QUALITY, STAT_DEFS, statsFor, stashList, ensureItems, equipItem, unequipItem,
   targetSlot, slotFits, craftItem, CRAFT_ITEM_COST, modsOf, equippedIds,
+  SLOT_UNLOCK, slotOpen, slotLevel, openSlotCount, bestGear, BEST_GEAR_LV,
 } from '../core/items.js';
+import { isUnlocked, unlockLv, playerLv } from '../core/progression.js';
 import { baseCarry, KIT, medCarry } from '../core/loadout.js';
 import { perkMods, rankName, xpToNext, PERKS, MAX_LV } from '../core/progress.js';
 import { esc } from './fmt.js';
@@ -43,7 +45,7 @@ function previewEquipMap(s, c) {
   const sel = c.sel;
   if (!sel) return null;
   const eq = { ...(rec.equip || {}) };
-  if (sel.from === 'stash') { const sl = sel.slot || targetSlot(rec, sel.id); if (!sl) return null; eq[sl] = sel.id; return eq; }
+  if (sel.from === 'stash') { const sl = sel.slot || targetSlot(rec, sel.id, s, c.hero); if (!sl) return null; eq[sl] = sel.id; return eq; }
   if (sel.from === 'slot' && eq[sel.slot]) { delete eq[sel.slot]; return eq; }
   return null;
 }
@@ -103,8 +105,9 @@ function detail(s, c) {
     return `<div class="cdetail">${itemCard(id, `<div class="row" style="margin-top:4px;gap:4px"><button class="btn sm" data-act="charUnequip" data-slot="${sel.slot}">Take off</button></div>`)}</div>`;
   }
   const it = ITEMS[sel.id];
-  const fits = SLOTS.filter((sl) => sl.kind === it.slot);
-  const tgt = sel.slot || targetSlot(rec, sel.id);
+  const fits = SLOTS.filter((sl) => sl.kind === it.slot && slotOpen(s, c.hero, sl.id));
+  const tgt = sel.slot || targetSlot(rec, sel.id, s, c.hero);
+  if (!fits.length) return `<div class="cdetail">${itemCard(sel.id, `<div class="tiny cmp red">🔒 ${esc(SLOT_BY_ID[tgt].name)} slot opens at level ${SLOT_UNLOCK[tgt]}.</div>`)}</div>`;
   const cur = rec.equip[tgt];
   const btns = fits.length > 1
     ? fits.map((sl) => `<button class="btn sm ${sl.id === tgt ? 'gold' : ''}" data-act="charEquip" data-id="${sel.id}" data-slot="${sl.id}">Equip · ${esc(sl.short)} ${sl.id.slice(-1)}</button>`).join('')
@@ -113,14 +116,23 @@ function detail(s, c) {
   return `<div class="cdetail">${itemCard(sel.id, `${vs}<div class="row" style="margin-top:4px;gap:4px;flex-wrap:wrap">${btns}</div>`)}</div>`;
 }
 
-function slotBtn(rec, c, sl) {
+function slotBtn(s, rec, c, sl) {
   const id = (rec.equip || {})[sl.id];
+  if (!slotOpen(s, c.hero, sl.id) && !id) {
+    return `<button class="cslot locked" data-act="charSlotLocked" data-slot="${sl.id}" title="${esc(sl.name)}: opens at level ${SLOT_UNLOCK[sl.id]}">
+      <span class="sico"><i>🔒</i></span><span class="slab">Lv ${SLOT_UNLOCK[sl.id]}</span></button>`;
+  }
   const it = id && ITEMS[id];
   const selItem = c.sel && c.sel.from === 'stash' ? ITEMS[c.sel.id] : null;
   const fit = selItem && selItem.slot === sl.kind;
   const sel = c.sel && c.sel.from === 'slot' && c.sel.slot === sl.id;
   return `<button class="cslot ${it ? 'has q-' + it.q : 'empty'} ${fit ? 'fit' : ''} ${sel ? 'sel' : ''}" data-act="charSlot" data-slot="${sl.id}" data-drop-slot="${sl.id}" ${it ? `draggable="true" data-drag-slot="${sl.id}" data-tip-item="${id}"` : ''} title="${esc(it ? it.name : sl.name)}">
     <span class="sico">${it ? icoOf(id) : `<i>${sl.ico}</i>`}</span><span class="slab">${esc(it ? it.name : sl.short)}</span></button>`;
+}
+
+function bestBtn(s, c) {
+  if (playerLv(s) >= BEST_GEAR_LV) return '<button class="btn sm gold" data-act="charBest" title="Equip the strongest gear you own in every open slot">✨ Best gear</button>';
+  return `<button class="btn sm off" data-act="charBestLocked" title="Unlocks at player level ${BEST_GEAR_LV}">✨ Best gear · Lv ${BEST_GEAR_LV}</button>`;
 }
 
 function stashGrid(s, c) {
@@ -132,7 +144,8 @@ function stashGrid(s, c) {
   const selSlotKind = c.sel && c.sel.from === 'slot' ? SLOT_BY_ID[c.sel.slot].kind : null;
   return `<div class="cstash" data-drop-stash="1">
     <div class="stashhead"><div class="sect" style="margin:0">Stash</div><span class="tiny dim">${list.reduce((a, x) => a + x.n, 0)} items · ${s.parts || 0} parts</span>
-      <button class="btn sm" data-act="charCraft" title="Workshop: turn ${CRAFT_ITEM_COST} parts into a random piece of street gear">🔨 Craft · ${CRAFT_ITEM_COST} parts</button></div>
+      ${bestBtn(s, c)}
+      ${isUnlocked(s, 'crafting') ? `<button class="btn sm" data-act="charCraft" title="Workshop: turn ${CRAFT_ITEM_COST} parts into a random piece of street gear">🔨 Craft · ${CRAFT_ITEM_COST}</button>` : ''}</div>
     ${chips}
     <div class="sgridi">${list.length ? list.map(({ id, n, item }) => `<button class="sitem q-${item.q} ${c.sel && c.sel.from === 'stash' && c.sel.id === id ? 'sel' : ''} ${selSlotKind && item.slot === selSlotKind ? 'fit' : ''}" data-act="charItem" data-id="${id}" draggable="true" data-drag-item="${id}" data-tip-item="${id}" title="${esc(item.name)}">
         <span class="sico">${icoOf(id)}</span>${n > 1 ? `<span class="sn">×${n}</span>` : ''}<span class="slab">${esc(item.name)}</span></button>`).join('') : '<div class="tiny dim" style="padding:6px">Nothing here. Win fights, clear missions, open crates or craft at the Workshop.</div>'}</div>
@@ -141,7 +154,7 @@ function stashGrid(s, c) {
 
 function abilityPanel(s, c) {
   const d = defOf(c.hero), rec = s.heroes.owned[c.hero];
-  const lv = rec.lv || 1;
+  const lv = Math.max(rec.lv || 1, playerLv(s)); // abilities open at operator OR player level
   const pk = speciesPerk(d.species);
   const ab = (a) => {
     const locked = a.unlock && lv < a.unlock;
@@ -180,15 +193,15 @@ export function render(ctx) {
     <div class="charhead">
       <button class="btn sm" data-act="charBack">‹ Back</button>
       <div class="cname"><b class="h">${esc(d.name)}</b> <span class="tiny dim">${esc(d.species)} · ${esc((classOf(d) || {}).name || d.role)} · Lv ${lv} ${esc(rankName(lv))}</span>
-        <div class="xpbar" title="XP"><i style="width:${pct}%"></i></div><span class="tiny dim">${need ? `${rec.xp || 0}/${need} XP` : 'Max level'}${lv < MAX_LV ? '' : ''}</span></div>
+        <div class="xpbar" title="XP"><i style="width:${pct}%"></i></div><span class="tiny dim">${need ? `${rec.xp || 0}/${need} XP` : 'Max level'} · ${openSlotCount(s, c.hero)}/13 slots open</span></div>
       ${owned.length > 1 ? `<select class="csel" data-act="charHero">${owned.map((id) => `<option value="${id}" ${id === c.hero ? 'selected' : ''}>${esc(HEROES[id].name)}</option>`).join('')}</select>` : ''}
       <div class="ctabs"><button class="chip ${c.tab === 'gear' ? 'on' : ''}" data-act="charTab" data-t="gear">Inventory</button><button class="chip ${c.tab === 'skills' ? 'on' : ''}" data-act="charTab" data-t="skills">Abilities</button></div>
     </div>
     <div class="charbody">
       <div class="doll">
-        <div class="dcol">${L.map((x) => slotBtn(rec, c, x)).join('')}</div>
+        <div class="dcol">${L.map((x) => slotBtn(s, rec, c, x)).join('')}</div>
         <div class="dpor"><img src="${d.portrait}" alt="${esc(d.name)}"><div class="dcls tiny">${esc((classOf(d) || {}).blurb || '')}</div></div>
-        <div class="dcol">${R.map((x) => slotBtn(rec, c, x)).join('')}</div>
+        <div class="dcol">${R.map((x) => slotBtn(s, rec, c, x)).join('')}</div>
       </div>
       ${statPanel(s, c)}
       <div class="cright">${c.tab === 'skills' ? abilityPanel(s, c) : detail(s, c) + stashGrid(s, c)}</div>
@@ -284,6 +297,17 @@ export const actions = {
     ctx.render();
   },
   charEquip(ctx, el) { doEquip(ctx, el.dataset.id, el.dataset.slot); },
+  charSlotLocked(ctx, el) { const sl = el.dataset.slot; ctx.toast(`${SLOT_BY_ID[sl].name} slot opens when ${HEROES[cs(ctx).hero].name} or your player level reaches ${SLOT_UNLOCK[sl]}`); },
+  charBestLocked(ctx) { ctx.toast(`Best gear unlocks at player level ${BEST_GEAR_LV}`); },
+  charBest(ctx) {
+    const c = cs(ctx);
+    const r = bestGear(ctx.state, c.hero);
+    if (!r.ok) return ctx.toast(r.reason);
+    Audio.play('build');
+    c.sel = null;
+    ctx.toast(r.changed ? `Best gear on: ${r.changed} slot${r.changed > 1 ? 's' : ''} changed` : 'Already wearing the best you have');
+    ctx.save(); ctx.render();
+  },
   charUnequip(ctx, el) { doUnequip(ctx, el.dataset.slot); },
   charCraft(ctx) {
     const r = craftItem(ctx.state);

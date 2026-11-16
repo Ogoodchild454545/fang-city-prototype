@@ -26,6 +26,8 @@ import { BUILTIN_MAPS, BUILTIN_BY_ID } from '../js/core/maps/index.js';
 import * as CM from '../js/core/custommaps.js';
 import * as IT from '../js/core/items.js';
 import * as TH from '../js/core/themes.js';
+import * as PG from '../js/core/progression.js';
+import * as OPS from '../js/core/ops.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -300,7 +302,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 6);
+  assert.equal(s.v, 7);
   assert.equal(s.crew, undefined);
   assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
@@ -309,7 +311,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 6 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 7 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
@@ -328,7 +330,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
   const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
   const teeth = s2.teeth, cash0 = s2.cash;
   const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
-  assert.equal(s.v, 6);
+  assert.equal(s.v, 7);
   assert.equal(s.gang, undefined);
   assert.equal(s.crew, undefined);
   assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
@@ -511,7 +513,7 @@ test('v3 save migrates to v5 with Rook and starting ammo', () => {
   delete s3.heroes;
   delete s3.tactics;
   const s = migrate(s3, T0);
-  assert.equal(s.v, 6);
+  assert.equal(s.v, 7);
   assert.ok(s.heroes.owned.rook);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.ok((s.ammo || 0) >= 30);
@@ -820,6 +822,7 @@ test('species perks: fox is quicker, croc shrugs a point, badger stays stubborn,
 
 test('PvP: trophy matchmaking, winner gets cash, rep, trophies and shards; loss drops trophies; High Stakes still takes gear', () => {
   const s = newGame(T0, 101);
+  s.player.lv = 15; // PvP vs copies opens at Lv 15 (v0.10)
   PVP.ensurePvp(s);
   s.pvp.trophies = 240;
   const opp = PVP.findMatch(s, 101, 2);
@@ -1089,6 +1092,7 @@ test('v0.9 items: 13 slots, quality tiers, equip/unequip moves items between sta
     if (['primary', 'sidearm', 'melee'].includes(it.slot)) assert.ok(it.wpn && it.wpn.dmg[1] >= it.wpn.dmg[0], id + ' weapon');
   }
   const s = newGame(T0, 4);
+  s.player.lv = 10; // every slot open (v0.10 slots open with level)
   let r = IT.equipItem(s, 'rook', 'gilet');
   assert.ok(r.ok && r.slot === 'body'); assert.equal(IT.stashCount(s, 'gilet'), 0);
   r = IT.equipItem(s, 'rook', 'chain'); assert.equal(r.slot, 'acc1');
@@ -1235,7 +1239,7 @@ test('v0.9 save migration: v5 saves keep operators, Rook gets his kit, misfit Wo
   delete s5.heroes.owned.ivory.equip;
   s5.kit = {};
   const s = migrate(JSON.parse(serialize(s5)), T0);
-  assert.equal(s.v, 6);
+  assert.equal(s.v, 7);
   assert.ok(s.heroes.owned.ivory, 'unlocked operators are kept');
   const rook = s.heroes.owned.rook;
   assert.equal(rook.lv, 4); assert.deepEqual(rook.perks, ['iron']);
@@ -1270,7 +1274,8 @@ test('v0.9.1 hero-only crew: new game has no troops; troop fights refuse cleanly
   // the Rook objectives are reachable
   const eq = M.OBJECTIVES.find((o) => /Equip new gear/.test(o.text));
   assert.equal(eq.check(s), false);
-  const id = Object.keys(s.stash).find((i) => IT.targetSlot(s.heroes.owned.rook, i));
+  IT.addItem(s, 'knuckles'); // the lesson's gift; at Lv 1 only melee/sidearm/jacket/boots are open
+  const id = Object.keys(s.stash).find((i) => { const sl = IT.targetSlot(s.heroes.owned.rook, i, s, 'rook'); return sl && IT.slotOpen(s, 'rook', sl); });
   assert.ok(IT.equipItem(s, 'rook', id).ok);
   assert.equal(eq.check(s), true);
   // a save that already had troops keeps them and can still fight missions
@@ -1299,6 +1304,158 @@ test('v0.9.2 themes: Settings list, Rainy Night Cop default, saved choice, battl
   for (const t of TH.THEMES) { assert.equal(t.sw.length, 4); if (t.id !== 'dark') assert.ok(css.includes(`[data-theme="${t.id}"]{`), 'css for ' + t.id); }
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('fangcity.theme') && html.includes('"rainy"'), 'index.html applies the saved theme before first paint');
+});
+
+
+test('v0.10 player level: XP curve, unlock schedule, squad cap, medic at Lv 5, ?level jump', () => {
+  const s = newGame(T0, 7);
+  assert.equal(PG.playerLv(s), 1);
+  assert.equal(PG.squadCap(s), 1);
+  for (const id of ['track', 'stockpile', 'maul', 'market']) assert.equal(PG.unlockLv(id), 3, id);
+  for (const id of ['medic', 'howl', 'clinic']) assert.equal(PG.unlockLv(id), 5, id);
+  for (const id of ['jobs', 'crafting', 'rep']) assert.equal(PG.unlockLv(id), 7, id);
+  for (const id of ['allslots', 'bestgear']) assert.equal(PG.unlockLv(id), 10, id);
+  for (const id of ['highstakes', 'pvpcopy']) assert.equal(PG.unlockLv(id), 15, id);
+  assert.equal(PG.unlockLv('livepvp'), 20);
+  // the three tutorial ops (90 + 80 + 80 XP) reach Lv 3
+  const r = PG.addPlayerXp(s, 250);
+  assert.deepEqual(r.levels, [2, 3]);
+  assert.ok(r.unlocks.some((u) => u.id === 'track'));
+  // Lv 10 needs a few days of ops (~2,600 XP = 60+ ops)
+  let need = 0; for (let l = 1; l < 10; l++) need += PG.playerXpNeed(l);
+  assert.ok(need >= 2000 && need <= 3500, 'XP to Lv10 ' + need);
+  PG.addPlayerXp(s, 1000);
+  assert.ok(PG.playerLv(s) >= 5);
+  assert.ok(s.heroes.owned.vesper, 'free medic joins at Lv 5');
+  assert.equal(PG.squadCap(s), PG.playerLv(s) >= 7 ? 3 : 2);
+  const s2 = newGame(T0, 8);
+  PG.setPlayerLevel(s2, 15, T0);
+  assert.ok(PG.isUnlocked(s2, 'pvpcopy') && !PG.isUnlocked(s2, 'livepvp'));
+  assert.equal(PG.squadCap(s2), 4);
+  assert.ok(s2.heroes.owned.vesper);
+});
+
+test('v0.10 energy: 10 max, 1 per op, +1 every 10 minutes offline, tutorial ops free', () => {
+  const s = newGame(T0, 9);
+  assert.equal(PG.energy(s, T0).n, 10);
+  assert.ok(PG.spendEnergy(s, 1, T0));
+  assert.equal(PG.energy(s, T0).n, 9);
+  assert.equal(PG.energy(s, T0 + 9 * 60000).n, 9);
+  assert.equal(PG.energy(s, T0 + 10 * 60000).n, 10);
+  for (let i = 0; i < 10; i++) PG.spendEnergy(s, 1, T0 + 10 * 60000);
+  assert.equal(PG.energy(s, T0 + 10 * 60000).n, 0);
+  assert.ok(!PG.spendEnergy(s, 1, T0 + 10 * 60000));
+  assert.equal(PG.energy(s, T0 + 10 * 60000 + 35 * 60000).n, 3, '35 minutes later: 3 points');
+  assert.equal(PG.energy(s, T0 + 10 * 3600000).n, 10, 'never above max');
+  // tutorial ops cost nothing; a regular op costs 1
+  const g = newGame(T0, 10);
+  g.energy = { n: 0, at: T0 };
+  g.heroes.tutorialDone = true; g.ops.cleared.t1 = 1;
+  assert.ok(OPS.startOp(g, 't2', T0, 5).ok, 'tutorial op with 0 energy');
+  g.tactics = null; g.ops.cleared.t2 = 1; g.ops.cleared.t3 = 1;
+  PG.setPlayerLevel(g, 3, T0);
+  g.energy = { n: 0, at: T0 };
+  assert.equal(OPS.startOp(g, 'o1', T0, 5).reason, 'energy');
+  g.energy = { n: 2, at: T0 };
+  assert.ok(OPS.startOp(g, 'o1', T0, 5).ok);
+  assert.equal(g.energy.n, 1);
+});
+
+test('v0.10 ops: short fights, close starts, first-clear XP and cash, locks by level', () => {
+  const s = newGame(T0, 11);
+  assert.equal(OPS.nextOp(s).id, 't1');
+  assert.ok(OPS.opStatus(s, OPS.OP_BY_ID.t2).locked);
+  assert.ok(OPS.opStatus(s, OPS.OP_BY_ID.o1).locked);
+  for (const op of OPS.OPS) {
+    assert.ok(BUILTIN_BY_ID[op.map], op.id + ' map');
+    const m = OPS.opMap(op, Math.min(4, op.foes.length), op.foes.length);
+    const d = Math.min(...m.start.player.map((p) => Math.min(...m.start.enemy.map((e) => Math.abs(p.x - e.x) + Math.abs(p.y - e.y)))));
+    assert.ok(d <= 12, `${op.id} starts close (${d})`);
+    assert.ok(op.foes.length <= 4);
+  }
+  // play the lesson + two tutorial ops through the rules: Lv 3 at the end
+  for (const id of ['t1', 't2', 't3']) {
+    const r = OPS.startOp(s, id, T0, 3);
+    assert.ok(r.ok, id + ' ' + r.reason);
+    const b = r.battle; s.tactics = b;
+    b.units.filter((u) => u.side === 'enemy').forEach((u) => { u.hp = 0; }); b.status = 'win';
+    const res = T.resolveTactics(s, b);
+    assert.ok(res.playerXp && res.playerXp.amount >= 80, id);
+  }
+  assert.equal(PG.playerLv(s), 3);
+  assert.equal(s.energy.n, 10, 'tutorial ops spent no energy');
+  // ops are fought on AI-sim length: a 1 v 1 op ends inside a few rounds
+  const r = OPS.startOp(s, 'o1', T0, 21);
+  T.autoplay(r.battle, 600);
+  assert.notEqual(r.battle.status, 'active');
+  assert.ok(r.battle.turn <= 10, 'short op, rounds ' + r.battle.turn);
+});
+
+test('v0.10 gear slots open with level; Best gear fills open slots with the strongest kit', () => {
+  const s = newGame(T0, 12);
+  assert.deepEqual(Object.keys(s.heroes.owned.rook.equip).sort(), ['boots', 'jacket', 'melee', 'sidearm']);
+  assert.equal(IT.openSlotCount(s, 'rook'), 4);
+  assert.ok(!IT.equipItem(s, 'rook', 'gilet').ok, 'body armour slot locked at Lv 1');
+  assert.ok(!IT.bestGear(s, 'rook').ok, 'Best gear locked before Lv 10');
+  s.heroes.owned.rook.lv = 4;
+  assert.ok(IT.equipItem(s, 'rook', 'gilet').ok, 'operator level opens the slot');
+  PG.setPlayerLevel(s, 10, T0);
+  assert.equal(IT.openSlotCount(s, 'rook'), 13);
+  IT.addItem(s, 'machete'); IT.addItem(s, 'stabvest');
+  const r = IT.bestGear(s, 'rook');
+  assert.ok(r.ok && r.changed > 0);
+  assert.equal(s.heroes.owned.rook.equip.melee, 'machete');
+  assert.equal(s.heroes.owned.rook.equip.body, 'stabvest');
+  assert.equal(IT.stashCount(s, 'tyreiron'), 1, 'old piece back in the stash');
+});
+
+test('v0.10 stockpile (12h cap), operator jobs, clinic beds, Rookie Track', () => {
+  const s = newGame(T0, 13);
+  assert.equal(PG.stockpile(s, T0 + 3600000).cash, 0, 'locked before Lv 3');
+  PG.setPlayerLevel(s, 3, T0);
+  s.stockpile.at = T0;
+  const p12 = PG.stockpile(s, T0 + 12 * 3600000), p20 = PG.stockpile(s, T0 + 20 * 3600000);
+  assert.ok(p12.full && p12.cash > 0);
+  assert.equal(p20.cash, p12.cash, 'capped at 12 hours');
+  s.cash = 0;
+  const c = PG.collectStockpile(s, T0 + 2 * 3600000);
+  assert.ok(c.ok && c.cash > 0);
+  assert.ok(PG.trackCurrent(s).done, 'first track step: collect the stockpile');
+  assert.ok(PG.claimTrack(s).ok);
+  assert.equal(PG.TRACK.length, 20);
+  // jobs at Lv 7: operator is unavailable while away, must keep one home
+  assert.ok(!PG.sendOnJob(s, 'rook', 'lookout', T0).ok);
+  PG.setPlayerLevel(s, 7, T0);
+  assert.equal(PG.sendOnJob(s, 'rook', 'lookout', T0).ok, true);
+  assert.ok(!PG.isAvailable(s, 'rook', T0));
+  assert.ok(!PG.sendOnJob(s, 'vesper', 'lookout', T0).ok, 'keep one operator home');
+  assert.ok(!PG.collectJob(s, 'rook', T0 + 1000).ok);
+  const cash0 = s.cash;
+  assert.ok(PG.collectJob(s, 'rook', T0 + 3600000).ok);
+  assert.ok(s.cash > cash0 && PG.isAvailable(s, 'rook', T0 + 3600000));
+  // clinic: 2 beds, the third patient waits for a bed
+  grantHero(s, 'brick');
+  for (const id of ['rook', 'vesper', 'brick']) PG.admit(s, id, T0);
+  assert.equal(s.clinic.length, 3);
+  assert.equal(s.clinic[2].start, s.clinic[0].end, 'third waits for the first bed');
+  assert.ok(!PG.isAvailable(s, 'brick', T0));
+  assert.deepEqual(PG.tickClinic(s, T0 + PG.CLINIC_MIN * 60000).sort(), ['rook', 'vesper']);
+  assert.ok(PG.inClinic(s, 'brick', T0 + PG.CLINIC_MIN * 60000));
+  assert.ok(PG.rushPatient(s, 'brick', T0 + PG.CLINIC_MIN * 60000).ok);
+  assert.equal(s.clinic.length, 0);
+});
+
+test('v0.10 save migration: v6 saves get a level from play so far and keep their kit', () => {
+  const s6 = newGame(T0, 14);
+  s6.v = 6; delete s6.player; delete s6.energy; delete s6.stockpile; delete s6.track; delete s6.ops; delete s6.opJobs; delete s6.clinic;
+  s6.heroes.tutorialDone = true; s6.stats.battles = 12;
+  s6.heroes.owned.rook.equip.gloves = 'tape';
+  const s = migrate(JSON.parse(serialize(s6)), T0);
+  assert.equal(s.v, 7);
+  assert.ok(s.player.lv >= 3 && s.player.lv <= 10, 'level ' + s.player.lv);
+  assert.equal(s.energy.n, 10);
+  assert.equal(s.heroes.owned.rook.equip.gloves, 'tape', 'worn kit is kept');
+  assert.ok(s.ops.cleared.t1);
 });
 
 console.log(`\n${pass} tests passed`);

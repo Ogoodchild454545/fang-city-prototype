@@ -152,7 +152,7 @@ async def main():
         page.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))
         page.on('console', lambda m: m.type == 'error' and errors.append('console: ' + m.text))
 
-        await page.goto(BASE + '?reset=1')
+        await page.goto(BASE + '?reset=1&level=20')  # v0.10: everything unlocked for the long playthrough
         await page.wait_for_selector('.splash')
         await shot(page, '01-splash')
         await tap(page, '#play')
@@ -365,7 +365,8 @@ async def main():
         await page.wait_for_selector('.armyscr.heroonly .heroshow')
         await shot(page, '18-crew-roster')
         assert await page.locator('.tcard, .tchip, [data-act="train"], [data-act="crewTab"][data-t="upgrades"]').count() == 0, 'troop UI should be hidden'
-        assert await page.locator('.crewcol .opslot').count() == 1, 'crew column should show only Rook'
+        # ?level=20 run: Rook plus Vesper (the free medic at player Lv 5), operators only
+        assert await page.locator('.crewcol .opslot').count() == 2, 'crew column should show Rook and Vesper'
         assert await page.locator('.bslot[data-act="bossInfo"]').count() == 0, 'no bosses on the crew screen'
         assert await ev(page, "Object.keys(window.__game.state.army).length") == 0, 'new game should have no troops'
         await tap(page, '.crewcol .opslot[data-id="rook"]')
@@ -386,14 +387,11 @@ async def main():
         await page.wait_for_selector('.overlay .opsinfo')
         await shot(page, '18b-operators-info')
         await tap(page, '.overlay [data-act="closeModal"]')
-        # gang missions are locked gracefully without troops
+        # v0.10: the Ops tab lists short operator ops; troop campaigns are hidden without troops
         await tap(page, '[data-act="nav"][data-tab="missions"]')
-        await page.wait_for_selector('.troopnote')
-        await tap(page, '[data-act="missionInfo"][data-gi="0"][data-si="0"]')
-        await page.wait_for_selector('.overlay')
-        assert await page.locator('.overlay [data-act="startMission"]').count() == 0, 'mission should not start without troops'
-        await shot(page, '33b-missions-no-troops')
-        await tap(page, '.overlay [data-act="closeModal"]')
+        await page.wait_for_selector('.opsscreen .opscard')
+        assert await page.locator('.mcamp').count() == 0, 'troop campaigns hidden without troops'
+        await shot(page, '33b-ops-no-troops')
         # the rest of this run plays the troop modes as an older save that still has troops
         await ev(page, "(()=>{window.__game.state.army={rat:4,fox:3,wolf:2};window.__game.render();return 1})()")
 

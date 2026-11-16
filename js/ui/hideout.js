@@ -8,6 +8,8 @@ import { TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER } from '../core/data.js';
 import { BaseView, preload, tileToWorld } from './iso.js';
 import { fmt, money, dur, esc, rewardText, rewardTextPlain, resName, ico } from './fmt.js';
 import * as Audio from './audio.js';
+import * as P from '../core/progression.js';
+import * as O from '../core/ops.js';
 import { TROOPS_UI } from './crew.js';
 
 let view = null;
@@ -18,9 +20,14 @@ const afford = (s, res, v) => (s[res] || 0) >= v;
 
 export function render(ctx) {
   const s = ctx.state, now = ctx.now();
-  const obj = M.currentObjective(s);
-  ctx.sub.objKey = obj ? `${obj.index}:${obj.done}` : 'none';
+  const trackOn = P.isUnlocked(s, 'track');
+  const tr = trackOn ? P.trackCurrent(s) : null;
+  const obj = trackOn ? null : M.currentObjective(s);
+  ctx.sub.objKey = obj ? `${obj.index}:${obj.done}` : tr ? `t${tr.i}:${tr.done}` : 'none';
   const ad = E.adBoostActive(s, now);
+  const stockOn = P.isUnlocked(s, 'stockpile');
+  const sp = stockOn ? P.stockpile(s, now) : null;
+  const nx = O.nextOp(s);
   return `
   <div class="basewrap" id="basewrap">
     <canvas id="basecv"></canvas>
@@ -30,20 +37,26 @@ export function render(ctx) {
         <div class="tick">${obj.done ? '✔' : obj.index + 1}</div>
         <div class="grow"><div class="tiny red h">Boss's orders</div><div class="small">${obj.text}</div>
         <div class="tiny dim">${obj.done ? 'Tap to claim: ' : 'Reward: '}${rewardText(obj.reward)}</div></div></div>` : ''}
+      ${tr ? `<div class="objcard track ${tr.done ? 'glow' : ''}" data-act="${tr.done ? 'claimTrack' : 'openTrack'}">
+        <div class="tick">${tr.done ? '✔' : tr.i + 1}</div>
+        <div class="grow"><div class="tiny red h">Rookie Track · ${tr.i + 1}/20</div><div class="small">${tr.text}</div>
+        <div class="tiny dim">${tr.done ? 'Tap to claim: ' : 'Reward: '}${rewardText(tr.reward)}</div></div></div>` : ''}
     </div>
     <div class="hud hud-tr">
       <div class="pillbtn supplies">${ico('ammo')} <b data-live="ammo">${fmt(Math.floor(s.ammo || 0))}</b><span class="tiny dim">/${fmt(BS.caps(s).ammo)}</span>
         ${ico('medkits')} <b data-live="medkits">${fmt(Math.floor(s.medkits || 0))}</b>
-        ${ico('parts')} <b data-live="parts">${fmt(Math.floor(s.parts || 0))}</b></div>
+        ${P.isUnlocked(s, 'crafting') ? `${ico('parts')} <b data-live="parts">${fmt(Math.floor(s.parts || 0))}</b>` : ''}</div>
+      ${stockOn ? `<button class="pillbtn stockpill ${sp.full ? 'gold' : ''}" data-act="collectStockHud" title="Hideout stockpile: tap to collect">📦 <b data-live="hudstock">${money(sp.cash)}</b><span class="tiny dim">${sp.full ? 'FULL' : 'collect'}</span></button>` : ''}
       <button class="pillbtn ${ad ? 'gold' : ''}" data-act="adBoost">${ad ? `x2 cash · <span data-live="adleft"></span>` : '▶ x2 cash (ad)'}</button>
     </div>
     <div class="hud hud-bl">
       <button class="tapbtn sm" data-act="tap">Shake<br>down<small data-live="tapv">+${money(E.tapValue(s, now))}</small></button>
     </div>
     <div class="hud hud-br">
-      ${!ctx.state.heroes?.tutorialDone ? '<button class="bigbtn gold" data-act="startTutorial"><span class="i">🐺</span>Lesson</button>' : '<button class="bigbtn" data-act="nav" data-tab="heroes"><span class="i">🐺</span>Ops</button>'}
+      <button class="bigbtn gold nextop" data-act="startOp" data-id="${nx.id}" title="${esc(nx.name)}"><span class="i">🎯</span>${nx.tut ? 'Next op' : 'Next op'}<small>${esc(nx.name)}${nx.tut ? ' · free' : ' · ⚡1'}</small></button>
+      <button class="bigbtn" data-act="nav" data-tab="missions"><span class="i">🗂️</span>Ops</button>
       <button class="bigbtn" data-act="openBuild"><span class="i">🔨</span>Build</button>
-      <button class="bigbtn" data-act="nav" data-tab="shop"><span class="i">🧰</span>Shop</button>
+      ${trackOn ? '<button class="bigbtn" data-act="openTrack"><span class="i">🛤️</span>Track</button>' : `<button class="bigbtn off" data-act="openTrack"><span class="i">🔒</span>Track<small>Lv ${P.unlockLv('track')}</small></button>`}
     </div>
     <div class="hud hud-bc" id="selpanel"></div>
   </div>`;
@@ -208,8 +221,11 @@ function buildingPanel(ctx, b, now) {
 
 export function live(ctx, now) {
   const s = ctx.state;
-  const obj = M.currentObjective(s);
-  if ((obj ? `${obj.index}:${obj.done}` : 'none') !== ctx.sub.objKey && !document.querySelector('.overlay')) return ctx.render();
+  const trackOn = P.isUnlocked(s, 'track');
+  const obj = trackOn ? null : M.currentObjective(s);
+  const tr = trackOn ? P.trackCurrent(s) : null;
+  if ((obj ? `${obj.index}:${obj.done}` : tr ? `t${tr.i}:${tr.done}` : 'none') !== ctx.sub.objKey && !document.querySelector('.overlay')) return ctx.render();
+  if (P.isUnlocked(s, 'stockpile')) { const n = document.querySelector('[data-live="hudstock"]'); const v = money(P.stockpile(s, now).cash); if (n && n.textContent !== v) n.textContent = v; }
   const set = (sel, v) => { const n = document.querySelector(sel); if (n && n.textContent !== v) n.textContent = v; };
   set('[data-live="tapv"]', '+' + money(E.tapValue(s, now)));
   set('[data-live="builders"]', `${BS.buildersFree(s)}/${s.base.builders}`);
@@ -234,6 +250,9 @@ export function refresh(ctx) { if (view) { syncGhost(ctx); panel(ctx); view.dirt
 // ---------------------------------------------------------------- build menu
 function buildMenu(ctx) {
   const u = ui(ctx), s = ctx.state;
+  // v0.10: Rep buildings appear with Rep (player Lv 7)
+  const cats = CATS.filter(([id]) => id !== 'influence' || P.isUnlocked(s, 'rep'));
+  if (!cats.some(([id]) => id === u.cat)) u.cat = cats[0][0];
   const types = Object.keys(BUILDINGS).filter((t) => t !== 'den' && BUILDINGS[t].cat === u.cat);
   const card = (t) => {
     const d = BUILDINGS[t];
@@ -249,7 +268,7 @@ function buildMenu(ctx) {
   };
   return `<div class="row" style="justify-content:space-between;margin-bottom:6px;padding-right:34px"><div class="h" style="font-size:20px">Build</div>
     <div class="tiny dim">Builders free: ${BS.buildersFree(s)}/${s.base.builders} · Den level ${BS.denLevel(s)}</div></div>
-    <div class="tabs">${CATS.map(([id, label]) => `<button class="${u.cat === id ? 'on' : ''}" data-act="buildCat" data-cat="${id}">${label}</button>`).join('')}</div>
+    <div class="tabs">${cats.map(([id, label]) => `<button class="${u.cat === id ? 'on' : ''}" data-act="buildCat" data-cat="${id}">${label}</button>`).join('')}</div>
     <div class="bgrid">${types.map(card).join('')}</div>`;
 }
 

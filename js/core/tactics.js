@@ -1,5 +1,6 @@
 // XCOM-style 4v4 tactics: action points, half/full cover, hitchance, flanking,
 // overwatch, and a simple enemy AI. Outcomes depend on positioning and decisions.
+import { addPlayerXp, ensureProgress, isUnlocked, admit } from './progression.js';
 import { rngNext, rngInt, newSeed } from './rng.js';
 import { defOf, HEROES, matchup, synergiesFor } from './heroes.js';
 import { starBonus, tutorialShardGift } from './shards.js';
@@ -95,7 +96,8 @@ export function melOf(u) {
 // Abilities this unit can use right now (unlocked by level), plus any granted by gear.
 export function abilitiesOf(u) {
   const d = defOf(u.hero);
-  const out = (d.abilities || []).filter((a) => !a.unlock || (u.lv || 1) >= a.unlock);
+  // alv: ability level = the higher of operator level and player (account) level (v0.10)
+  const out = (d.abilities || []).filter((a) => !a.unlock || (u.alv || u.lv || 1) >= a.unlock);
   if ((u.charges || 0) > 0 && !out.some((a) => a.kind === 'breach')) {
     out.push({ id: 'breach', name: 'Pipe Bomb', ap: CHARGE.ap, kind: 'breach', gear: 1, text: `Throw a pipe bomb up to ${CHARGE.range} tiles: ${CHARGE.dmg} damage around the tile, sets off barrels and cars. ${u.charges} left.` });
   }
@@ -252,7 +254,7 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
   const st = statsFor(hero, { stars, lv, perks, gear, equip });
   const hp = st.hp, move = st.move;
   return {
-    uid, hero, side, x, y, hp, maxHp: hp, stars, lv, perks, gear,
+    uid, hero, side, x, y, hp, maxHp: hp, stars, lv, perks, gear, alv: Math.max(lv, opts.alv || 0),
     equip: Object.values(equip).filter((id) => ITEMS[id]),
     aimMod: st.aimMod,
     armor: st.armor, rangeBonus: st.range, mdmg: st.mdmg, rdmg: st.rdmg,
@@ -268,12 +270,12 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
   };
 }
 
-function packFromState(s, id) {
+export function packFromState(s, id) {
   const rec = s.heroes.owned[id] || {};
-  return { stars: rec.stars || 1, lv: rec.lv || 1, perks: rec.perks || [], gear: rec.gear || null, equip: rec.equip ? { ...rec.equip } : null };
+  return { stars: rec.stars || 1, lv: rec.lv || 1, alv: (s.player && s.player.lv) || 1, perks: rec.perks || [], gear: rec.gear || null, equip: rec.equip ? { ...rec.equip } : null };
 }
 
-export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes, pvp, opponent }) {
+export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes, pvp, opponent, enemyRecs }) {
   const b = {
     kind: kind || (tutorial ? 'tutorial' : 'street'),
     label: label || (tutorial ? 'Street lesson' : 'Street fight'),
@@ -297,7 +299,7 @@ export function startBattle({ map, player, enemy, seed, label, tutorial, reward,
   });
   enemy.forEach((id, i) => {
     const spt = eSpots[i] || { x: map.w - 2, y: 1 + i };
-    b.units.push(freshUnit(id, 'enemy', spt.x, spt.y, 'e' + i, { ammo: 8 }));
+    b.units.push(freshUnit(id, 'enemy', spt.x, spt.y, 'e' + i, { ...((enemyRecs && enemyRecs[i]) || {}), ammo: 8 }));
   });
   beginRound(b, true);
   return b;
@@ -1057,11 +1059,11 @@ export function resolveTactics(s, b) {
     s.lastTactics = res;
     return res;
   }
-  // unused ammo / medkits come back; spent rounds stay gone
-  res.returned = returnUnused(s, b.units);
+  // unused ammo / medkits come back; spent rounds stay gone (ops issue their own ammo)
+  res.returned = b.freeAmmo ? { ammo: 0, medkits: 0 } : returnUnused(s, b.units);
   if (b.status === 'win') {
     res.cash = b.reward?.cash || 0;
-    res.influence = b.reward?.influence || 0;
+    res.influence = isUnlocked(s, 'rep') ? (b.reward?.influence || 0) : 0;
     s.cash += res.cash;
     s.influence += res.influence;
     s.lifetime = (s.lifetime || 0) + res.cash;
@@ -1108,10 +1110,31 @@ export function resolveTactics(s, b) {
       gained, kills: u.kills || 0, survived: u.hp > 0, pendingChoices: rec.pendingChoices || null,
     });
   }
+  // v0.10: account XP, op clears and the clinic
+  ensureProgress(s);
+  const win = b.status === 'win';
+  const opId = b.opId || (b.kind === 'tutorial' ? 't1' : null);
+  if (opId && OPS_XP[opId] != null) {
+    const first = !(s.ops.cleared[opId]);
+    if (win) { s.ops.cleared[opId] = (s.ops.cleared[opId] || 0) + 1; res.firstClear = first; }
+    res.opId = opId;
+    if (win && b.units.filter((u) => u.side === 'player').length >= 2) s.stats.duoWins = (s.stats.duoWins || 0) + 1;
+    const tut = OPS_XP[opId];
+    res.playerXp = addPlayerXp(s, tut ? (win && first ? tut : win ? 20 : 10) : (win ? 30 + (first ? 30 : 0) : 10));
+  } else if (b.kind === 'street') {
+    res.playerXp = addPlayerXp(s, win ? 40 : 15);
+  }
+  if (isUnlocked(s, 'clinic') && (opId || b.kind === 'street')) {
+    const lostIds = new Set(res.lost.map((l) => l.id));
+    res.clinic = [];
+    for (const u of b.units) if (u.side === 'player' && u.hp <= 0 && !lostIds.has(u.hero) && admit(s, u.hero)) res.clinic.push(u.hero);
+  }
   s.stats.battles = (s.stats.battles || 0) + 1;
   s.tactics = null;
   s.lastTactics = res;
   return res;
 }
+// Tutorial-op first-clear XP (others use the regular op formula). Mirrors ops.js opXp.
+const OPS_XP = { t1: 90, t2: 80, t3: 80, ...Object.fromEntries(Array.from({ length: 30 }, (_, i) => ['o' + (i + 1), 0])) };
 
 export function coverLabel(c) { return c >= 2 ? 'Full cover' : c === 1 ? 'Half cover' : 'No cover'; }

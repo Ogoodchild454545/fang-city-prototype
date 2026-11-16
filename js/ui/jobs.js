@@ -1,7 +1,68 @@
 // Jobs screen: daily login streak, daily jobs, season pass track.
 import { DAILY_REWARDS, GEAR } from '../core/data.js';
 import * as M from '../core/meta.js';
-import { fmt, money, rewardText, rewardTextPlain, ico } from './fmt.js';
+import { fmt, money, rewardText, rewardTextPlain, ico, dur, esc } from './fmt.js';
+import * as P from '../core/progression.js';
+import { HEROES } from '../core/heroes.js';
+
+// v0.10 Safehouse: Hideout stockpile (Lv 3), clinic (Lv 5) and operator jobs (Lv 7), then the
+// daily pay-out. Locked panels show a one-line "Unlocks at Lv X" teaser only.
+const lockedPanel = (id, title, ico2) => `<div class="shpanel locked"><div class="shhead"><span class="shico">${ico2}</span><b class="h">${title}</b></div><div class="tiny dim">🔒 Unlocks at player level ${P.unlockLv(id)}</div></div>`;
+const left = (end, now) => `<span data-until="${end}">${dur(Math.max(0, (end - now) / 1000))}</span>`;
+
+function stockPanel(s, now) {
+  if (!P.isUnlocked(s, 'stockpile')) return lockedPanel('stockpile', 'Stockpile', '📦');
+  const p = P.stockpile(s, now);
+  return `<div class="shpanel"><div class="shhead"><span class="shico">📦</span><b class="h">Stockpile</b><span class="tiny dim">${money(p.rate.cash)}/h · ${p.rate.ammo} ammo/h</span></div>
+    <div class="shbig"><b data-live="stockcash">${money(p.cash)}</b> <span class="tiny">+ ${ico('ammo')} <span data-live="stockammo">${p.ammo}</span></span></div>
+    <div class="bar"><i data-live-bar="stock" style="width:${(p.hours / P.STOCK_CAP_H) * 100}%"></i></div>
+    <div class="tiny dim">Piles up while you are away · full after ${P.STOCK_CAP_H}h${p.full ? ' · <span class="red">FULL</span>' : ''}</div>
+    <button class="btn red block" data-act="collectStock" ${p.cash < 1 && p.ammo < 1 ? 'disabled' : ''}>Collect</button></div>`;
+}
+
+function clinicPanel(s, now) {
+  if (!P.isUnlocked(s, 'clinic')) return lockedPanel('clinic', 'Clinic', '🏥');
+  P.tickClinic(s, now);
+  const beds = P.clinicSlots(s);
+  const rows = s.clinic.map((p) => `<div class="shrow"><img src="${HEROES[p.hero]?.thumb || HEROES[p.hero]?.portrait}" alt=""><div class="grow"><b class="small">${esc(HEROES[p.hero]?.name || p.hero)}</b>
+      <div class="tiny dim">${p.start > now ? 'Waiting for a bed' : 'Patching up'} · ${left(p.end, now)}</div></div>
+      <button class="btn sm gold" data-act="rushPatient" data-id="${p.hero}">Rush · ${ico('teeth')} ${P.RUSH_ICE}</button></div>`).join('');
+  return `<div class="shpanel"><div class="shhead"><span class="shico">🏥</span><b class="h">Clinic</b><span class="tiny dim">${beds} beds · ${P.CLINIC_MIN} min each</span></div>
+    ${rows || '<div class="tiny dim">Everyone is fit. Operators knocked out in ops come here to recover; they sit out ops until they are patched up.</div>'}</div>`;
+}
+
+function jobsPanel(s, now) {
+  if (!P.isUnlocked(s, 'jobs')) return lockedPanel('jobs', 'Operator jobs', '💼');
+  const act = s.opJobs.map((j) => {
+    const job = P.OP_JOBS.find((x) => x.id === j.job) || P.OP_JOBS[0];
+    const done = now >= j.end;
+    return `<div class="shrow"><img src="${HEROES[j.hero]?.thumb || HEROES[j.hero]?.portrait}" alt=""><div class="grow"><b class="small">${esc(HEROES[j.hero]?.name || j.hero)}</b>
+      <div class="tiny dim">${esc(job.name)} · ${done ? '<span class="green">Done</span>' : left(j.end, now)}</div></div>
+      ${done ? `<button class="btn sm red" data-act="collectOpJob" data-id="${j.hero}">Collect</button>` : ''}</div>`;
+  }).join('');
+  const free = s.opJobs.length < P.jobSlots(s);
+  return `<div class="shpanel"><div class="shhead"><span class="shico">💼</span><b class="h">Operator jobs</b><span class="tiny dim">${s.opJobs.length}/${P.jobSlots(s)} slots</span></div>
+    ${act}
+    ${free ? `<div class="shjobs">${P.OP_JOBS.map((j) => `<button class="shjob" data-act="pickJob" data-id="${j.id}"><b class="tiny">${esc(j.name)}</b><span class="tiny dim">${j.hours}h · ${esc(rewardLine(s, j.reward))}</span></button>`).join('')}</div>` : '<div class="tiny dim">All slots busy.</div>'}
+    <div class="tiny faint">Operators on a job sit out ops until they are back.</div></div>`;
+}
+const rewardLine = (s, r) => [r.cash ? money(r.cash) : '', r.influence && P.isUnlocked(s, 'rep') ? `${r.influence} Rep` : '', r.parts ? `${r.parts} parts` : '', r.universal ? `${r.universal} shards` : ''].filter(Boolean).join(' · ');
+
+export function live(ctx, now) {
+  document.querySelectorAll('[data-until]').forEach((n) => { const v = dur(Math.max(0, (+n.dataset.until - now) / 1000)); if (n.textContent !== v) n.textContent = v; });
+  const s = ctx.state;
+  if (P.isUnlocked(s, 'stockpile')) {
+    const p = P.stockpile(s, now);
+    const a = document.querySelector('[data-live="stockcash"]'); if (a) a.textContent = money(p.cash);
+    const b = document.querySelector('[data-live="stockammo"]'); if (b) b.textContent = p.ammo;
+    const bar = document.querySelector('[data-live-bar="stock"]'); if (bar) bar.style.width = (p.hours / P.STOCK_CAP_H) * 100 + '%';
+  }
+  if (s.opJobs.some((j) => j.end <= now && !ctx.sub.jobDoneShown?.[j.hero + j.end]) || (s.clinic.length && s.clinic[0].end <= now)) {
+    ctx.sub.jobDoneShown ||= {};
+    for (const j of s.opJobs) if (j.end <= now) ctx.sub.jobDoneShown[j.hero + j.end] = 1;
+    ctx.render();
+  }
+}
 
 export function render(ctx) {
   const s = ctx.state, now = ctx.now();
@@ -9,7 +70,9 @@ export function render(ctx) {
   const ds = M.dailyStatus(s, now);
   const passTier = Math.floor(s.passXp / 100);
   return `
-  <div class="title"><span class="h">Jobs</span><span class="sub">/ Daily</span></div>
+  <div class="title"><span class="h">Safehouse</span><span class="sub">/ Stockpile · Clinic · Jobs</span></div>
+  <div class="shgrid">${stockPanel(s, now)}${clinicPanel(s, now)}${jobsPanel(s, now)}</div>
+  <div class="sect">Daily</div>
   <div class="tagline">Show up every day. The family notices.</div>
   <div class="sect">Daily pay-out · streak ${ds.streak}</div>
   <div class="days">${DAILY_REWARDS.map((r, i) => {
@@ -34,6 +97,17 @@ export function render(ctx) {
 }
 
 export const actions = {
+  collectStock(ctx) { const r = P.collectStockpile(ctx.state, ctx.now()); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`Collected ${money(r.cash)}${r.ammo ? ` and ${r.ammo} ammo` : ''}${r.lost > 0 ? ` · ${money(r.lost)} left in the pile (storage full)` : ''}`); ctx.render(); },
+  rushPatient(ctx, el) { const r = P.rushPatient(ctx.state, el.dataset.id, ctx.now()); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`${HEROES[el.dataset.id].name} is patched up`); ctx.render(); },
+  collectOpJob(ctx, el) { const r = P.collectJob(ctx.state, el.dataset.id, ctx.now()); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`${HEROES[el.dataset.id].name} is back: ${rewardLine(ctx.state, r.got)}`); ctx.render(); },
+  pickJob(ctx, el) {
+    const s = ctx.state, now = ctx.now(), job = P.OP_JOBS.find((j) => j.id === el.dataset.id);
+    const ids = Object.keys(s.heroes.owned).filter((id) => P.isAvailable(s, id, now));
+    ctx.modal(`<div class="h" style="font-size:20px">${esc(job.name)} · ${job.hours}h</div><p class="small dim">${esc(job.text)} Reward: ${esc(rewardLine(s, job.reward))}.</p>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${ids.map((id) => `<button class="btn" data-act="sendJob" data-hero="${id}" data-job="${job.id}">Send ${esc(HEROES[id].name)}</button>`).join('') || '<span class="tiny dim">Nobody is free.</span>'}</div>
+      <p class="tiny faint">You must keep at least one operator home for ops.</p>`, { center: true });
+  },
+  sendJob(ctx, el) { const r = P.sendOnJob(ctx.state, el.dataset.hero, el.dataset.job, ctx.now()); ctx.closeModal(true); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`${HEROES[el.dataset.hero].name} is out: ${r.job.name}`); ctx.render(); },
   claimDaily(ctx) { const r = M.claimDaily(ctx.state, ctx.now()); if (r.ok) ctx.toast('Collected: ' + rewardTextPlain(r.reward)); ctx.render(); },
   claimJob(ctx, el) { const r = M.claimJob(ctx.state, el.dataset.id); if (r.ok) ctx.toast('Job done: ' + rewardTextPlain(r.reward)); ctx.render(); },
 };

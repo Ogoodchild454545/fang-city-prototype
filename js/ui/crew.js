@@ -2,6 +2,7 @@
 // operator's showcase (portrait, stats, gear, abilities) on the right. Troop training, housing and the Armoury
 // tab are dormant (v0.9.1): the code below (armyTab, trainCard, upgradesTab, troop actions) is kept so troop
 // hiring can return from the base later — flip TROOPS_UI to true to bring it back. Rules live in core/crew.js.
+import { playerLv, busyReason, isUnlocked } from '../core/progression.js';
 import { SPECIES, ROLES, TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER, BOSS_SLOTS, DEPLOY_CAP, GEAR } from '../core/data.js';
 import * as C from '../core/crew.js';
 import * as BS from '../core/base.js';
@@ -57,6 +58,8 @@ function heroShow(ctx, id) {
   const eq = equippedIds(rec).map((i) => ITEMS[i]).filter(Boolean);
   const armour = eq.filter((it) => ['head', 'jacket', 'body', 'gloves', 'boots'].includes(it.slot)).slice(0, 4).map((it) => esc(it.name));
   const abil = (d.abilities || []).filter((a) => a.unlock);
+  const alv = Math.max(lv, playerLv(s));
+  const busy = busyReason(s, id, ctx.now());
   return `<div class="heroshow">
     <button class="hsport" data-act="openHero" data-id="${id}" style="background-image:url(${d.portrait})" title="Open ${esc(d.name)}'s gear and abilities"><span class="hslv">Lv ${lv}</span></button>
     <div class="hsbody">
@@ -66,10 +69,12 @@ function heroShow(ctx, id) {
       <div class="hsstats">${show.map(stat).join('')}</div>
       <div class="hsgear tiny"><div><span class="faint">Melee</span> ${w(st.mel)}</div><div><span class="faint">Gun</span> ${w(st.gun)}</div>
         <div class="dim">${armour.length ? armour.join(' · ') : 'No armour yet'}${eq.length ? ` · ${eq.length} items equipped` : ''}</div></div>
-      <div class="hsabil">${abil.map((a) => `<span class="hsab ${lv < a.unlock ? 'locked' : ''}" title="${esc(a.name)}${lv < a.unlock ? ` · unlocks at level ${a.unlock}` : ''}">${abilityIcon(a.kind)}<em>${lv < a.unlock ? 'Lv ' + a.unlock : esc(a.name)}</em></span>`).join('')}</div>
+      <div class="hsabil">${abil.map((a) => `<span class="hsab ${alv < a.unlock ? 'locked' : ''}" title="${esc(a.name)}${alv < a.unlock ? ` · unlocks at level ${a.unlock}` : ''}">${abilityIcon(a.kind)}<em>${alv < a.unlock ? 'Lv ' + a.unlock : esc(a.name)}</em></span>`).join('')}</div>
+      ${busy ? `<div class="tiny gold">${busy.kind === 'job' ? '💼' : '🏥'} ${esc(busy.text)}</div>` : ''}
       <div class="hsbtns">
         <button class="btn red" data-act="openHero" data-id="${id}">Gear &amp; abilities</button>
-        ${s.heroes.tutorialDone ? `<button class="btn" data-act="startStreet">⚔ Docklands fight</button>` : '<button class="btn gold" data-act="startTutorial">⚔ Street lesson</button>'}
+        ${s.heroes.tutorialDone ? `<button class="btn" data-act="nav" data-tab="missions">🎯 Ops</button>` : '<button class="btn gold" data-act="startTutorial">⚔ Street lesson</button>'}
+        ${isUnlocked(s, 'pvpcopy') ? '<button class="btn" data-act="startStreet">⚔ PvP</button>' : ''}
       </div>
     </div>
   </div>`;

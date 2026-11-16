@@ -270,3 +270,10 @@
 [data-theme="rainy"] .opcard{border:1px solid rgba(160,205,255,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 18px rgba(0,0,0,.45)}
 [data-theme="modern"] .opcard{border:0;box-shadow:0 4px 14px rgba(0,0,0,.35)}
 [data-theme="modern"] .opchip,[data-theme="modern"] .infob{background:#fff}
+
+/* v0.10 panels follow the menu theme like the operator cards */
+[data-theme] :is(.opscard,.shpanel,.lstop,.tstep,.nextun,.pxbox){background:var(--th-panel)}
+:is([data-theme="novel"],[data-theme="sepia"],[data-theme="modern"],[data-theme="evidence"]) :is(.opscard,.shpanel,.lstop,.tstep,.nextun,.pxbox,.opsbar .opchip){--text:var(--ink);--dim:var(--ink-dim);--faint:var(--ink-faint);color:var(--text);text-shadow:none}
+[data-theme="rainy"] :is(.opscard,.shpanel){border:1px solid rgba(160,205,255,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 18px rgba(0,0,0,.45)}
+[data-theme="novel"] :is(.opscard,.shpanel){border:2.5px solid #120c16;box-shadow:3px 3px 0 #120c16}
+[data-theme="rainy"] .opscard.new{border-color:var(--gold)}
