@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.6.0)
+# Fang City: Animal Gangs (playable prototype v0.6.1)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,11 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.6.1
+
+- Base/city tutorial tips no longer appear over a battle. A tip that would show (or was cut short) while a fight is open waits and shows once you are back at base.
+- Brighter site office (lighter panels and floor, stronger ceiling light) and bulkhead wall lights on the back walls of both rooms.
 
 ## v0.6.0 (docklands rebuilt as a real place)
 

@@ -102,6 +102,14 @@ export function prepMap(m) {
   }
   for (const r of Object.values(p.rooms)) {
     p.lights.push({ kind: r.hue === 'cafe' ? 'neon' : 'tube', x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 });
+    // a couple of bulkhead wall lights on the back walls
+    for (const [wx, wy, dx, dy] of [[Math.round((r.x0 + r.x1) / 2), r.y0, 0, 0.7], [r.x0, r.y0 + 1, 0.7, 0]]) {
+      const wt = at(wx, wy);
+      if (!wt || wt.decor !== 'wall' || wt.cut) continue;
+      const inf = INFO.get(wt);
+      if (inf) inf.wallLight = 1;
+      p.lights.push({ kind: 'wall', x: wx + dx, y: wy + dy, hue: r.hue });
+    }
   }
   p.scenery = buildScenery(m, p);
   PREP.set(m, p);
@@ -116,7 +124,7 @@ const HUES = {
 };
 const ALT = ['grey', 'blue', 'rust', 'teal', 'white', 'green', 'mustard'];
 const BRANDS = ['KESTREL', 'NORDHAVN', 'AMBERLINE', 'ORCA LINES', 'TALLOW & CO', 'HALCYON', 'GREYWATER', 'MARROW BAY'];
-const WALLHUE = { office: '#566672', cafe: '#7c3e2a' };
+const WALLHUE = { office: '#6a7c8a', cafe: '#7c3e2a' };
 
 // ---------- props ----------
 export function propHeight(t) {
@@ -327,7 +335,17 @@ function drawWall(g, t, sx, sy, z) {
     const straightY = (c.N && c.S) && !c.E && !c.W;
     if (straightX) wallDecor(g, { A: P(sx, sy, z, -0.5, th, 0), B: P(sx, sy, z, 0.5, th, 0), H: H * z }, kind, z);
     else if (straightY) wallDecor(g, { A: P(sx, sy, z, th, 0.5, 0), B: P(sx, sy, z, th, -0.5, 0), H: H * z }, kind, z);
-    line(g, P(sx, sy, z, -0.5, th, H), P(sx, sy, z, 0.5, th, H), 'rgba(0,0,0,0)', 0);
+    if (info.wallLight && (straightX || straightY)) {
+      const lp = straightX ? P(sx, sy, z, 0.18, th, H * 0.82) : P(sx, sy, z, th, -0.18, H * 0.82);
+      const warm = t.hue === 'cafe';
+      const gl = g.createRadialGradient(lp[0], lp[1], 0, lp[0], lp[1], 16 * z);
+      gl.addColorStop(0, warm ? 'rgba(255,190,120,0.6)' : 'rgba(220,235,255,0.6)');
+      gl.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gl; g.beginPath(); g.arc(lp[0], lp[1], 16 * z, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2a2c2e'; g.fillRect(lp[0] - 3.4 * z, lp[1] - 2.2 * z, 6.8 * z, 4.4 * z);
+      g.fillStyle = warm ? '#ffd9a0' : '#eef6ff'; g.fillRect(lp[0] - 2.6 * z, lp[1] - 1.4 * z, 5.2 * z, 2.8 * z);
+      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(lp[0] - 2.6 * z, lp[1] - 0.2 * z, 5.2 * z, 0.5 * z);
+    }
   }
 }
 
@@ -961,7 +979,7 @@ export function bakeYard(m) {
       }
       g.fillStyle = 'rgba(20,12,10,0.45)'; g.fillRect(x0, y0, w, h);
     } else {
-      g.fillStyle = '#3e4448'; g.fillRect(x0, y0, w, h);
+      g.fillStyle = '#5a636a'; g.fillRect(x0, y0, w, h);
       g.lineWidth = 0.025;
       for (let yy = 0; yy < h * 6; yy++) for (let xx = 0; xx < w * 6; xx++) {
         const cx = x0 + (xx + 0.5) / 6, cy = y0 + (yy + 0.5) / 6, d = (xx + yy) % 2 ? 0.05 : -0.05;
@@ -1241,7 +1259,8 @@ export function drawYard(g, m, z, now) {
     if (L.kind === 'lamp') { R = 2.6; col = '255,170,80'; a = 0.26; }
     else if (L.kind === 'fire') { R = 2.0; col = '255,120,40'; a = 0.24 + 0.05 * Math.sin(t * 9 + L.x) + 0.04 * Math.sin(t * 23 + L.y); }
     else if (L.kind === 'neon') { R = 2.2; col = '255,80,150'; a = 0.16; }
-    else { R = 2.0; col = '160,200,255'; a = 0.15; }
+    else if (L.kind === 'wall') { R = 1.3; col = L.hue === 'cafe' ? '255,180,110' : '200,225,255'; a = 0.2; }
+    else { R = 2.4; col = '170,205,255'; a = 0.26; }
     const c = toWorld(L.x + (L.kind === 'lamp' ? 0.3 : 0), L.y + (L.kind === 'lamp' ? 0.05 : 0));
     const rx = R * HX * 1.41 * z;
     g.save(); g.translate(c.x * z, c.y * z); g.scale(1, 0.5);

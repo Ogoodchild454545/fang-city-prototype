@@ -39,7 +39,7 @@ export const ctx = {
   now() { return Date.now() + this.timeOffset; },
   save() { if (this.state) storage.save(this.state); },
   go(tab) { this.tab = tab; this.render(); document.getElementById('screen').scrollTop = 0; },
-  render, toast, modal, closeModal, floaty, live,
+  render, toast, baseTip, modal, closeModal, floaty, live,
   app: { handleBaseEvents },
   fmt, money, dur, esc,
 };
@@ -89,6 +89,7 @@ function render() {
   el.scrollTop = keep;
   scr.mount?.(ctx, el);
   live();
+  flushTips();
 }
 
 function live() {
@@ -122,10 +123,27 @@ function closeModal(silent) {
   if (!silent && cb) cb();
 }
 let toastTimer;
-function toast(msg) {
+// Base/city tutorial tips never show over a fight: they wait until you are back at base.
+let pendingTips = [];
+const battleOpen = () => ctx.tab === 'battle' || ctx.tab === 'tactics' || !!(ctx.state && (ctx.state.tactics || ctx.state.battle));
+function baseTip(msg) {
+  if (battleOpen()) { if (!pendingTips.includes(msg)) pendingTips.push(msg); return; }
+  toast(msg, true);
+}
+function flushTips() {
+  if (battleOpen()) {
+    // a tip cut short by a fight is shown again back at base
+    document.querySelectorAll('.toast.basetip').forEach((t) => { if (!pendingTips.includes(t.textContent)) pendingTips.push(t.textContent); t.remove(); });
+    return;
+  }
+  if (!pendingTips.length) return;
+  const msg = pendingTips.shift();
+  toast(msg, true);
+}
+function toast(msg, tip = false) {
   document.querySelectorAll('.toast').forEach((t) => t.remove());
   const t = document.createElement('div');
-  t.className = 'toast'; t.textContent = msg;
+  t.className = tip ? 'toast basetip' : 'toast'; t.textContent = msg;
   $('#app').appendChild(t);
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.remove(), 2200);
@@ -225,7 +243,7 @@ function startNewGame() {
   ctx.state = newGame(ctx.now());
   M.ensureJobs(ctx.state, ctx.now());
   ctx.save(); render();
-  toast('Welcome to the wasteland. Tap BUILD to put up your first Knock-off Stall.');
+  baseTip('Welcome to the wasteland. Tap BUILD to put up your first Knock-off Stall.');
   if (!ctx.fast) {
     modal(`<div class="h" style="font-size:22px">Rook is ready</div>
       <p class="small">You start with one unique operator — Rook the wolf. A short street lesson will teach you action points, cover and hit chance. Other operators are unlocked with shards from bushes, missions and Ice crates. Home-base troops stay for missions and raids.</p>
