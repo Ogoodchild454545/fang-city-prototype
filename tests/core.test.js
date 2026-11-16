@@ -17,6 +17,10 @@ import { tutorialMap, avenueMap, docklandsMap, describeDocklands, tile } from '.
 import * as P from '../js/core/progress.js';
 import * as L from '../js/core/loadout.js';
 import * as PVP from '../js/core/pvp.js';
+import * as MF from '../js/core/mapfmt.js';
+import { DOCKLANDS } from '../js/core/maps/docklands.js';
+import { legacyDocklandsMap } from './fixtures/docklands-legacy.js';
+import { pickDeploys } from '../js/core/tmaps.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -876,6 +880,70 @@ test('class gear: only the matching class can equip a silencer or heavier rifle'
   assert.equal(L.medCarry(s, 'vesper'), 2);
 });
 
+
+const TF = ['t', 'block', 'cover', 'face', 'decor', 'los', 'explosive', 'hue', 'stack', 'cut'];
+const tileSig = (m) => m.tiles.map((r) => r.map((t) => TF.map((f) => t[f] || 0).join(',') + JSON.stringify(t.run || null) + JSON.stringify(t.partner || null)).join('|')).join('\n');
+
+test('map format: Docklands JSON builds the exact legacy yard', () => {
+  const a = docklandsMap(), b = legacyDocklandsMap();
+  assert.equal(a.w, b.w); assert.equal(a.h, b.h);
+  assert.equal(tileSig(a), tileSig(b));
+  assert.deepEqual(a.start, b.start);
+  assert.equal(DOCKLANDS.format, MF.MAP_FORMAT);
+  assert.equal(DOCKLANDS.version, MF.MAP_VERSION);
+  assert.ok(MF.validateMap(DOCKLANDS).ok);
+});
+
+test('map format: JSON -> map -> JSON round trip is stable', () => {
+  const j1 = MF.mapToJson(MF.mapFromJson(DOCKLANDS), { name: 'Docklands', id: 'docklands' });
+  const j2 = MF.mapToJson(MF.mapFromJson(j1), { name: 'Docklands', id: 'docklands' });
+  for (const k of ['ground', 'props', 'spawn']) assert.deepEqual(j1[k], j2[k]);
+  assert.deepEqual(j1.objects, j2.objects);
+  assert.equal(tileSig(MF.mapFromJson(j1)), tileSig(MF.mapFromJson(DOCKLANDS)));
+  const back = JSON.parse(MF.stringifyMap(j1));
+  assert.deepEqual(back.props, j1.props);
+});
+
+test('map format: validation catches spawns, sealed areas and bad input', () => {
+  const blank = MF.blankMapJson('small', 'T');
+  const v0 = MF.validateMap(blank);
+  assert.ok(!v0.ok, 'blank map has no spawns');
+  const [w, h] = MF.MAP_SIZES.small;
+  const j = MF.blankMapJson('small', 'T');
+  const row = (y, f) => { const a = j.spawn[y].split(''); f(a); j.spawn[y] = a.join(''); };
+  for (let y = 2; y < 6; y++) { row(y, (a) => { a[1] = 'P'; a[w - 2] = 'E'; }); }
+  const v1 = MF.validateMap(j);
+  assert.ok(v1.ok, JSON.stringify(v1.errors));
+  // wall the enemies in with full walls
+  const walled = JSON.parse(JSON.stringify(j));
+  for (let y = 0; y < h; y++) { const a = walled.props[y].split(''); a[w - 4] = 'W'; walled.props[y] = a.join(''); }
+  const v2 = MF.validateMap(walled);
+  assert.ok(!v2.ok, 'enemy zone cut off must fail');
+  assert.ok(!MF.validateMap({ format: 'nope' }).ok);
+  assert.ok(!MF.validateMap(null).ok);
+});
+
+test('custom map: practice battle spends nothing and spawns in the zone', () => {
+  const s = newGame(); finishTutorial(s);
+  for (const id of ['rook', 'brick']) grantHero(s, id);
+  setSquad(s, ['rook', 'brick']);
+  const [w] = MF.MAP_SIZES.small;
+  const j = MF.blankMapJson('small', 'Practice yard'); j.id = 'map-t';
+  for (let y = 2; y < 6; y++) { const a = j.spawn[y].split(''); a[1] = 'P'; a[w - 2] = 'E'; j.spawn[y] = a.join(''); }
+  const m = MF.mapFromJson(j);
+  const d = pickDeploys(m, 'player', 2, 5);
+  assert.equal(d.length, 2);
+  assert.ok(d.every((p) => p.x === 1 && p.y >= 2 && p.y < 6));
+  const ammo = s.ammo, cash = s.res ? JSON.stringify(s.res) : '';
+  const b = T.startCustom(s, j, 11);
+  s.tactics = b;
+  assert.equal(b.practice, 1); assert.equal(b.mapId, 'map-t');
+  b.status = 'loss'; b.reason = 'retreat';
+  const r = T.resolveTactics(s, b);
+  assert.ok(r.practice);
+  assert.equal(s.ammo, ammo);
+  assert.equal(s.res ? JSON.stringify(s.res) : '', cash);
+});
 
 console.log(`\n${pass} tests passed`);
 

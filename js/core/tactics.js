@@ -6,6 +6,7 @@ import { starBonus, tutorialShardGift } from './shards.js';
 import { levelBonus, perkMods, addXp, xpFromBattle, resetAfterKo, perkChoices, xpToNext } from './progress.js';
 import { kitMods, returnUnused, commitLoadout, defaultLoadout, carryOf } from './loadout.js';
 import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, DIRS4, docklandsMap } from './tmaps.js';
+import { mapFromJson } from './mapfmt.js';
 import { findMatch, pvpStake, settlePvp, opponentLabel } from './pvp.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
@@ -291,7 +292,8 @@ export function startStreet(s, seed, committed) {
   // Any mix of classes is allowed (duplicates included). Matchmaking is by trophies.
   const opponent = (committed && committed.opponent) || findMatch(s, seed, n);
   const enemy = (opponent.squad || []).slice(0, n);
-  const map = docklandsMap();
+  const map = (committed && committed.map) || docklandsMap();
+  const place = map.flavour === 'docklands' ? 'Docklands' : (map.name || 'Custom map');
   const recs = {};
   for (const id of squad) recs[id] = packFromState(s, id);
   const high = !!(committed && committed.highStakes);
@@ -299,10 +301,34 @@ export function startStreet(s, seed, committed) {
   const vs = opponent.name ? ` vs ${opponent.name}` : '';
   return startBattle({
     map, player: squad, enemy, seed: (seed >>> 0) || s.rng,
-    label: (high ? 'High Stakes · Docklands PvP' : 'Docklands · PvP') + vs, kind: 'street',
+    label: (high ? `High Stakes · ${place} PvP` : `${place} · PvP`) + vs, kind: 'street',
     reward, highStakes: high, pvp: true, opponent,
     loadout: { recs, ammo: committed?.ammo || {}, medkits: committed?.medkits || {} },
   });
+}
+
+// Practice fight on any map JSON (the map editor's Play button): your squad against a mirror
+// crew. No rewards, no XP, no ammo or medkits spent, nothing at stake.
+export function startCustom(s, json, seed) {
+  const map = mapFromJson(json);
+  const owned = Object.keys(s.heroes.owned || {});
+  let squad = (s.heroes.squad || []).filter((id) => s.heroes.owned[id]).slice(0, 4);
+  if (!squad.length) squad = owned.slice(0, 4);
+  if (!squad.length) squad = ['rook'];
+  const pool = Object.keys(HEROES);
+  const holder = { rng: (seed >>> 0) || 7 };
+  const enemy = [];
+  for (let i = 0; i < squad.length; i++) enemy.push(pool[rngInt(holder, 0, pool.length - 1)]);
+  const recs = {}, ammo = {};
+  for (const id of squad) { recs[id] = packFromState(s, id); ammo[id] = 8; }
+  const b = startBattle({
+    map, player: squad, enemy, seed: (seed >>> 0) || newSeed(),
+    label: `Practice · ${map.name || 'Custom map'}`, kind: 'custom', pvp: false,
+    reward: { cash: 0, influence: 0 }, loadout: { recs, ammo, medkits: {} },
+  });
+  b.practice = 1;
+  b.mapId = json.id;
+  return b;
 }
 
 function living(b, side) { return b.units.filter((u) => u.hp > 0 && (!side || u.side === side)); }
@@ -871,6 +897,13 @@ export function resolveTactics(s, b) {
     kind: b.kind, label: b.label, win: b.status === 'win', reason: b.reason,
     cash: 0, influence: 0, teeth: 0, highStakes: !!b.highStakes, xp: [], lost: [], returned: null,
   };
+  if (b.practice) {
+    // practice on a custom map: nothing is spent, won or lost
+    res.practice = true; res.mapId = b.mapId;
+    s.tactics = null;
+    s.lastTactics = res;
+    return res;
+  }
   // unused ammo / medkits come back; spent rounds stay gone
   res.returned = returnUnused(s, b.units);
   if (b.status === 'win') {

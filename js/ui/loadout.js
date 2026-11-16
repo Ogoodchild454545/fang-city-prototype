@@ -7,6 +7,8 @@ import { rankName } from '../core/progress.js';
 import { fmt, ico, esc } from './fmt.js';
 import * as BS from '../core/base.js';
 import * as Audio from './audio.js';
+import { listMaps, battleMapFor } from '../core/custommaps.js';
+import { validateMap } from '../core/mapfmt.js';
 
 const lo = (ctx) => (ctx.sub.loadout ||= { draft: null, confirmHS: false });
 
@@ -53,6 +55,14 @@ export function render(ctx) {
     </div>
     </div>
     <div class="loadfoot">
+      <div class="loadmap">
+        <span class="tiny dim">Map</span>
+        <select data-act="setLoadMap" aria-label="Battle map">
+          <option value="docklands">Docklands yard</option>
+          ${listMaps().filter((j) => validateMap(j).ok).map((j) => `<option value="${esc(j.id)}" ${d.mapId === j.id ? 'selected' : ''}>${esc(j.name)} (${j.w}×${j.h})</option>`).join('')}
+        </select>
+        <button class="btn sm" data-act="openEditor">Edit maps</button>
+      </div>
       <label class="hstakes ${d.highStakes ? 'on' : ''}">
         <input type="checkbox" data-act="toggleHighStakes" ${d.highStakes ? 'checked' : ''}>
         <span><b>High Stakes</b> — triple rewards. If an operator is KO'd they stay in the crew, but their level resets and any gear they carried is taken. Normal fights have no such penalty.</span>
@@ -152,6 +162,7 @@ export const actions = {
     ctx.toast(`Made a ${r.name}.`);
     ctx.render();
   },
+  setLoadMap(ctx, el) { ensure(ctx).mapId = el.value; },
   toggleHighStakes(ctx) {
     const d = ensure(ctx);
     if (d.highStakes) { d.highStakes = false; return ctx.render(); }
@@ -174,6 +185,7 @@ export const actions = {
     const d = ensure(ctx);
     const r = commitLoadout(ctx.state, d);
     if (!r.ok) return ctx.toast(r.reason);
+    if (d.mapId && d.mapId !== 'docklands') r.map = battleMapFor(d.mapId);
     ctx.state.tactics = startStreet(ctx.state, ctx.state.rng, r);
     ctx.sub.tactics = null;
     ctx.sub.loadout = null;

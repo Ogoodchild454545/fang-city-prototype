@@ -19,13 +19,14 @@ import * as Audio from './audio.js';
 import * as Tactics from './tactics.js';
 import * as Heroes from './heroes.js';
 import * as Loadout from './loadout.js';
+import * as Editor from './editor.js';
 import { formatDrop } from '../core/shards.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
 if (params.has('reset')) storage.clear();
 
-const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes, loadout: Loadout };
+const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes, loadout: Loadout, editor: Editor };
 const NAV = [
   ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['missions', '🎯', 'Missions'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
 ];
@@ -74,13 +75,14 @@ function render() {
   if (s.tactics && ctx.tab !== 'tactics') ctx.tab = 'tactics';
   else if (s.battle && ctx.tab !== 'battle') ctx.tab = 'battle';
   const scr = SCREENS[ctx.tab];
-  const inBattle = ctx.tab === 'battle' || ctx.tab === 'tactics';
+  const inBattle = ctx.tab === 'battle' || ctx.tab === 'tactics' || ctx.tab === 'editor';
   $('#topbar').style.display = inBattle ? 'none' : '';
   $('#nav').style.display = inBattle ? 'none' : '';
   $('#topbar').innerHTML = topbar();
   $('#app').classList.toggle('mode-base', ctx.tab === 'base');
   $('#app').classList.toggle('mode-battle', ctx.tab === 'battle');
   $('#app').classList.toggle('mode-tactics', ctx.tab === 'tactics');
+  $('#app').classList.toggle('mode-editor', ctx.tab === 'editor');
   $('#nav').innerHTML = nav();
   syncBattleMute();
   const el = $('#screen');
@@ -175,6 +177,7 @@ const GLOBAL_ACTIONS = {
   nav: (c, el) => c.go(el.dataset.tab),
   closeModal: (c, el) => { if (el && el.dataset && el.dataset.then) c.sub.afterBattle = el.dataset.then; closeModal(); },
   toggleMute: () => { Audio.toggleMute(); render(); },
+  openEditor: (c, el) => { c.sub.editorBack = c.tab === 'editor' ? (c.sub.editorBack || 'heroes') : c.tab; c.closeModal && c.closeModal(); Editor.openEditor(c, el && el.dataset && el.dataset.id); },
 };
 function unlockAudio() { Audio.unlock(); syncBattleMute(); }
 document.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });

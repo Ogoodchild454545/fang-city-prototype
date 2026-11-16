@@ -76,6 +76,30 @@ function hull(pts) {
 const INFO = new WeakMap();
 const PREP = new WeakMap();
 const isWallish = (t) => t && (t.decor === 'wall' || t.decor === 'door');
+// Rooms are connected groups of same-style walls/doors, so a map can hold several rooms of one style.
+const COMP = new WeakMap();
+function roomKey(m, x, y, t) {
+  let c = COMP.get(m);
+  if (!c) {
+    c = new Map(); let id = 0;
+    const at = (xx, yy) => (xx >= 0 && yy >= 0 && xx < m.w && yy < m.h ? m.tiles[yy][xx] : null);
+    for (let yy = 0; yy < m.h; yy++) for (let xx = 0; xx < m.w; xx++) {
+      const tt = at(xx, yy);
+      if (!isWallish(tt) || c.has(tt)) continue;
+      const key = `${tt.hue || 'room'}#${id++}`;
+      const st = [[xx, yy]]; c.set(tt, key);
+      while (st.length) {
+        const [cx, cy] = st.pop();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+          const n = at(cx + dx, cy + dy);
+          if (isWallish(n) && !c.has(n) && (n.hue || '') === (tt.hue || '')) { c.set(n, key); st.push([cx + dx, cy + dy]); }
+        }
+      }
+    }
+    COMP.set(m, c);
+  }
+  return c.get(t) || (t.hue || 'room');
+}
 export function prepMap(m) {
   let p = PREP.get(m);
   if (p) return p;
@@ -88,7 +112,7 @@ export function prepMap(m) {
       const ok = (n) => isWallish(n) && (n.hue || '') === (t.hue || '');
       info.conn = { N: ok(at(x, y - 1)), S: ok(at(x, y + 1)), W: ok(at(x - 1, y)), E: ok(at(x + 1, y)) };
       if (t.decor === 'wall') {
-        const r = p.rooms[t.hue || 'room'] ||= { x0: x, y0: y, x1: x, y1: y, hue: t.hue };
+        const r = p.rooms[roomKey(m, x, y, t)] ||= { x0: x, y0: y, x1: x, y1: y, hue: t.hue };
         r.x0 = Math.min(r.x0, x); r.y0 = Math.min(r.y0, y); r.x1 = Math.max(r.x1, x); r.y1 = Math.max(r.y1, y);
       }
     }
@@ -250,6 +274,7 @@ function drawContainer(g, t, sx, sy, z) {
       g.save();
       g.translate(pt[0], pt[1]);
       g.transform(dx / len, dy / len, 0, 1, 0, 0);
+      if (t.__mir) g.scale(-1, 1); // keep the lettering readable on a mirrored (N-S) run
       g.textAlign = 'center';
       g.fillStyle = 'rgba(232,226,210,0.5)';
       g.font = `700 ${(run.n >= 2 ? 6.4 : 4.2) * z}px Oswald, sans-serif`;
@@ -750,18 +775,26 @@ export function drawYardProp(g, t, sx, sy, z, now) {
     const d = t.decor;
     const H = propHeight(t);
     let ox = HX + 8, w0 = TW + 16;
-    if (d === 'van' || d === 'wreck' || d === 'car') { ox = 34; w0 = 130; }
-    if (d === 'container' && t.run) { ox += 24 + (t.run.n - 1) * HX * 0.5; w0 += 24 + (t.run.n - 1) * HX * 0.5; }
+    const mir = t.dir === 'S';
+    if (d === 'van' || d === 'wreck' || d === 'car') { ox = mir ? 96 : 34; w0 = 130; }
+    if (d === 'container' && t.run) { const ex = 24 + (t.run.n - 1) * HX * 0.5; if (!mir) ox += ex; w0 += ex; }
     const oy = HY + H + 14, h0 = oy + HY + 12;
     const ck = t.__cut || 0;
     if (ck > 0 && ck < 1) return paintProp(g, t, sx, sy, z, now);
-    const key = `${d}|${t.hue}|${t.cut}|${t.stack}|${ck >= 1 ? 'cut' : ''}`;
+    const key = `${d}|${t.hue}|${t.cut}|${t.stack}|${ck >= 1 ? 'cut' : ''}|${t.dir || ''}`;
     cached(g, t, key, sx, sy, z, ox, oy, w0, h0, (cg, x, y, k) => paintProp(cg, t, x, y, k, now));
     return true;
   }
   return paintProp(g, t, sx, sy, z, now);
 }
 function paintProp(g, t, sx, sy, z, now) {
+  if (t.dir === 'S' && !t.__mir && (t.decor === 'container' || t.decor === 'van' || t.decor === 'wreck' || t.decor === 'car')) {
+    // A run or van along +y is the same drawing mirrored about the tile's vertical axis
+    // (iso swaps dx and dy under a horizontal flip).
+    g.save(); g.translate(sx, 0); g.scale(-1, 1); g.translate(-sx, 0);
+    t.__mir = 1;
+    try { return paintProp(g, t, sx, sy, z, now); } finally { t.__mir = 0; g.restore(); }
+  }
   const d = t.decor;
   if (d === 'van' || d === 'car') { drawVan(g, t, sx, sy, z, false); return true; }
   if (d === 'wreck') { drawVan(g, t, sx, sy, z, true); return true; }
@@ -785,21 +818,24 @@ function paintProp(g, t, sx, sy, z, now) {
 // ---------- scenery (not gameplay): border fences, bollards, backdrop ----------
 function buildScenery(m, p) {
   const s = [];
-  const office = p.rooms.office, cafe = p.rooms.cafe;
-  for (let x = 4; x < m.w; x++) {
-    if (office && x >= office.x0 && x <= office.x1) continue;
+  const rooms = Object.values(p.rooms);
+  const Q0 = Math.round(canalQX(m) + 0.5);
+  const hasCol0Land = Q0 <= 0;
+  for (let x = Math.max(0, Q0 + 1); x < m.w; x++) {
+    if (rooms.some((r) => r.y0 <= 0 && x >= r.x0 && x <= r.x1)) continue;
     s.push({ kind: 'fence', x, y: -0.6, alongY: false, depth: -10 });
   }
   for (let y = 0; y < m.h; y++) {
-    if (cafe && y >= cafe.y0 && y <= cafe.y1 && cafe.x1 >= m.w - 1) continue;
+    if (rooms.some((r) => y >= r.y0 && y <= r.y1 && r.x1 >= m.w - 1)) continue;
     s.push({ kind: 'fence', x: m.w - 0.4, y, alongY: true, depth: m.w + y + 0.06 });
   }
-  for (let x = 4; x < m.w; x++) {
-    if (cafe && x >= cafe.x0 && x <= cafe.x1 && cafe.y1 >= m.h - 1) continue;
+  for (let x = Math.max(0, Q0 + 1); x < m.w; x++) {
+    if (rooms.some((r) => x >= r.x0 && x <= r.x1 && r.y1 >= m.h - 1)) continue;
     if (x === 6 || x === 7) continue; // open gate
     s.push({ kind: 'fence', x, y: m.h - 0.4, alongY: false, depth: x + m.h + 0.06 });
   }
-  for (let y = 1; y < m.h; y += 3) s.push({ kind: 'bollard', x: 2.78, y: y + 0.2, depth: 2.78 + y });
+  for (let y = 1; y < m.h; y += 3) s.push({ kind: 'bollard', x: canalQX(m) + 0.28, y: y + 0.2, depth: canalQX(m) + 0.28 + y });
+  void hasCol0Land;
   return s;
 }
 
@@ -898,6 +934,10 @@ const BAKE = new WeakMap();
 const S = 1.6, MARGIN = 5;
 
 function footprints(t) {
+  const out = footprints0(t);
+  return t.dir === 'S' ? out.map(([a, b, c, d, h]) => [b, a, d, c, h]) : out;
+}
+function footprints0(t) {
   const d = t.decor;
   const out = [];
   if (d === 'container') out.push([-0.5, -0.44, 0.5, 0.44, t.stack >= 2 ? CONT_H * 2 + 0.8 : CONT_H]);
@@ -932,6 +972,30 @@ function noiseTile(n = 160) {
   return c;
 }
 
+// West canal: the number of leading columns that are water in every row (Docklands: 3).
+// Maps without one get the canal just beyond their west edge, so the yard always sits on a quay.
+const WCELLS = new WeakMap();
+function waterCells(m) {
+  let c = WCELLS.get(m);
+  if (c) return c;
+  c = [];
+  const QX = canalQX(m);
+  if (QX > 0) for (let ty = -4; ty < m.h + 4; ty++) for (let tx = -3; tx <= Math.floor(QX); tx++) c.push([tx, ty]);
+  for (let ty = 0; ty < m.h; ty++) for (let tx = Math.max(0, Math.round(QX + 0.5)); tx < m.w; tx++) if (m.tiles[ty][tx].t === 'water') c.push([tx, ty]);
+  WCELLS.set(m, c);
+  return c;
+}
+export function canalQX(m) {
+  let n = 0;
+  for (let x = 0; x < m.w; x++) {
+    let all = true;
+    for (let y = 0; y < m.h; y++) if (m.tiles[y][x].t !== 'water') { all = false; break; }
+    if (!all) break;
+    n++;
+  }
+  return n ? n - 0.5 : -1.5;
+}
+
 export function bakeYard(m) {
   let bk = BAKE.get(m);
   if (bk) return bk;
@@ -946,7 +1010,9 @@ export function bakeYard(m) {
   const SC = () => g.setTransform(S, 0, 0, S, -minX * S, -minY * S); // world coords
   const inMap = (x, y) => x >= 0 && y >= 0 && x < m.w && y < m.h;
   const r = rng(7331);
-  const QX = 2.5; // canal / quay boundary
+  const QX = canalQX(m); // canal / quay boundary (2.5 on the Docklands yard; off-map for others)
+  const Q0 = Math.round(QX + 0.5); // first land column
+  const DOCK = m.flavour === 'docklands' || m.flavour === 'tutorial';
 
   g.fillStyle = '#101113'; g.fillRect(0, 0, W, H);
   GT();
@@ -968,17 +1034,28 @@ export function bakeYard(m) {
     g.fillStyle = sh; g.fillRect(QX - 0.6, -M - 1, 0.6, m.h + 2 * M + 2);
   }
   // --- land tiles ---
-  for (let ty = -M; ty < m.h + M; ty++) for (let tx = 3; tx < m.w + M; tx++) {
+  for (let ty = -M; ty < m.h + M; ty++) for (let tx = Q0; tx < m.w + M; tx++) {
     const t = inMap(tx, ty) ? m.tiles[ty][tx] : null;
-    const kind = t ? t.t : (tx === 3 ? 'edge' : 'out');
+    const kind = t ? t.t : (tx === Q0 ? 'edge' : 'out');
     let c;
     if (kind === 'edge') c = [74, 72, 67];
     else if (kind === 'shed') c = [48, 50, 49];
     else if (kind === 'out') c = [44, 44, 46];
+    else if (kind === 'water') c = [12, 30, 38];
     else c = [64, 62, 58];
     const k = 0.9 + 0.14 * hash(Math.floor(tx / 2), Math.floor(ty / 2), 1) + 0.04 * hash(tx, ty, 2);
     g.fillStyle = rgb(c, k);
     g.fillRect(tx - 0.5, ty - 0.5, 1.02, 1.02);
+  }
+  // inland water (editor maps): concrete coping where water meets land
+  for (let ty = 0; ty < m.h; ty++) for (let tx = Math.max(0, Q0); tx < m.w; tx++) {
+    if (m.tiles[ty][tx].t !== 'water') continue;
+    const land = (x, y) => inMap(x, y) && m.tiles[y][x].t !== 'water';
+    g.fillStyle = '#7a766c';
+    if (land(tx, ty - 1)) g.fillRect(tx - 0.5, ty - 0.5, 1, 0.14);
+    if (land(tx, ty + 1)) g.fillRect(tx - 0.5, ty + 0.36, 1, 0.14);
+    if (land(tx - 1, ty)) g.fillRect(tx - 0.5, ty - 0.5, 0.14, 1);
+    if (land(tx + 1, ty)) g.fillRect(tx + 0.36, ty - 0.5, 0.14, 1);
   }
   // --- far bank strip ---
   g.fillStyle = '#26262a'; g.fillRect(-M - 1, -M - 1, 1.7, m.h + 2 * M + 2);
@@ -1046,14 +1123,14 @@ export function bakeYard(m) {
   }
   // --- slab joints + faint grid ---
   g.lineWidth = 0.028;
-  for (let x = 3.5; x < m.w + M; x += 2) {
+  for (let x = Q0 + 0.5; x < m.w + M; x += 2) {
     g.strokeStyle = 'rgba(0,0,0,0.38)'; g.beginPath(); g.moveTo(x, -M); g.lineTo(x, m.h + M); g.stroke();
   }
   for (let y = -M + 0.5; y < m.h + M; y += 2) {
     g.strokeStyle = 'rgba(0,0,0,0.38)'; g.beginPath(); g.moveTo(QX, y); g.lineTo(m.w + M, y); g.stroke();
   }
   g.lineWidth = 0.012; g.strokeStyle = 'rgba(255,240,220,0.055)';
-  for (let x = 3; x <= m.w; x++) { g.beginPath(); g.moveTo(x - 0.5, -0.5); g.lineTo(x - 0.5, m.h - 0.5); g.stroke(); }
+  for (let x = Q0; x <= m.w; x++) { g.beginPath(); g.moveTo(x - 0.5, -0.5); g.lineTo(x - 0.5, m.h - 0.5); g.stroke(); }
   for (let y = 0; y <= m.h; y++) { g.beginPath(); g.moveTo(QX, y - 0.5); g.lineTo(m.w - 0.5, y - 0.5); g.stroke(); }
   // --- quay coping with hazard paint ---
   g.fillStyle = '#7a766c'; g.fillRect(QX, -M - 1, 0.3, m.h + 2 * M + 2);
@@ -1067,15 +1144,17 @@ export function bakeYard(m) {
     g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash || []);
     g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); g.setLineDash([]);
   };
-  paint(4, 9.5, 12.4, 9.5, 'rgba(206,168,58,0.55)', 0.08, [0.7, 0.35]);
-  paint(4, 3.6, 9.4, 3.6, 'rgba(206,168,58,0.5)', 0.08);
-  paint(9.5, 10.5, 9.5, 15.5, 'rgba(206,168,58,0.45)', 0.08);
-  paint(15.5, 3.5, 15.5, 9.4, 'rgba(206,168,58,0.4)', 0.07, [0.5, 0.3]);
+  if (DOCK) {
+    paint(4, 9.5, 12.4, 9.5, 'rgba(206,168,58,0.55)', 0.08, [0.7, 0.35]);
+    paint(4, 3.6, 9.4, 3.6, 'rgba(206,168,58,0.5)', 0.08);
+    paint(9.5, 10.5, 9.5, 15.5, 'rgba(206,168,58,0.45)', 0.08);
+    paint(15.5, 3.5, 15.5, 9.4, 'rgba(206,168,58,0.4)', 0.07, [0.5, 0.3]);
+  }
   for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
     const t = m.tiles[y][x];
     if (t.decor === 'van') {
       g.strokeStyle = 'rgba(230,226,214,0.35)'; g.lineWidth = 0.06;
-      g.strokeRect(x - 0.6, y - 0.55, 2.2, 1.1);
+      if (t.dir === 'S') g.strokeRect(x - 0.55, y - 0.6, 1.1, 2.2); else g.strokeRect(x - 0.6, y - 0.55, 2.2, 1.1);
     }
   }
   // stencils
@@ -1084,9 +1163,11 @@ export function bakeYard(m) {
     g.font = `700 ${size}px Oswald, sans-serif`; g.textAlign = 'center'; g.fillStyle = col;
     g.fillText(txt, 0, 0); g.restore();
   };
-  stencil('BAY 07', 5.5, 13.4, 0.55, 'rgba(220,214,200,0.28)');
-  stencil('NO STACKING', 12.5, 10.5, 0.42, 'rgba(206,168,58,0.4)');
-  stencil('KEEP CLEAR', 7.2, 1.5, 0.45, 'rgba(206,168,58,0.38)', Math.PI / 2);
+  if (DOCK) {
+    stencil('BAY 07', 5.5, 13.4, 0.55, 'rgba(220,214,200,0.28)');
+    stencil('NO STACKING', 12.5, 10.5, 0.42, 'rgba(206,168,58,0.4)');
+    stencil('KEEP CLEAR', 7.2, 1.5, 0.45, 'rgba(206,168,58,0.38)', Math.PI / 2);
+  }
   // cracks
   g.lineCap = 'round';
   for (let i = 0; i < 90; i++) {
@@ -1175,7 +1256,7 @@ export function bakeYard(m) {
   }
   // litter: paper and cans
   for (let i = 0; i < 40; i++) {
-    const x = 3.5 + r() * (m.w - 3.5), y = r() * m.h;
+    const x = Q0 + 0.5 + r() * (m.w - Q0 - 0.5), y = r() * m.h;
     g.fillStyle = r() < 0.6 ? 'rgba(200,190,170,0.35)' : 'rgba(150,60,40,0.5)';
     g.save(); g.translate(x, y); g.rotate(r() * 3); g.fillRect(-0.05, -0.03, 0.1, 0.06); g.restore();
   }
@@ -1269,7 +1350,7 @@ export function drawYard(g, m, z, now) {
   g.lineCap = 'round';
   g.lineWidth = 1.1 * z;
   const buckets = [[], [], []];
-  for (let ty = -4; ty < m.h + 4; ty++) for (let tx = -3; tx <= 2; tx++) {
+  for (const [tx, ty] of waterCells(m)) {
     const ph = hash(tx, ty, 3) * 6.28;
     const k = 0.5 + 0.5 * Math.sin(t * 1.3 + ph);
     const a = toWorld(tx + 0.2 * Math.sin(ph), ty - 0.3 + 0.25 * Math.sin(t * 0.5 + ph));

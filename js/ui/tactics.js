@@ -1241,9 +1241,10 @@ function finish(ctx) {
   ctx.sub.tactics = null;
   if (!res) { ctx.go('city'); return; }
   if (res.win) Audio.play('win'); else Audio.play('lose');
-  const el = ctx.modal(resultHtml(res, squad), { center: true, backdrop: false, cls: 'resultov', onClose: () => ctx.go(ctx.sub.afterBattle || (res.kind === 'tutorial' ? 'base' : 'city')) });
-  if (el) animateResult(el);
+  const back = ctx.sub.afterBattle;
   ctx.sub.afterBattle = null;
+  const el = ctx.modal(resultHtml(res, squad), { center: true, backdrop: false, cls: 'resultov', onClose: () => { const to = ctx.sub.afterBattle || back || (res.kind === 'tutorial' ? 'base' : 'city'); ctx.sub.afterBattle = null; ctx.go(to); } });
+  if (el) animateResult(el);
 }
 
 // End-of-fight screen: landscape two-column card. Left: banner + squad with MVP and KO states.
@@ -1288,11 +1289,12 @@ function resultHtml(res, squad) {
       ${quip}
       <div class="row rbtns">
         <button class="btn block" data-act="closeModal" data-then="heroes">Operators</button>
-        <button class="btn red block" data-act="closeModal">${res.kind === 'tutorial' ? 'Back to the hideout' : 'Continue'}</button>
+        ${res.practice ? '<button class="btn red block" data-act="closeModal" data-then="editor">Back to editor</button>' : `<button class="btn red block" data-act="closeModal">${res.kind === 'tutorial' ? 'Back to the hideout' : 'Continue'}</button>`}
       </div>
     </div>
     <div class="rright">
       ${tiles.length ? `<div class="rtiles">${tiles.join('')}</div>` : ''}
+      ${res.practice ? '<p class="small dim">Practice match on a custom map: no rewards, XP or ammo spent.</p>' : ''}
       ${lossTip}
       ${league}
       ${res.tutorial && res.shardDrop ? '<p class="small gold">Collect 30 shards to unlock an operator.</p>' : ''}

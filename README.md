@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.6.4)
+# Fang City: Animal Gangs (playable prototype v0.7.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,17 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.7.0 (map editor)
+
+- An in-game map editor, opened from Operators → **Map editor** or Loadout → **Edit maps**. It runs fullscreen at 844×390 and also works on desktop.
+- Paint the ground (concrete, water/canal, quay edge, canopy, office and bar floors). Place and rotate single and double containers (1–4 long, 8 colours), vans, crates, explosive and burn barrels, barriers, fences, lamps, walls, doors, counters, shelves and boats. Drag out a Room to get walls and a door automatically.
+- Paint player and enemy spawn zones. The editor has an eraser, undo/redo, a map name and three sizes, and you can switch between a top-down grid and a live 3D preview.
+- Live validation:
+  - errors: spawns too small, spawns on solid tiles, or the two sides not connected
+  - warnings: sealed-off areas, lopsided cover, too little cover, spawns too close
+- Maps save to localStorage and can be exported or imported as JSON. **Play** starts a practice match with nothing spent or earned. Valid saved maps can be picked for PvP in the Loadout.
+- New versioned JSON map format with one string per row for each layer. Docklands is now stored in this format and loads through the same path; a test checks it tile-for-tile against the old builder. See [docs/map-editor.md](docs/map-editor.md).
 
 ## v0.6.4 (taller containers, never lose a unit)
 

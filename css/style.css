@@ -666,3 +666,44 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .ttimer:empty{display:none}
 .tbar .ttimer:empty + [data-act="retreatFight"]{margin-left:auto}
 .tbar .btn[disabled]{opacity:.55}
+
+/* ----- map editor (v0.7) ----- */
+.loadfoot .loadmap{flex:none;display:flex;flex-direction:column;gap:3px;max-width:170px}
+.loadfoot .loadmap select{background:#1c1814;color:#f3e7c9;border:1px solid var(--line);border-radius:6px;padding:3px 4px;font-size:12px;max-width:170px}
+.mode-editor #screen{grid-row:1/3;grid-column:1/3;padding:0;overflow:hidden}
+.edscr{display:flex;flex-direction:column;height:100%;background:#0f1012}
+.edtop{flex:none;display:flex;align-items:center;gap:5px;padding:max(4px,env(safe-area-inset-top)) max(46px,env(safe-area-inset-right)) 4px max(6px,env(safe-area-inset-left));background:#171311;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.edtop::-webkit-scrollbar{display:none}
+.edtop .btn.sm{min-height:28px;padding:3px 8px;font-size:11px;flex:none}
+.edtop .grow{flex:1}
+.edname{flex:0 1 150px;min-width:80px;background:#0e0c0b;color:#f3e7c9;border:1px solid var(--line2);border-radius:6px;padding:4px 6px;font:600 12px Inter,sans-serif}
+.edsel{flex:none;background:#0e0c0b;color:#f3e7c9;border:1px solid var(--line2);border-radius:6px;padding:4px;font-size:11px}
+.edbody{flex:1;min-height:0;display:flex}
+.edtools{flex:none;width:156px;overflow-y:auto;padding:4px 5px max(8px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left));background:#141110;border-right:1px solid var(--line);scrollbar-width:thin}
+.edgrp{font:600 10px Oswald,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#c9302c;margin:6px 2px 3px}
+.edgrid{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.edtool{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:40px;padding:2px;border-radius:6px;border:1px solid #2c2522;background:#1d1816;color:#e6dccb;font-size:9.5px;line-height:1.05;text-align:center;cursor:pointer}
+.edtool span{font-size:15px;line-height:1}
+.edtool.on{border-color:#f0c35a;background:#3a2a12;color:#fff;box-shadow:0 0 0 1px #f0c35a inset}
+.edopt{background:#1d1714;border:1px solid #3a2c22;border-radius:8px;padding:2px 5px 5px;margin-bottom:4px}
+.edrow{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.edlen{min-width:28px;height:26px;border-radius:5px;border:1px solid #3a302a;background:#241e1a;color:#f3e7c9;font-weight:700;cursor:pointer}
+.edlen.wide{flex:1}
+.edlen.on{border-color:#f0c35a;background:#4a3414}
+.edsw{width:22px;height:22px;border-radius:5px;border:2px solid #222;background:var(--c);cursor:pointer}
+.edsw.on{border-color:#f0c35a;box-shadow:0 0 0 1px #000}
+.edcanvas{position:relative;flex:1;min-width:0}
+.edcanvas canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.edzoom{position:absolute;right:8px;bottom:max(8px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:4px}
+.edzoom button{width:32px;height:30px;border-radius:7px;border:1px solid #3a302a;background:rgba(20,16,14,.88);color:#f3e7c9;font-size:15px;cursor:pointer}
+.edstatus{position:absolute;left:8px;bottom:max(8px,env(safe-area-inset-bottom));border-radius:999px;padding:4px 10px;font:600 11px Inter,sans-serif;border:1px solid;cursor:pointer;background:rgba(14,12,10,.9)}
+.edstatus.ok{color:#8fe08f;border-color:#3c7a3c}.edstatus.warn{color:#e0c15a;border-color:#8a7020}.edstatus.bad{color:#ff8a7a;border-color:#a03a30}
+.edhint{position:absolute;left:8px;top:6px;font:500 11px Inter,sans-serif;color:#d8cfbf;text-shadow:0 1px 2px #000;pointer-events:none}
+.edmenu{width:100%;min-width:0;box-sizing:border-box}
+.edlist{max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+.edli{display:flex;align-items:center;gap:6px;background:#1a1513;border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.edli .grow{flex:1}
+.edli b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edli .btn{flex:none;min-width:0}
+.edjson{width:100%;height:42vh;background:#0c0a09;color:#d8cfbf;border:1px solid var(--line2);border-radius:6px;font:11px ui-monospace,Menlo,monospace;margin:6px 0;white-space:pre}
+@media (max-height:420px){.edtools{width:146px}.edtool{min-height:36px}}

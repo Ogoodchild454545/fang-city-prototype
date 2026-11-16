@@ -28,6 +28,7 @@ export function render(ctx) {
       <div class="row">
         ${s.heroes.tutorialDone ? '' : '<button class="btn gold" data-act="startTutorial">Street lesson</button>'}
         <button class="btn red" data-act="startStreet" ${squad.length ? '' : 'disabled'}>Docklands PvP</button>
+        <button class="btn" data-act="openEditor">Map editor</button>
       </div>
     </div>
     <div class="tiny dim" style="margin:4px 0 8px">
