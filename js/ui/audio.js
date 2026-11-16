@@ -163,6 +163,42 @@ const SFX = {
     osc('sine', 740, t, 0.12, 0.1, sfxGain, 0.005);
     osc('sine', 1110, t + 0.08, 0.14, 0.08, sfxGain, 0.005);
   },
+  // Wolf abilities
+  pounce() {
+    const t = ctx().currentTime;
+    noiseBurst(t, 0.16, 0.16, 500, 3000);            // rush of air
+    osc('sawtooth', 180, t, 0.14, 0.10, sfxGain, 0.01, 420);
+    osc('triangle', 95, t + 0.14, 0.10, 0.20, sfxGain, 0.001, 50); // landing thud
+  },
+  maul() {
+    const t = ctx().currentTime;
+    osc('sawtooth', 120, t, 0.22, 0.14, sfxGain, 0.01, 70); // snarl
+    noiseBurst(t, 0.20, 0.10, 300, 1400);
+    noiseBurst(t + 0.16, 0.07, 0.26, 200, 2200);     // crunch
+  },
+  howl() {
+    const t = ctx().currentTime;
+    const c = ctx(); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain(), v = c.createOscillator(), vg = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(520, t + 0.35);
+    o.frequency.exponentialRampToValueAtTime(470, t + 0.9); o.frequency.exponentialRampToValueAtTime(300, t + 1.25);
+    v.frequency.value = 6; vg.gain.value = 12; v.connect(vg); vg.connect(o.frequency);
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 1.4;
+    env(g, t, 0.18, 1.1, 0.22);
+    o.connect(f); f.connect(g); g.connect(sfxGain);
+    o.start(t); v.start(t); o.stop(t + 1.4); v.stop(t + 1.4);
+  },
+  secondwind() {
+    const t = ctx().currentTime;
+    noiseBurst(t, 0.35, 0.08, 200, 900);              // deep breath
+    osc('sine', 220, t + 0.2, 0.25, 0.12, sfxGain, 0.05, 330);
+    osc('sine', 330, t + 0.35, 0.3, 0.10, sfxGain, 0.05, 440);
+  },
+  bleed() {
+    const t = ctx().currentTime;
+    osc('sine', 300, t, 0.08, 0.06, sfxGain, 0.004, 180);
+  },
   win() {
     const t = ctx().currentTime;
     [523, 659, 784, 1046].forEach((f, i) => osc('triangle', f, t + i * 0.11, 0.28, 0.14, sfxGain, 0.01));
@@ -183,15 +219,15 @@ export function play(name) {
 }
 
 const WEAPON_SFX = {
-  rook: 'rifle', ash: 'rifle', lumen: 'rifle', mica: 'rifle',
+  rook: 'pistol', ash: 'rifle', lumen: 'rifle', mica: 'rifle',
   brick: 'rifle', slab: 'rifle',
   vesper: 'pistol', pact: 'pistol', pip: 'pistol', knack: 'pistol', hook: 'pistol',
   ivory: 'shotgun', marlow: 'shotgun', bruno: 'shotgun',
   nile: 'melee', rill: 'melee',
 };
 
-export function playShoot(hero) {
-  play(WEAPON_SFX[hero] || 'rifle');
+export function playShoot(hero, melee) {
+  play(melee ? 'melee' : (WEAPON_SFX[hero] || 'rifle'));
 }
 
 // A looping dusk groove in A minor: soft kick, hat, bass, and a sparse piano figure.

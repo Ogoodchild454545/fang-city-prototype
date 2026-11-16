@@ -24,6 +24,7 @@ import { pickDeploys } from '../js/core/tmaps.js';
 import * as CAT from '../js/core/catalog.js';
 import { BUILTIN_MAPS, BUILTIN_BY_ID } from '../js/core/maps/index.js';
 import * as CM from '../js/core/custommaps.js';
+import * as IT from '../js/core/items.js';
 
 let pass = 0;
 const test = (name, fn) => { try { fn(); pass++; console.log('ok  ', name); } catch (e) { console.error('FAIL', name, '\n', e); process.exitCode = 1; } };
@@ -295,7 +296,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 5);
+  assert.equal(s.v, 6);
   assert.equal(s.crew, undefined);
   assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
@@ -304,7 +305,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 5 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 6 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
@@ -323,7 +324,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
   const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
   const teeth = s2.teeth, cash0 = s2.cash;
   const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
-  assert.equal(s.v, 5);
+  assert.equal(s.v, 6);
   assert.equal(s.gang, undefined);
   assert.equal(s.crew, undefined);
   assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
@@ -468,6 +469,8 @@ test('tactics: cover, hitchance, flanking, overwatch and a tutorial fight', () =
   assert.equal(hook.x, 13); assert.equal(hook.y, 9);
   assert.equal(b.acting, rook.uid, 'Rook goes first in the lesson');
   // Hook sits behind a crate at (12,9) — shots from the west should have cover
+  // (Rook's snub revolver reaches 6 tiles, so step one tile in first)
+  rook.x = 7;
   const west = T.previewShot(b, rook, hook, 'shot');
   assert.ok(west && west.ok, 'LOS down the lane, ' + (west && west.reason));
   assert.ok(west.cover >= 1, 'crate gives Hook cover from the west, cover=' + west.cover);
@@ -504,7 +507,7 @@ test('v3 save migrates to v5 with Rook and starting ammo', () => {
   delete s3.heroes;
   delete s3.tactics;
   const s = migrate(s3, T0);
-  assert.equal(s.v, 5);
+  assert.equal(s.v, 6);
   assert.ok(s.heroes.owned.rook);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.ok((s.ammo || 0) >= 30);
@@ -745,8 +748,8 @@ test('docklands: speed queue, explosive barrels, medkit revive, cover is not des
 });
 
 
-test('heroes: six fixed classes, no rarity tiers, any class mix in a squad', () => {
-  const ids = ['tank', 'sniper', 'medic', 'assault', 'demo', 'scout'];
+test('heroes: seven fixed classes (Bruiser added), no rarity tiers, any class mix in a squad', () => {
+  const ids = ['tank', 'sniper', 'medic', 'assault', 'demo', 'scout', 'bruiser'];
   assert.deepEqual(Object.keys(CLASSES).sort(), ids.slice().sort());
   const covered = new Set(HERO_ORDER.map((id) => HEROES[id].classId));
   for (const c of ids) assert.ok(covered.has(c), 'class ' + c + ' is on a crew operator');
@@ -1046,6 +1049,207 @@ test('built-in maps: AI-vs-AI fights finish on every location (no deadlocks)', (
       assert.ok(rounds <= 30, `${j.id} seed ${seed} took ${rounds} rounds`);
     }
   }
+});
+
+
+// ---------------------------------------------------------------- v0.9: Rook the Bruiser, inventory, abilities
+const duel = (rookRec, enemy = ['hook'], seed = 5) => {
+  const b = T.startBattle({ map: tutorialMap(), player: ['rook'], enemy, seed, label: 'x', kind: 'custom', pvp: false,
+    loadout: { recs: { rook: rookRec }, ammo: { rook: 6 }, medkits: {} } });
+  const r = b.units.find((u) => u.hero === 'rook');
+  const foes = b.units.filter((u) => u.side === 'enemy');
+  b.acting = r.uid; b.side = 'player'; r.ap = r.maxAp;
+  return { b, r, foes };
+};
+
+test('v0.9 new game: the crew is only Rook (Wolf Bruiser) with his starter kit; no bosses', () => {
+  const s = newGame(T0, 3);
+  assert.deepEqual(Object.keys(s.heroes.owned), ['rook']);
+  assert.deepEqual(s.heroes.squad, ['rook']);
+  assert.deepEqual(s.bosses, {});
+  const d = HEROES.rook;
+  assert.equal(d.classId, 'bruiser'); assert.equal(d.species, 'Wolf'); assert.equal(CLASSES.bruiser.name, 'Bruiser');
+  assert.deepEqual(s.heroes.owned.rook.equip, d.template.start.equip, 'starter kit equipped');
+  for (const id of d.template.start.stash) assert.equal(IT.stashCount(s, id), 1, id + ' in stash');
+  const st = IT.statsFor('rook', { equip: s.heroes.owned.rook.equip });
+  assert.equal(st.mel.name, 'Tyre iron'); assert.equal(st.gun.name, 'Snub revolver');
+  assert.ok(st.hp >= 16 && st.hp > HEROES.lumen.hp, 'frontline health');
+  // every player gets the same Rook
+  assert.deepEqual(newGame(T0, 99).heroes.owned.rook.equip, s.heroes.owned.rook.equip);
+});
+
+test('v0.9 items: 13 slots, quality tiers, equip/unequip moves items between stash and slots', () => {
+  assert.equal(IT.SLOTS.length, 13);
+  for (const [id, it] of Object.entries(IT.ITEMS)) {
+    assert.ok(IT.QUALITY[it.q], id + ' quality'); assert.ok(IT.SLOTS.some((s) => s.kind === it.slot), id + ' slot');
+    if (['primary', 'sidearm', 'melee'].includes(it.slot)) assert.ok(it.wpn && it.wpn.dmg[1] >= it.wpn.dmg[0], id + ' weapon');
+  }
+  const s = newGame(T0, 4);
+  let r = IT.equipItem(s, 'rook', 'gilet');
+  assert.ok(r.ok && r.slot === 'body'); assert.equal(IT.stashCount(s, 'gilet'), 0);
+  r = IT.equipItem(s, 'rook', 'chain'); assert.equal(r.slot, 'acc1');
+  IT.addItem(s, 'watch'); r = IT.equipItem(s, 'rook', 'watch'); assert.equal(r.slot, 'acc2', 'second accessory socket');
+  assert.ok(!IT.equipItem(s, 'rook', 'flatcap', 'boots').ok, 'wrong slot refused');
+  IT.addItem(s, 'machete'); r = IT.equipItem(s, 'rook', 'machete');
+  assert.equal(r.prev, 'tyreiron'); assert.equal(IT.stashCount(s, 'tyreiron'), 1, 'swapped weapon goes back to the stash');
+  r = IT.unequipItem(s, 'rook', 'body'); assert.ok(r.ok); assert.equal(IT.stashCount(s, 'gilet'), 1);
+  // loot sources
+  s.parts = 25; const c = IT.craftItem(s); assert.ok(c.ok && IT.ITEMS[c.id]); assert.equal(s.parts, 15);
+  assert.ok(!IT.craftItem({ parts: 3 }).ok);
+});
+
+test('v0.9 equipped gear changes Rook\'s stats in battle', () => {
+  const base = { stars: 1, lv: 1, perks: [], gear: null, equip: { ...HEROES.rook.template.start.equip } };
+  const plain = duel(base);
+  const geared = duel({ ...base, equip: { ...base.equip, body: 'platerig', melee: 'machete', head: 'helmet', boots: 'runners', acc1: 'chain' } });
+  assert.equal(geared.r.maxHp, plain.r.maxHp + 3 + 3, 'plate rig + riot helmet HP');
+  assert.equal(geared.r.armor, 1);
+  assert.equal(geared.r.move, plain.r.move - 1 + 1, 'plate rig -1, running shoes +1');
+  assert.equal(geared.r.crit, plain.r.crit + 5);
+  const foe = plain.foes[0];
+  for (const x of [plain, geared]) { x.r.x = 7; x.r.y = 9; x.foes[0].x = 8; x.foes[0].y = 9; }
+  const p1 = T.previewShot(plain.b, plain.r, plain.foes[0], 'melee');
+  const p2 = T.previewShot(geared.b, geared.r, geared.foes[0], 'melee');
+  assert.ok(p1.ok && p2.ok);
+  assert.equal(p2.dmg[1] - p1.dmg[1], 8 - 6, 'machete hits harder than the tyre iron');
+  // armour soaks hits; dodge lowers the attacker's chance
+  const hoodieless = duel({ ...base, equip: { ...base.equip, jacket: null } });
+  for (const x of [plain, hoodieless]) { x.foes[0].x = 9; x.foes[0].y = 9; x.r.x = 7; x.r.y = 9; }
+  const c1 = T.previewShot(plain.b, plain.foes[0], plain.r, 'shot').chance;
+  const c2 = T.previewShot(hoodieless.b, hoodieless.foes[0], hoodieless.r, 'shot').chance;
+  assert.equal(c2 - c1, 3, 'hoodie dodge 3% off the attacker');
+  // no gun equipped: the Sidearm is refused, strikes still work
+  const unarmed = duel({ ...base, equip: { melee: 'tyreiron' } });
+  unarmed.r.x = 7; unarmed.r.y = 9; unarmed.foes[0].x = 8; unarmed.foes[0].y = 9;
+  assert.equal(T.previewShot(unarmed.b, unarmed.r, unarmed.foes[0], 'shot').reason, 'No gun equipped');
+  // pipe bomb in the utility slot grants a one-off throw
+  const bomb = duel({ ...base, equip: { ...base.equip, utility: 'pipebomb' } });
+  assert.ok(T.abilitiesOf(bomb.r).some((a) => a.kind === 'breach'));
+  bomb.foes[0].x = 9; bomb.foes[0].y = 9; bomb.r.x = 6; bomb.r.y = 9;
+  const hp0 = bomb.foes[0].hp;
+  assert.ok(T.apply(bomb.b, { type: 'breach', uid: bomb.r.uid, x: 9, y: 9 }).ok);
+  assert.ok(bomb.foes[0].hp < hp0 || bomb.b.status === 'win');
+  assert.equal(bomb.r.charges, 0);
+  assert.ok(!T.abilitiesOf(bomb.r).some((a) => a.kind === 'breach'), 'used up');
+});
+
+test('v0.9 wolf abilities: Pounce, Second Wind, Maul (bleed), Howl; cooldowns and level unlocks', () => {
+  const base = { stars: 1, lv: 1, perks: [], gear: null, equip: { ...HEROES.rook.template.start.equip } };
+  // level 1: Pounce + Second Wind only
+  const lv1 = duel(base);
+  const ids1 = T.abilitiesOf(lv1.r).map((a) => a.id);
+  assert.ok(ids1.includes('pounce') && ids1.includes('secondwind') && !ids1.includes('maul') && !ids1.includes('howl'));
+  lv1.r.x = 9; lv1.r.y = 9;
+  const hook = lv1.foes[0];
+  hook.hp = 40; hook.maxHp = 40;
+  assert.match(T.apply(lv1.b, { type: 'maul', uid: lv1.r.uid, target: hook.uid, mode: 'maul' }).reason, /level 3/);
+  // Pounce: leap next to a foe 4 tiles away, no walking path needed
+  const r1 = T.apply(lv1.b, { type: 'pounce', uid: lv1.r.uid, target: hook.uid, mode: 'pounce' });
+  assert.ok(r1.ok, r1.reason);
+  assert.equal(Math.abs(lv1.r.x - hook.x) + Math.abs(lv1.r.y - hook.y), 1, 'landed adjacent');
+  assert.ok(r1.events.some((e) => e.typ === 'pounce') && r1.events.some((e) => e.typ === 'shot' && e.mode === 'pounce'));
+  assert.equal(lv1.r.cd.pounce, 3);
+  assert.equal(lv1.r.ap, lv1.r.maxAp - 2);
+  assert.match(T.apply(lv1.b, { type: 'pounce', uid: lv1.r.uid, target: hook.uid, mode: 'pounce' }).reason || '', /recharging/);
+  // Second Wind: 35% heal, clears bleed, then cools down
+  lv1.r.hp = 5; lv1.r.bleed = 2;
+  const sw = T.apply(lv1.b, { type: 'secondwind', uid: lv1.r.uid });
+  assert.ok(sw.ok, sw.reason);
+  assert.equal(lv1.r.hp, 5 + Math.round(lv1.r.maxHp * 0.35)); assert.equal(lv1.r.bleed, 0); assert.equal(lv1.r.cd.secondwind, 5);
+  // cooldowns tick down at the start of Rook's own turns
+  const before = lv1.r.cd.pounce;
+  T.apply(lv1.b, { type: 'endTurn' });
+  let guard = 0;
+  while (lv1.b.status === 'active' && lv1.b.acting !== lv1.r.uid && guard++ < 50) { const a = T.think(lv1.b); const r = T.apply(lv1.b, a); if (!r.ok) T.apply(lv1.b, { type: 'endTurn' }); }
+  if (lv1.b.status === 'active') assert.equal(lv1.r.cd.pounce, before - 1);
+
+  // level 5: Maul bleeds, Howl shakes foes and rallies Rook
+  const lv5 = duel({ ...base, lv: 5 }, ['slab', 'knack']);
+  const [a, c] = lv5.foes;
+  lv5.r.x = 7; lv5.r.y = 9; a.x = 8; a.y = 9; c.x = 7; c.y = 11; a.hp = 30; a.maxHp = 30;
+  const hw = T.apply(lv5.b, { type: 'howl', uid: lv5.r.uid });
+  assert.ok(hw.ok, hw.reason);
+  assert.ok(a.shaken && c.shaken && lv5.r.rallied);
+  assert.equal(lv5.r.cd.howl, 4);
+  const shaken = T.previewShot(lv5.b, a, lv5.r, 'shot');
+  a.shaken = 0; const calm = T.previewShot(lv5.b, a, lv5.r, 'shot'); a.shaken = 1;
+  assert.equal(calm.chance - shaken.chance, 15, 'Shaken: -15 aim');
+  const pm = T.previewShot(lv5.b, lv5.r, a, 'maul'), ps = T.previewShot(lv5.b, lv5.r, a, 'melee');
+  assert.equal(pm.dmg[0] - ps.dmg[0], 2, 'Maul +2 damage');
+  assert.equal(pm.ap, 3);
+  let mauled = false;
+  for (let i = 0; i < 12 && !mauled; i++) {
+    lv5.r.ap = lv5.r.maxAp; lv5.r.cd.maul = 0;
+    const r = T.apply(lv5.b, { type: 'maul', uid: lv5.r.uid, target: a.uid, mode: 'maul' });
+    assert.ok(r.ok, r.reason);
+    mauled = r.events.some((e) => e.hit);
+  }
+  assert.ok(mauled, 'a maul landed');
+  assert.equal(a.bleed, 2);
+  const hpB = a.hp;
+  // bleed ticks at the start of the bleeder's turn
+  lv5.b.queue = [lv5.r.uid, a.uid, c.uid]; lv5.b.qIndex = 0; lv5.b.acting = lv5.r.uid;
+  const ev = T.apply(lv5.b, { type: 'endTurn' });
+  assert.ok(ev.events.some((e) => e.typ === 'bleed' && e.uid === a.uid));
+  assert.equal(a.hp, hpB - 1); assert.equal(a.bleed, 1);
+  assert.ok(!lv5.r.rallied, 'rally ends with Rook\'s turn');
+});
+
+test('v0.9 Bruiser Grit + tutorial: Rook alone beats Hook, AI uses Pounce, lesson drops gear', () => {
+  let wins = 0, pounces = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const b = T.startTutorial(seed);
+    T.autoplay(b, 300);
+    assert.ok(b.status === 'win' || b.status === 'loss', 'tutorial finishes');
+    if (b.status === 'win') wins++;
+    if (b.log.some((l) => /pounces/.test(l))) pounces++;
+  }
+  assert.ok(wins >= 36, `tutorial is winnable (${wins}/40)`);
+  assert.ok(pounces > 20, 'AI uses Pounce');
+  const s = newGame(T0, 8);
+  const b = T.startTutorial(s, 3);
+  assert.deepEqual(b.units.filter((u) => u.side === 'player').map((u) => u.hero), ['rook']);
+  T.autoplay(b, 300);
+  if (b.status === 'win') {
+    const res = T.resolveTactics(s, b);
+    assert.equal(res.item, 'knuckles'); assert.equal(IT.stashCount(s, 'knuckles'), 1);
+  }
+  // Grit: a landed melee hit heals 1
+  const d = duel({ stars: 1, lv: 1, perks: [], gear: null, equip: { ...HEROES.rook.template.start.equip } }, ['slab']);
+  d.r.x = 7; d.r.y = 9; d.foes[0].x = 8; d.foes[0].y = 9; d.foes[0].hp = 40; d.r.hp = 5;
+  let healed = false;
+  for (let i = 0; i < 10 && !healed; i++) { d.r.ap = 4; const r = T.apply(d.b, { type: 'melee', uid: d.r.uid, target: d.foes[0].uid, mode: 'melee' }); healed = r.events.some((e) => e.leech); }
+  assert.ok(healed && d.r.hp > 5);
+});
+
+test('v0.9 save migration: v5 saves keep operators, Rook gets his kit, misfit Workshop mods return to stock', () => {
+  const s5 = newGame(T0, 12);
+  s5.v = 5;
+  delete s5.stash;
+  grantHero(s5, 'ivory');
+  s5.heroes.owned.rook = { xp: 40, lv: 4, stars: 2, shards: 0, perks: ['iron'], gear: 'slug' };
+  delete s5.heroes.owned.ivory.equip;
+  s5.kit = {};
+  const s = migrate(JSON.parse(serialize(s5)), T0);
+  assert.equal(s.v, 6);
+  assert.ok(s.heroes.owned.ivory, 'unlocked operators are kept');
+  const rook = s.heroes.owned.rook;
+  assert.equal(rook.lv, 4); assert.deepEqual(rook.perks, ['iron']);
+  assert.equal(rook.gear, null); assert.equal(s.kit.slug, 1, 'assault-only mod returned to stock');
+  assert.equal(rook.equip.melee, 'tyreiron'); assert.equal(IT.stashCount(s, 'pipebomb'), 1);
+  assert.deepEqual(s.heroes.owned.ivory.equip, {}, 'other operators get empty slots');
+  // round-trips and does not re-gift the starter stash
+  const again = deserialize(serialize(s), T0);
+  assert.equal(IT.stashCount(again, 'pipebomb'), 1);
+  // High Stakes KO strips non-worn gear
+  again.heroes.owned.rook.equip.body = 'platerig';
+  const b = T.startBattle({ map: docklandsMap(), player: ['rook'], enemy: ['bruno'], seed: 2, kind: 'street', highStakes: true, pvp: false,
+    loadout: { recs: { rook: { stars: 1, lv: 4, perks: [], gear: null, equip: again.heroes.owned.rook.equip } }, ammo: {}, medkits: {} } });
+  b.units[0].hp = 0; b.status = 'loss'; b.reason = 'wiped';
+  const res = T.resolveTactics(again, b);
+  assert.ok(res.lost[0].items.includes('platerig'));
+  assert.equal(again.heroes.owned.rook.equip.body, undefined);
+  assert.equal(again.heroes.owned.rook.equip.melee, 'tyreiron', 'worn starter kit is left on him');
 });
 
 console.log(`\n${pass} tests passed`);

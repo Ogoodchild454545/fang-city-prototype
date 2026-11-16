@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.8.0)
+# Fang City: Animal Gangs (playable prototype v0.9.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,28 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.9.0 (Rook the Bruiser, inventory and wolf abilities)
+
+- **One starter, the same for everyone.** A new game's crew is just **Rook**, a wolf **Bruiser**. My Crew shows him alone in the left column; there are no bosses there and no locked placeholders. The Operators screen lists only operators you own, plus a Recruit card for shard progress. Other operators still unlock with shards.
+- **Rook is a Bruiser / Fighter.** He is a melee all-rounder: 16 HP base, Tyre Iron 4–6 plus a Snub Revolver backup, and Bruiser Grit (every melee hit heals 1 HP).
+- **Character sheet.** Tap Rook in My Crew or Operators to open it:
+  - a paper doll with 13 slots: primary, sidearm, melee, head, jacket, body armour, gloves, boots, two accessories, utility, consumable and charm
+  - a stash grid with slot filters
+  - item cards that compare against what is equipped
+  - a live stat panel with ▲/▼ diffs
+  - tap to equip; drag and drop works on desktop
+- **37 street items** in four quality tiers (Worn, Street, Tuned, Custom); no magic. Gear stats apply in battle: HP, armour, melee and gun damage, aim, crit, dodge, speed, move, ammo and medkit carry, plus a Pipe Bomb throw.
+- **Where gear comes from:** fights, missions, Ice crates, and Workshop crafting (10 parts).
+- **Wolf abilities** with cooldowns and level unlocks, each with an ability-bar button, animation, sound and callouts:
+  - Pounce
+  - Second Wind
+  - Maul (bleed)
+  - Howl (Shaken / Rallied)
+- **Street lesson** is Rook alone against Hook. It is rewritten for melee: walk, Sidearm, then Pounce and Strike.
+- **Data-driven hero template.** See [docs/hero-template.md](docs/hero-template.md).
+- **Saves are version 6.** v5 saves keep every unlocked operator. Rook gets his starter kit and stash, and a Workshop mod that no longer fits his class goes back to stock.
+- **High Stakes:** a KO also loses any equipped gear above Worn quality.
 
 ## v0.8.0 (locations and prop catalogue)
 
@@ -133,7 +155,7 @@ factions you fight in Missions.
 - One shared roster of seven troop types, each with a grid-battle role, housing space, train cost/time and
   a type level (1–10). You unlock them by upgrading the Training Yard (Rats and Foxes at lv 1, Wolf Bruisers
   at lv 2, then Snake Medics, Badger Tanks, Croc Heavies and Bear Breachers).
-- **My Crew** is a landscape army screen: bosses on the left (with a locked third slot), trained troops with
+- **My Crew** is a landscape army screen: your operators on the left (tap one for the character sheet), trained troops with
   counts and levels, a housing counter, the training queue, and a Battle button that jumps to Missions.
 - Troops knocked out in a fight are lost and must be retrained; survivors come home.
 - Named bosses are collectable heroes with a once-per-battle skill: **Ma Grey** (Rally Howl, Den 2) and
@@ -152,7 +174,7 @@ Wreck The Den to win and take everything left; storages pay out as they fall (ke
 Stars: Den wrecked, 50% of structures wrecked, every defender down. `playerBaseLayout()` already converts the
 player's own base, ready for a "rivals raid you" defence mode.
 
-Saves are version 5. Older v1–v4 saves migrate automatically: a v2 base is kept, individual crew members
+Saves are version 6. Older v1–v5 saves migrate automatically: a v2 base is kept, individual crew members
 become troops of their species, and the old gang choice is dropped.
 
 ## Architecture (ready for an online backend)
@@ -163,7 +185,7 @@ js/core/   pure game rules, no DOM. Runs in the browser and in Node (tests), and
   base.js       map generation, placement, builders, timers, clearing, production, storage caps
   raid.js       rival base generator, base layout -> battle grid conversion, loot split
   rng.js        seeded deterministic RNG stored inside the JSON state
-  state.js      newGame(), versioned JSON save (v5) with v1–v4 migration, storage adapter
+  state.js      newGame(), versioned JSON save (v6) with v1–v5 migration, storage adapter
   economy.js    ticking, offline catch-up (finishes jobs at their own end time), boosts
   crew.js       troop training queue, housing, type upgrades, bosses, battle line-up
   battle.js     grid combat (variable size): AP, LOS, cover, crits, structures/turrets, boss skills, raid scoring
@@ -171,10 +193,12 @@ js/core/   pure game rules, no DOM. Runs in the browser and in Node (tests), and
   meta.js       daily rewards, jobs, objectives, missions, turf/raid setup, rewards, mock purchases
   progress.js   operator XP, ranks and perk picks
   loadout.js    ammo/medkit carry, Workshop gear, High Stakes commit/return
+  items.js      paper-doll slots, item catalogue, stash, equip/unequip, statsFor(), loot rolls
 js/ui/     rendering only
   iso.js        canvas renderer for the base: pre-rendered ground, depth-sorted sprites, culling, pan/zoom, ghost
   hideout.js    base HUD, selection panel, build menu, placement, move
-  crew.js       My Crew army screen, training queue, Armoury upgrades, boss hire
+  crew.js       My Crew army screen (operator column), training queue, Armoury upgrades
+  character.js  operator character sheet: paper doll, stash, stat diff, abilities
   missions.js   four gang-district campaigns
   battle.js     isometric DOM battle board (landscape), raid HUD, scouting preview
 assets/base/   cut-out WebP building/obstacle sprites + ground textures (tools/cut_sprites.py)

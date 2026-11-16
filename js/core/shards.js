@@ -1,5 +1,6 @@
 // Operator shards: ~30 unlock a hero. Drops from clearing bushes, mission wins,
 // and Ice crates (mock shop). Pin a target, a weekly feature, and a 10-crate pity.
+import { rollCrateLoot } from './items.js';
 import { rngNext, rngInt, rngWeighted } from './rng.js';
 import { HERO_ORDER, HEROES, ensureHeroes, grantHero } from './heroes.js';
 
@@ -207,6 +208,12 @@ function rollCrateInner(s, kind, now) {
 }
 
 export function openCrate(s, kind, now = Date.now()) {
+  const r = openCrateInner(s, kind, now);
+  if (r && r.ok) r.item = rollCrateLoot(s, kind);
+  return r;
+}
+
+function openCrateInner(s, kind, now) {
   ensureHeroes(s);
   const c = CRATES[kind];
   if (!c) return { ok: false, reason: 'Unknown crate' };

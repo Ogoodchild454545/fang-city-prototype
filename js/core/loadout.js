@@ -1,6 +1,7 @@
 // Pre-battle loadout: carry ammo and medkits from base stock, and assign Workshop gear.
 import { defOf, HEROES } from './heroes.js';
 import { perkMods } from './progress.js';
+import { weaponsFor, defaultEquip, modsOf, equippedIds } from './items.js';
 import { caps, gain } from './base.js';
 
 export const KIT = {
@@ -33,10 +34,12 @@ export function kitFits(heroId, kitId) {
   return !!(d && d.classId === k.class);
 }
 
-export function baseCarry(heroId) {
+export function baseCarry(heroId, equip) {
   const d = defOf(heroId);
   if (!d) return 6;
-  const typ = d.weapon?.typ;
+  // The gun actually carried decides how many rounds fit (a melee-only hero still packs 2).
+  const w = weaponsFor(heroId, equip ? Object.values(equip) : Object.values(defaultEquip(heroId)));
+  const typ = w.gun ? w.gun.typ : 'melee';
   if (typ === 'melee') return 2;
   if (typ === 'shotgun') return 5;
   if (typ === 'rifle') return 8;
@@ -45,16 +48,18 @@ export function baseCarry(heroId) {
 }
 
 export function carryOf(s, heroId) {
-  let c = baseCarry(heroId);
   const rec = s.heroes.owned[heroId] || {};
+  let c = baseCarry(heroId, rec.equip);
   c += perkMods(rec.perks).carry;
+  c += modsOf(equippedIds(rec)).carry;
   if (rec.gear === 'pouch') c += 2;
   return c;
 }
 
 export function medCarry(s, heroId) {
   const d = defOf(heroId);
-  return d && (d.classId === 'medic' || d.role === 'Medic' || d.role === 'Support') ? 2 : 1;
+  const extra = modsOf(equippedIds((s && s.heroes && s.heroes.owned[heroId]) || {})).medCarry;
+  return (d && (d.classId === 'medic' || d.role === 'Medic' || d.role === 'Support') ? 2 : 1) + extra;
 }
 
 export function inventoryCount(s, kitId) {

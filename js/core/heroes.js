@@ -10,6 +10,7 @@ export const CLASSES = {
   assault: { id: 'assault', name: 'Assault',       blurb: 'Mid-range rifles and shotguns. Gear tweaks the punch.' },
   demo:    { id: 'demo',    name: 'Demolitions',   blurb: 'Explosives and heavy shots. Best around barrels and vans.' },
   scout:   { id: 'scout',   name: 'Scout',         blurb: 'First around the corner. Fast, quiet, hard to pin down.' },
+  bruiser: { id: 'bruiser', name: 'Bruiser',       blurb: 'Melee all-rounder: holds the front alone, hits hard, heals on every hit.' },
 };
 
 // Species perk is always on. Heroes of the same species share it; there are no rarity tiers.
@@ -30,19 +31,40 @@ export const HERO_ORDER = ['rook', 'pip', 'lumen', 'brick', 'vesper', 'ivory', '
 
 export const HEROES = {
   rook: {
-    id: 'rook', name: 'Rook', species: 'Wolf', role: 'Assault',
-    blurb: 'A steady street rifleman. Every new crew starts with him.',
+    id: 'rook', name: 'Rook', species: 'Wolf', role: 'Bruiser',
+    blurb: 'A frontline wolf bruiser. Every new crew starts with him.',
     portrait: 'assets/heroes/rook.jpg', thumb: 'assets/heroes/rook-64.jpg',
     mood: 'heroic',
-    hp: 12, ap: 4, move: 5, aim: 72, armor: 0, speed: 8,
-    weapon: { name: 'Carbine', dmg: [3, 5], range: 8, typ: 'rifle' },
+    // Bruiser / Fighter: the melee all-rounder. Enough HP to hold the front alone,
+    // respectable damage, and his own sustain (Bruiser Grit, Second Wind).
+    hp: 16, ap: 4, move: 5, aim: 66, armor: 0, speed: 8,
+    // Bare-handed baseline; the real weapons come from his equipment (template.start).
+    weapon: { name: 'Fists', dmg: [2, 3], range: 1, typ: 'melee' },
     abilities: [
-      { id: 'shot', name: 'Snap Shot', ap: 2, kind: 'shot', text: 'Standard carbine shot.' },
-      { id: 'overwatch', name: 'Overwatch', ap: 2, kind: 'overwatch', text: 'Shoot the first foe who moves in range.' },
+      { id: 'melee', name: 'Strike', ap: 2, kind: 'melee', range: 1, melee: true, text: 'Hit with the equipped melee weapon.' },
+      { id: 'shot', name: 'Sidearm', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'pounce', name: 'Pounce', ap: 2, kind: 'pounce', range: 4, cd: 3, aim: 10, melee: true, unlock: 1, sfx: 'pounce',
+        text: 'Leap onto a foe up to 4 tiles away (no overwatch can catch the leap), then strike at +10 aim.' },
+      { id: 'secondwind', name: 'Second Wind', ap: 1, kind: 'secondwind', cd: 5, heal: 0.35, unlock: 1, sfx: 'secondwind',
+        text: 'Catch your breath: heal 35% of max HP and shake off bleed and venom.' },
+      { id: 'maul', name: 'Maul', ap: 3, kind: 'maul', range: 1, cd: 2, dmgAdd: 2, bleed: 2, melee: true, unlock: 3, sfx: 'maul',
+        text: 'Savage bite and swing: +2 damage and the target bleeds 1 HP a turn for 2 turns.' },
+      { id: 'howl', name: 'Howl', ap: 1, kind: 'howl', cd: 4, radius: 5, unlock: 5, sfx: 'howl',
+        text: 'Foes within 5 tiles are Shaken (-15 aim); you and nearby crew are Rallied (+10 aim) until your next turn.' },
     ],
-    passive: { id: 'pack', name: 'Pack Sense', text: '+15% hit when an ally is next to Rook or the target.' },
-    classId: 'assault',
-    bio: "A dock-road rifleman who walked out of a Grey Pack setup with a carbine and a younger cousin to look after. He talks little, covers well, and does not leave crew on the ground.",
+    passive: { id: 'grit', name: 'Bruiser Grit', text: 'Every melee hit heals Rook 1 HP — he keeps himself standing on the front line.' },
+    classId: 'bruiser',
+    // Data-driven template: anything built from Rook later (new operators, rivals) copies this shape.
+    template: {
+      class: 'bruiser',
+      base: { crit: 5, dodge: 0 },
+      slots: ['primary', 'sidearm', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      start: {
+        equip: { melee: 'tyreiron', sidearm: 'snub', jacket: 'hoodie', boots: 'trainers', gloves: 'tape', consumable: 'dressings' },
+        stash: ['flatcap', 'gilet', 'chain', 'pipebomb'],
+      },
+    },
+    bio: "A dock-road bruiser who walked out of a Grey Pack setup with a tyre iron, a borrowed revolver and a younger cousin to look after. He talks little, goes in first, and does not leave crew on the ground.",
     quips: {
       move: ["Round the crates.", "On me.", "Keep it tight."],
       shoot: ["I have him.", "Steady.", "Down you go."],
@@ -50,7 +72,7 @@ export const HEROES = {
       revive: ["On your feet.", "Up. We are not finished."]
     },
 
-    tags: ['rifle', 'wolf'],
+    tags: ['melee', 'wolf', 'bruiser'],
     unlock: { kind: 'start' },
   },
   pip: {

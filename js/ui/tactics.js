@@ -1,4 +1,6 @@
 // Canvas tactics view: docklands yard, pan/zoom, hitchance, cover, speed queue and PvP timer.
+import { ITEMS, QUALITY } from '../core/items.js';
+import { ITEM_ICO } from './character.js';
 import * as T from '../core/tactics.js';
 import { defOf, classOf, speciesPerk } from '../core/heroes.js';
 import { tile, inB, DIRS4 } from '../core/tmaps.js';
@@ -571,7 +573,7 @@ function modeApCost(mode, def) {
   if (mode === 'medkit') return 2;
   if (mode === 'overwatch' || mode === 'dash' || mode === 'sprint') return 2;
   const a = (def && def.abilities || []).find((x) => x.id === mode || x.kind === mode);
-  return a && a.ap || (mode === 'shot' ? 2 : 0);
+  return a && a.ap || (mode === 'shot' || mode === 'breach' ? 2 : 0);
 }
 
 function drawDestCover(g, b, x, y, sx, sy, z) {
@@ -864,7 +866,7 @@ function draw(ctx) {
     }
     g.restore(); });
     if (sel && u.mode !== 'breach' && un.side !== sel.side && un.hp > 0 && (u.hover && u.hover.uid === un.uid || u.mode)) {
-      const prev = T.previewShot(b, sel, un, u.mode === 'aimed' ? 'aimed' : u.mode === 'melee' || u.mode === 'knife' || u.mode === 'roll' ? u.mode : u.mode === 'venom' ? 'venom' : u.mode === 'suppress' ? 'suppress' : 'shot');
+      const prev = T.previewShot(b, sel, un, ['aimed', 'melee', 'knife', 'roll', 'venom', 'suppress', 'pounce', 'maul'].includes(u.mode) ? u.mode : defaultMode(sel, un));
       if (prev && prev.ok) {
         // queued: laid out after all units so it never sits on a neighbour's HP bar
         const showParts = !!(u.hover && u.hover.uid === un.uid && prev.parts && prev.parts.length);
@@ -887,6 +889,21 @@ function draw(ctx) {
 
   Vfx.draw(g, fx, z);
 
+  // Howl: a shock ring out to the ability radius (a Manhattan diamond, exactly the tiles it reaches)
+  if (u.howlRing) {
+    const k = (now - u.howlRing.t0) / 900;
+    if (k >= 1) u.howlRing = null;
+    else {
+      const { x: hx, y: hy, r } = u.howlRing, rr = r * Math.min(1, k * 1.6);
+      const pts = [toWorld(hx + rr, hy), toWorld(hx, hy + rr), toWorld(hx - rr, hy), toWorld(hx, hy - rr)];
+      g.save();
+      g.globalAlpha = Math.max(0, 1 - k);
+      g.strokeStyle = '#e0a526'; g.lineWidth = 3 * z; g.shadowColor = 'rgba(224,165,38,.8)'; g.shadowBlur = 12 * z;
+      g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x * z, p.y * z) : g.moveTo(p.x * z, p.y * z))); g.closePath(); g.stroke();
+      g.fillStyle = 'rgba(224,165,38,0.08)'; g.fill();
+      g.restore();
+    }
+  }
   // boom flashes
   u.booms = (u.booms || []).filter((bm) => now < bm.until);
   for (const bm of u.booms) {
@@ -959,6 +976,7 @@ function loop(ctx) {
     const A = pts[i], B = pts[i + 1];
     a.x = A.x + (B.x - A.x) * frac;
     a.y = A.y + (B.y - A.y) * frac;
+    if (a.leap) { const lift = Math.sin(Math.PI * t) * 0.7; a.x -= lift; a.y -= lift; }
     if (a.stepI !== i) { a.stepI = i; Audio.play('footstep'); }
     if (t >= 1) u.pathAnim = null;
   }
@@ -1026,6 +1044,13 @@ function bindCanvas(ctx) {
   }, { passive: false });
 }
 
+// Tapping a foe with no ability picked: bruisers swing when adjacent (or have no gun), others shoot.
+function defaultMode(sel, foe) {
+  const adj = Math.abs(sel.x - foe.x) + Math.abs(sel.y - foe.y) === 1;
+  if (defOf(sel.hero).template && sel.mel && (adj || !T.gunOf(sel))) return 'melee';
+  return 'shot';
+}
+
 function clickTile(ctx, x, y) {
   const b = ctx.state.tactics, u = ui(ctx);
   if (!b || u.busy || b.status !== 'active' || b.side !== 'player') return;
@@ -1047,7 +1072,7 @@ function clickTile(ctx, x, y) {
   }
   if (occ && occ.side === 'player' && occ.uid !== sel.uid) return;
   if (occ && occ.side === 'enemy') {
-    const mode = u.mode || 'shot';
+    const mode = u.mode || defaultMode(sel, occ);
     return doAct(ctx, { type: mode, uid: sel.uid, target: occ.uid, mode });
   }
   if (T.isExplosiveAt(b, x, y)) {
@@ -1086,7 +1111,7 @@ async function playEvents(ctx, events) {
       if (att && def && cv) {
         const a = toWorld(att.x, att.y), tw = toWorld(def.x, def.y);
         const zz = u.cam.z;
-        const melee = ev.mode === 'melee' || ev.mode === 'knife' || ev.mode === 'lunge' || ev.mode === 'roll';
+        const melee = ev.mode === 'melee' || ev.mode === 'knife' || ev.mode === 'lunge' || ev.mode === 'roll' || ev.mode === 'pounce' || ev.mode === 'maul' || (ev.typ === 'shot' && !T.gunOf(att));
         u.flash = { uid: def.uid, until: performance.now() + 220, muzzle: !melee };
         u.cutFocus = { uids: [att.uid, def.uid], until: performance.now() + 1600 };
         Actors.faceToward(att, att.x, att.y, def.x, def.y);
@@ -1095,7 +1120,8 @@ async function playEvents(ctx, events) {
           Vfx.spawnCallout(Vfx.ensure(u), a.x * zz, (a.y - 30) * zz, 'OVERWATCH', 'overwatch');
           Audio.play('overwatch');
         }
-        Audio.playShoot(att.hero);
+        Audio.playShoot(att.hero, melee);
+        if (ev.mode === 'maul') { Audio.play('maul'); Vfx.spawnCallout(Vfx.ensure(u), a.x * zz, (a.y - Actors.actorHeight(att.hero) - 22) * zz, 'MAUL', 'crit'); }
         say(u, b, ev.uid, 'shoot');
         const midX = ((a.x + tw.x) / 2) * zz, midY = ((a.y + tw.y) / 2) * zz;
         Vfx.panCam(Vfx.ensure(u), u.cam, (a.x + tw.x) / 2, (a.y + tw.y) / 2, cv, {
@@ -1126,11 +1152,69 @@ async function playEvents(ctx, events) {
           Vfx.spawnCallout(u.fx, tx, (tw.y - tH - 22) * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
           u.floats.push({ t: performance.now(), x: tx + fac * 13 * zz, y: (tw.y - tH * 0.7) * zz, z0: zz, text: ev.crit ? `-${ev.dmg}!` : `-${ev.dmg}`, heal: 0, crit: ev.crit, dmg: 1 });
           if (ev.ko) say(u, b, ev.target, 'ko');
+          if (ev.bleed && !ev.ko) u.floats.push({ t: performance.now() + 250, x: tx - fac * 16 * zz, y: (tw.y - tH * 0.45) * zz, z0: zz, text: 'BLEEDING', heal: 0, dmg: 1 });
+          if (ev.leech) u.floats.push({ t: performance.now() + 150, x: a.x * zz, y: (a.y - Actors.actorHeight(att.hero) * 0.7) * zz, z0: zz, text: '+1 Grit', heal: 1 });
           await wait(Math.max(0, u.hitstop - performance.now() + 40));
         } else {
           Vfx.spawnCallout(u.fx, tx, (tw.y - tH - 22) * zz, 'MISS', 'miss');
         }
         await wait(240);
+      }
+    }
+    if (ev.typ === 'pounce') {
+      const pu = b.units.find((x) => x.uid === ev.uid);
+      const tg = b.units.find((x) => x.uid === ev.target);
+      if (pu) {
+        Audio.play('pounce');
+        if (tg) Actors.faceToward(pu, ev.from.x, ev.from.y, tg.x, tg.y);
+        Actors.playClip(pu, 'ability');
+        const p = toWorld(ev.from.x, ev.from.y);
+        Vfx.spawnCallout(Vfx.ensure(u), p.x * u.cam.z, (p.y - Actors.actorHeight(pu.hero) - 22) * u.cam.z, 'POUNCE', 'crit');
+        u.pathAnim = { uid: ev.uid, path: [ev.to], from: ev.from, t0: performance.now(), dur: 300, x: ev.from.x, y: ev.from.y, leap: 1 };
+        await wait(300);
+        u.pathAnim = null;
+        u.shake = Math.max(u.shake || 0, 5);
+      }
+    }
+    if (ev.typ === 'howl') {
+      const hu = b.units.find((x) => x.uid === ev.uid);
+      if (hu) {
+        Audio.play('howl');
+        Actors.playClip(hu, 'ability');
+        const p = toWorld(hu.x, hu.y), fx = Vfx.ensure(u);
+        Vfx.spawnCallout(fx, p.x * u.cam.z, (p.y - Actors.actorHeight(hu.hero) - 22) * u.cam.z, 'HOWL', 'crit');
+        u.howlRing = { x: hu.x, y: hu.y, r: ev.radius || 5, t0: performance.now() };
+        for (const id of ev.shaken || []) {
+          const f = b.units.find((x) => x.uid === id); if (!f) continue;
+          const q = toWorld(f.x, f.y);
+          u.floats.push({ t: performance.now() + 200, x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(f.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: 'SHAKEN', heal: 0, dmg: 1 });
+        }
+        for (const id of ev.rallied || []) {
+          const f = b.units.find((x) => x.uid === id); if (!f) continue;
+          const q = toWorld(f.x, f.y);
+          u.floats.push({ t: performance.now() + 200, x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(f.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: 'RALLIED', heal: 1 });
+        }
+        await wait(700);
+      }
+    }
+    if (ev.typ === 'bleed') {
+      const bu = b.units.find((x) => x.uid === ev.uid);
+      if (bu) {
+        const q = toWorld(bu.x, bu.y);
+        Audio.play('bleed');
+        u.floats.push({ t: performance.now(), x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(bu.hero) * 0.7) * u.cam.z, z0: u.cam.z, text: '-1 bleed', heal: 0, dmg: 1 });
+        Actors.playClip(bu, bu.hp <= 0 ? 'ko' : 'hit');
+        await wait(260);
+      }
+    }
+    if (ev.typ === 'heal' && ev.ability === 'secondwind') {
+      const su = b.units.find((x) => x.uid === ev.uid);
+      if (su) {
+        Audio.play('secondwind');
+        Actors.playClip(su, 'ability');
+        const p = toWorld(su.x, su.y);
+        Vfx.spawnCallout(Vfx.ensure(u), p.x * u.cam.z, (p.y - Actors.actorHeight(su.hero) - 22) * u.cam.z, 'SECOND WIND', 'overwatch');
+        await wait(260);
       }
     }
     if (ev.typ === 'heal') {
@@ -1282,6 +1366,11 @@ function resultHtml(res, squad) {
     const sd = res.shardDrop, d = sd.id ? defOf(sd.id) : null;
     tiles.push(`<div class="rt shard">${d ? `<img src="${d.thumb || d.portrait}" alt="">` : '<i class="trico">◆</i>'}<b data-count="${sd.added}" data-sign="1">0</b><span>${esc(sd.name)} shards${sd.unlocked ? ' · UNLOCKED' : ''}</span></div>`);
   }
+  if (res.item && ITEMS[res.item]) {
+    const it = ITEMS[res.item];
+    tiles.push(`<div class="rt loot" title="${esc(it.text || '')}"><i class="trico">${ITEM_ICO[res.item] || '🎒'}</i><b style="color:${QUALITY[it.q].col}">${esc(it.name)}</b><span>New gear · ${esc(QUALITY[it.q].name)}</span></div>`);
+  }
+  for (const l of res.lost || []) if (l.items && l.items.length) tiles.push(`<div class="rt troph neg"><i class="trico">🎒</i><b>${l.items.length}</b><span>${esc(l.name)}'s gear taken: ${esc(l.items.map((x) => ITEMS[x]?.name).join(', '))}</span></div>`);
   let league = '';
   if (res.trophiesNow != null) {
     const lg = leagueOf(res.trophiesNow);
@@ -1303,7 +1392,7 @@ function resultHtml(res, squad) {
       <div class="rsquad">${sq}</div>
       ${quip}
       <div class="row rbtns">
-        <button class="btn block" data-act="closeModal" data-then="heroes">Operators</button>
+        <button class="btn block" data-act="closeModal" data-then="crew">${res.item ? 'Equip new gear' : 'My Crew'}</button>
         ${res.practice ? '<button class="btn red block" data-act="closeModal" data-then="editor">Back to editor</button>' : `<button class="btn red block" data-act="closeModal">${res.kind === 'tutorial' ? 'Back to the hideout' : 'Continue'}</button>`}
       </div>
     </div>
@@ -1367,15 +1456,22 @@ function coach(b, u) {
   const hook = b.units.find((x) => x.hero === 'hook');
   const actor = T.actingUnit(b);
   if (actor && actor.hero !== 'rook') return 'Turns go one operator at a time, fastest first. Hook is up now — wait for Rook’s next go, or finish him if you can.';
-  if (rook && !rook.moved) return 'Turns go one operator at a time, fastest first — Rook is up. Blue tiles are his walk range (1 AP per tile). Move him <b>south around the crate</b>, then toward Hook’s side — a front-on shot is weak because of cover.';
-  if (rook && hook) {
-    const prev = T.previewShot(b, rook, hook, 'shot');
-    if (prev && prev.ok) {
-      return `Hook’s hit chance is <b style="color:${chanceColor(prev.chance)}">${prev.chance}%</b> (${T.coverLabel(prev.cover)}${prev.flanked ? ', flanked' : ''}). Flank for a better shot, then tap Hook to fire.`;
-    }
+  if (!rook || !hook) return '';
+  const dist = Math.abs(rook.x - hook.x) + Math.abs(rook.y - hook.y);
+  const pounce = T.abilitiesOf(rook).find((a) => a.id === 'pounce');
+  if (b.turn === 1 && !rook.moved && !rook.acted && dist > 4) return 'Rook is a <b>Bruiser</b>: he wins up close. Blue tiles are his walk range (1 AP per tile). Walk him <b>2 tiles</b> toward Hook and keep 2 AP for an action.';
+  if (dist > 1 && pounce && !T.cooldownLeft(rook, 'pounce') && rook.ap >= 2) {
+    const prev = T.previewShot(b, rook, hook, 'pounce');
+    if (prev && prev.ok) return `In range. Pick <b>Pounce</b> and tap Hook — Rook leaps in (no overwatch can catch him) and swings at <b style="color:${chanceColor(prev.chance)}">${prev.chance}%</b>.`;
+    return 'Close the gap: <b>Pounce</b> reaches foes up to 4 tiles away.';
   }
-  if (rook && rook.ap >= 2) return 'You can <b>Overwatch</b> to shoot when Hook moves, or take another action, then <b>End turn</b>.';
-  return 'End the turn when you are out of AP. The next fastest operator goes next — Overwatch can catch Hook mid-stride.';
+  if (dist === 1 && rook.ap >= 2) {
+    const prev = T.previewShot(b, rook, hook, 'melee');
+    return `Tap Hook to <b>Strike</b> with the tyre iron${prev && prev.ok ? ` (<b style="color:${chanceColor(prev.chance)}">${prev.chance}%</b>, ${prev.dmg[0]}–${prev.dmg[1]} dmg)` : ''}. Every melee hit heals Rook 1 HP (Bruiser Grit).`;
+  }
+  if (rook.hp <= rook.maxHp * 0.5 && !T.cooldownLeft(rook, 'secondwind') && rook.ap >= 1) return 'Hurt? <b>Second Wind</b> heals 35% of his health for 1 AP.';
+  if (dist > 1 && rook.ap >= 2) return dist <= 6 ? 'Just out of <b>Pounce</b> range (4 tiles). Fire the <b>Sidearm</b> — tap it, then tap Hook — to soften him up. Next turn, Pounce.' : 'Out of reach. Walk closer — Pounce reaches 4 tiles, the Sidearm 6.';
+  return 'Out of AP. <b>End turn</b> — the next fastest operator goes next. Tap Rook later to open his inventory and gear him up.';
 }
 
 function queueHtml(b) {
@@ -1406,8 +1502,12 @@ const ICONS = {
   breach: '<path d="M12 2l2 6 6-3-3 6 6 2-6 2 3 6-6-3-2 6-2-6-6 3 3-6-6-2 6-2-3-6 6 3z"/>',
   suppress: '<path d="M3 7h12M3 12h15M3 17h12"/><path d="M17 5l4 2-4 2M19 10l3 2-3 2M17 15l4 2-4 2"/>',
   venom: '<path d="M12 2c3 5 7 9 7 13a7 7 0 01-14 0c0-4 4-8 7-13z"/><path d="M9 15a3 3 0 003 3"/>',
+  pounce: '<path d="M3 19c3-9 9-13 18-14"/><path d="M15 4h6v6"/><path d="M5 21l3-3M9 21l2-2"/>',
+  maul: '<path d="M4 4l5 7M9 3l4 8M14 3l3 8M19 4l1 7"/><path d="M4 15c3 4 13 4 16 0"/>',
+  secondwind: '<path d="M12 21s-8-5-8-11a4.5 4.5 0 018-3 4.5 4.5 0 018 3c0 6-8 11-8 11z"/><path d="M9 12h6M12 9v6"/>',
+  howl: '<path d="M4 14l5-1 3-6 2 4 6-1-4 5 2 6-5-3-5 3 1-5z"/><path d="M19 3c1 1 2 3 2 5M16 4c1 1 1.5 2 1.5 3"/>',
 };
-function abilityIcon(kind) {
+export function abilityIcon(kind) {
   const d = ICONS[kind] || ICONS.shot;
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 }
@@ -1449,7 +1549,7 @@ export function render(ctx) {
   }
   const sel = b.units.find((x) => x.uid === u.sel) || actor || b.units.find((x) => x.side === 'player');
   const def = sel ? defOf(sel.hero) : null;
-  const abs = def ? def.abilities : [];
+  const abs = sel ? T.abilitiesOf(sel) : [];
   const cls = def ? classOf(def) : null;
   const perk = def ? speciesPerk(def.species) : null;
   const coachHtml = coach(b, u);
@@ -1458,15 +1558,19 @@ export function render(ctx) {
   const canAct = b.side === 'player' && actor && actor.side === 'player' && !u.busy;
   const mine = sel && sel.side === 'player';
   const trayItems = sel && mine ? [
-    ...abs.map((a) => ({ id: a.id, kind: a.kind, name: a.name, ap: a.ap, text: a.text || '', act: 'tmode' })),
+    ...abs.map((a) => ({
+      id: a.id, kind: a.kind, name: a.name, ap: a.ap, act: 'tmode', cd: a.cd ? T.cooldownLeft(sel, a.id) : 0, count: a.gear ? sel.charges : 0,
+      text: (a.text || '') + (a.id === 'melee' && sel.mel && def.template ? ` (${sel.mel.name} ${sel.mel.dmg[0] + (sel.mdmg || 0)}–${sel.mel.dmg[1] + (sel.mdmg || 0)})` : '')
+        + (a.gun && T.gunOf(sel) ? ` (${T.gunOf(sel).name} ${T.gunOf(sel).dmg[0]}–${T.gunOf(sel).dmg[1]}, range ${T.gunOf(sel).range})` : '') + (a.cd ? ` Cooldown ${a.cd} turns.` : ''),
+    })),
     ...(sel.medkits ? [{ id: 'medkit', kind: 'heal', name: 'Medkit', ap: 2, text: `Heal yourself or an adjacent ally. ${sel.medkits} left.`, act: 'tmode', count: sel.medkits }] : []),
     { id: 'hunker', kind: 'hunker', name: 'Hunker', ap: 1, text: 'Brace in cover: harder to hit until your next turn.', act: 'doHunker' },
   ] : [];
   const trayBtns = trayItems.map((a) => {
     const on = u.mode === a.id || u.mode === a.kind || (a.id === 'hunker' && sel.fortify);
-    const why = !canAct ? 'Not this operator\u2019s turn' : (sel.ap < a.ap ? `Needs ${a.ap} AP` : '');
-    return `<button class="tabl ${on ? 'on' : ''} ${why ? 'off' : ''}" data-act="${a.act}" data-mode="${a.id}" data-apcost="${a.ap}" title="${esc(a.name + ' \u2014 ' + a.text + (why ? ' (' + why + ')' : ''))}" ${why ? 'disabled' : ''}>
-      <span class="tico">${abilityIcon(a.kind)}${a.count ? `<em>${a.count}</em>` : ''}</span>
+    const why = !canAct ? 'Not this operator\u2019s turn' : a.cd ? `Recharging: ${a.cd} turn${a.cd > 1 ? 's' : ''}` : (sel.ap < a.ap ? `Needs ${a.ap} AP` : '');
+    return `<button class="tabl ${on ? 'on' : ''} ${why ? 'off' : ''} ${a.cd ? 'cool' : ''}" data-act="${a.act}" data-mode="${a.id}" data-apcost="${a.ap}" title="${esc(a.name + ' \u2014 ' + a.text + (why ? ' (' + why + ')' : ''))}" ${why ? 'disabled' : ''}>
+      <span class="tico">${abilityIcon(a.kind)}${a.count ? `<em>${a.count}</em>` : ''}${a.cd ? `<b class="tcd">${a.cd}</b>` : ''}</span>
       <span class="tlbl ${a.name.length > 10 ? 'long' : ''}">${esc(a.name)}</span>
       ${apPips(a.ap, a.ap)}
     </button>`;
@@ -1497,7 +1601,7 @@ export function render(ctx) {
     </div>
     ${queueHtml(b)}
     ${banner}
-    ${coachHtml ? `<div class="tcoach">${coachHtml}</div>` : ''}
+    ${coachHtml ? `<div class="tcoach ${tip ? 'top' : ''}">${coachHtml}</div>` : ''}
     ${sel ? `
     <div class="tdock">
       <div class="thero ${sel.side === 'enemy' ? 'foe' : ''}">
@@ -1505,7 +1609,7 @@ export function render(ctx) {
         <div class="tinfo">
           <div class="tuname">${esc(def.name)} <span class="tcls">${esc((cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
           <div class="thp"><i style="width:${Math.max(0, Math.round(100 * sel.hp / sel.maxHp))}%"></i><span>${sel.hp}/${sel.maxHp}</span></div>
-          <div class="tstats">${apPips(sel.ap, sel.maxAp, 'big')}<span>Mv ${sel.move}</span><span>Spd ${sel.speed || def.speed}</span><span>${ico('ammo')} ${sel.ammo || 0}</span>${sel.medkits ? `<span>${ico('medkits')} ${sel.medkits}</span>` : ''}${sel.overwatch ? '<span class="tow">OW</span>' : ''}</div>
+          <div class="tstats">${apPips(sel.ap, sel.maxAp, 'big')}<span>Mv ${sel.move}</span><span>Spd ${sel.speed || def.speed}</span><span>${ico('ammo')} ${sel.ammo || 0}</span>${sel.medkits ? `<span>${ico('medkits')} ${sel.medkits}</span>` : ''}${sel.overwatch ? '<span class="tow">OW</span>' : ''}${sel.bleed ? `<span class="tst bleed">Bleed ${sel.bleed}</span>` : ''}${sel.shaken ? '<span class="tst shaken">Shaken</span>' : ''}${sel.rallied ? '<span class="tst rallied">Rallied</span>' : ''}${sel.dodge ? `<span title="Dodge">Dg ${sel.dodge}%</span>` : ''}</div>
         </div>
       </div>
       <div class="ttray">
@@ -1539,7 +1643,7 @@ export function mount(ctx, el) {
 export const actions = {
   tmode(ctx, el) {
     const mode = el.dataset.mode;
-    const inst = ['overwatch', 'dash', 'sprint', 'fortify', 'hunker'];
+    const inst = ['overwatch', 'dash', 'sprint', 'fortify', 'hunker', 'secondwind', 'howl'];
     const u = ui(ctx);
     if (!u.sel) return;
     if (inst.includes(mode)) return doAct(ctx, { type: mode, uid: u.sel });

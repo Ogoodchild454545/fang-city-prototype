@@ -1,9 +1,12 @@
-// "My Crew" army screen: bosses on the left, trained troops + housing, the training queue,
+// "My Crew" army screen: your operators on the left (a new crew has only Rook; bosses are retired from this screen), trained troops + housing, the training queue,
 // troop types to train, and the Armoury upgrades tab. Rules live in core/crew.js.
 import { SPECIES, ROLES, TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER, BOSS_SLOTS, DEPLOY_CAP, GEAR } from '../core/data.js';
 import * as C from '../core/crew.js';
 import * as BS from '../core/base.js';
 import { fmt, money, dur, esc, ico } from './fmt.js';
+import { HEROES, HERO_ORDER, classOf } from '../core/heroes.js';
+import { statsFor, ensureItems, equippedIds } from '../core/items.js';
+import { rankName } from '../core/progress.js';
 
 const img = (t) => SPECIES[TROOPS[t].species].img;
 
@@ -22,6 +25,20 @@ function bossSlot(ctx, id, i) {
   </div>`;
 }
 
+// Left column: your operators. A new crew has exactly one — Rook. Tap to open his character sheet.
+function opSlot(ctx, id) {
+  const s = ctx.state, d = HEROES[id], rec = s.heroes.owned[id];
+  const st = statsFor(id, { stars: rec.stars, lv: rec.lv, perks: rec.perks, gear: rec.gear, equip: rec.equip || {} });
+  const n = equippedIds(rec).length;
+  return `<button class="bslot own opslot" data-act="openHero" data-id="${id}" title="Open ${esc(d.name)}'s gear and abilities">
+    <div class="bpor" style="background-image:url(${d.thumb || d.portrait})"><span class="blv">${rec.lv || 1}</span></div>
+    <div class="bmeta"><b class="h small">${esc(d.name)}</b>
+      <span class="tiny gold">${esc(d.species)} · ${esc((classOf(d) || {}).name || d.role)} · ${esc(rankName(rec.lv || 1))}</span>
+      <span class="tiny dim">HP ${st.hp} · ${st.mel ? esc(st.mel.name) : esc(st.gun ? st.gun.name : '')} · ${n} gear</span>
+      ${rec.pendingPerk ? '<span class="tiny green">Perk ready</span>' : '<span class="tiny faint">Tap for inventory</span>'}</div>
+  </button>`;
+}
+
 function troopChip(ctx, t, n) {
   const lv = C.troopLevel(ctx.state, t);
   return `<button class="tchip" data-act="troopInfo" data-t="${t}"><div class="tpor" style="background-image:url(${img(t)})"><span class="tn">x${n}</span><span class="tl">${lv}</span></div><span class="tiny">${TROOPS[t].name.split(' ')[1]}</span></button>`;
@@ -36,10 +53,11 @@ function armyTab(ctx) {
   const remain = C.queueRemaining(s, now);
   const skip = C.skipCostSec(remain);
   const head = s.queue[0];
-  const slots = Array.from({ length: BOSS_SLOTS }, (_, i) => BOSS_ORDER[i] || null);
+  ensureItems(s);
+  const ops = HERO_ORDER.filter((id) => s.heroes.owned[id]);
   return `
   <div class="armyscr">
-    <div class="bosscol"><div class="sect" style="margin-top:0">Bosses</div>${slots.map((id, i) => bossSlot(ctx, id, i)).join('')}</div>
+    <div class="bosscol crewcol"><div class="sect" style="margin-top:0">Crew</div>${ops.map((id) => opSlot(ctx, id)).join('')}</div>
     <div class="armymain">
       <div class="armyhead">
         <div class="sect" style="margin:0;flex:1">Troops</div>

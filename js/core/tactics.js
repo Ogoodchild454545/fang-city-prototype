@@ -9,6 +9,7 @@ import { inB, tile, tutorialMap, avenueMap, alleyMap, crossingMap, pickDeploys, 
 import { mapFromJson } from './mapfmt.js';
 import { propDef } from './catalog.js';
 import { findMatch, pvpStake, settlePvp, opponentLabel } from './pvp.js';
+import { statsFor, defaultEquip, rollBattleLoot, ITEMS } from './items.js';
 
 export const MANH = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
 
@@ -80,14 +81,40 @@ function squadIds(b, side) {
   return b.units.filter((u) => u.side === side).map((u) => u.hero);
 }
 
+// The gun a unit shoots with and the weapon it swings (from its equipment; legacy units fall back
+// to the hero's built-in weapon).
+export function gunOf(u) {
+  if (u.gun !== undefined) return u.gun;
+  const w = defOf(u.hero).weapon;
+  return w.typ !== 'melee' ? w : null;
+}
+export function melOf(u) {
+  if (u.mel !== undefined && u.mel) return u.mel;
+  return defOf(u.hero).weapon;
+}
+// Abilities this unit can use right now (unlocked by level), plus any granted by gear.
+export function abilitiesOf(u) {
+  const d = defOf(u.hero);
+  const out = (d.abilities || []).filter((a) => !a.unlock || (u.lv || 1) >= a.unlock);
+  if ((u.charges || 0) > 0 && !out.some((a) => a.kind === 'breach')) {
+    out.push({ id: 'breach', name: 'Pipe Bomb', ap: CHARGE.ap, kind: 'breach', gear: 1, text: `Throw a pipe bomb up to ${CHARGE.range} tiles: ${CHARGE.dmg} damage around the tile, sets off barrels and cars. ${u.charges} left.` });
+  }
+  return out;
+}
+export function abilityOf(u, id) { return (defOf(u.hero).abilities || []).find((a) => a.id === id) || null; }
+export const cooldownLeft = (u, id) => ((u.cd || {})[id] || 0);
+
 export function previewShot(b, att, def, mode = 'shot') {
   if (!att || !def || att.hp <= 0 || def.hp <= 0) return null;
   const defn = defOf(att.hero);
   const tdef = defOf(def.hero);
-  const w = defn.weapon;
+  const abl = defn.abilities.find((a) => a.id === mode) || null;
+  const gun = gunOf(att);
+  if (abl && abl.gun && !gun) return { ok: false, reason: 'No gun equipped', chance: 0, dist: 0, cover: 0 };
+  const melee = mode === 'melee' || mode === 'lunge' || mode === 'roll' || !!(abl && abl.melee) || !gun;
+  const w = melee ? melOf(att) : gun;
   const dist = MANH(att.x, att.y, def.x, def.y);
-  const melee = mode === 'melee' || mode === 'lunge' || mode === 'roll' || w.typ === 'melee';
-  const range = melee ? (mode === 'lunge' ? 1 : (defn.abilities.find((a) => a.id === mode)?.range || 1)) : (w.range + (att.rangeBonus || 0));
+  const range = melee ? (mode === 'lunge' ? 1 : (abl?.range || 1)) : (w.range + (att.rangeBonus || 0));
   if (dist < 1) return null;
   if (!melee && dist > range) return { ok: false, reason: 'Out of range', chance: 0, dist, cover: 0 };
   if (!melee && (att.ammo || 0) <= 0) return { ok: false, reason: 'Out of ammo', chance: 0, dist, cover: 0, empty: true };
@@ -106,6 +133,10 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (mode === 'overwatch' && !(att.perks || []).includes('trigger')) { chance -= 15; push('Overwatch', -15); }
   if (mode === 'suppress') { chance += 10; push('Suppress', +10); }
   if (mode === 'knife' && flanked) { chance += 20; push('Knife flank', +20); }
+  if (abl && abl.aim) { chance += abl.aim; push(abl.name, abl.aim); }
+  if (att.rallied) { chance += 10; push('Rallied', +10); }
+  if (att.shaken) { chance -= 15; push('Shaken', -15); }
+  if (def.dodge) { chance -= def.dodge; push('Dodge', -def.dodge); }
   if (cover === 1) { chance -= 20; push('Half cover', -20); }
   if (cover === 2) { chance -= 40; push('Full cover', -40); }
   if (flanked) { chance += 10; push('Flank', +10); }
@@ -144,6 +175,7 @@ export function previewShot(b, att, def, mode = 'shot') {
   let [d0, d1] = melee
     ? (defn.abilities.find((a) => a.id === mode && a.dmg)?.dmg || w.dmg)
     : w.dmg;
+  if (abl && abl.dmgAdd) { d0 += abl.dmgAdd; d1 += abl.dmgAdd; }
   if (mode === 'suppress') { d0 = Math.max(1, Math.floor(d0 / 2)); d1 = Math.max(1, Math.floor(d1 / 2)); }
   d0 += mu.dmg; d1 += mu.dmg;
   if (melee && att.mdmg) { d0 += att.mdmg; d1 += att.mdmg; }
@@ -152,13 +184,13 @@ export function previewShot(b, att, def, mode = 'shot') {
   const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : mode === 'overwatch' ? 0 : (defn.abilities.find((a) => a.id === mode)?.ap || 2);
   return {
     ok: true, chance, cover, flanked, dist, melee, dmg: [Math.max(1, d0), Math.max(1, d1)],
-    ap, mode, note: mu.note, los: true, parts,
+    ap, mode, note: mu.note, los: true, parts, weapon: w.name, bleed: abl?.bleed || 0,
   };
 }
 
 export function critChance(att, mode) {
   const defn = defOf(att.hero);
-  let c = 8;
+  let c = 8 + (att.crit || 0);
   if (defn.passive?.id === 'cold' && !att.moved) c += 15;
   if (mode === 'aimed') c += 8;
   return c;
@@ -215,18 +247,19 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
   const lv = opts.lv || 1;
   const perks = opts.perks || [];
   const gear = opts.gear || null;
-  const sb = starBonus(stars);
-  const lb = levelBonus(lv);
-  const pm = perkMods(perks);
-  const km = kitMods(gear);
-  const hp = d.hp + sb.hp + lb.hp + pm.hp + (km.hp || 0) + (bear ? 3 : 0) + (km.hpClass || 0);
-  const move = d.move + (pm.move || 0) + (fox ? 1 : 0) + (km.move || 0);
+  // Equipped items (by slot). No record (rivals, sims) = the hero template's starter kit.
+  const equip = opts.equip || defaultEquip(hero);
+  const st = statsFor(hero, { stars, lv, perks, gear, equip });
+  const hp = st.hp, move = st.move;
   return {
     uid, hero, side, x, y, hp, maxHp: hp, stars, lv, perks, gear,
-    aimMod: sb.aim + lb.aim + pm.aim + (km.aim || 0),
-    armor: km.armor || 0, rangeBonus: km.range || 0, mdmg: km.mdmg || 0, rdmg: km.rdmg || 0,
-    ap: d.ap + extraAp, maxAp: d.ap + extraAp, move, baseMove: move,
-    speed: (d.speed || 8) + (fox ? 2 : 0), init: 0, classId: d.classId || '',
+    equip: Object.values(equip).filter((id) => ITEMS[id]),
+    aimMod: st.aimMod,
+    armor: st.armor, rangeBonus: st.range, mdmg: st.mdmg, rdmg: st.rdmg,
+    crit: st.crit, dodge: st.dodge, charges: st.charges, gun: st.gun, mel: st.mel,
+    cd: {}, bleed: 0, shaken: 0, rallied: 0,
+    ap: st.ap, maxAp: st.ap, move, baseMove: move,
+    speed: st.speed, init: 0, classId: d.classId || '',
     ammo: opts.ammo == null ? (side === 'enemy' ? 8 : 0) : opts.ammo,
     medkits: opts.medkits || 0, kills: 0,
     overwatch: false, moved: 0, acted: 0, fired: 0, lastFired: 0,
@@ -237,7 +270,7 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
 
 function packFromState(s, id) {
   const rec = s.heroes.owned[id] || {};
-  return { stars: rec.stars || 1, lv: rec.lv || 1, perks: rec.perks || [], gear: rec.gear || null };
+  return { stars: rec.stars || 1, lv: rec.lv || 1, perks: rec.perks || [], gear: rec.gear || null, equip: rec.equip ? { ...rec.equip } : null };
 }
 
 export function startBattle({ map, player, enemy, seed, label, tutorial, reward, kind, stars, loadout, highStakes, pvp, opponent }) {
@@ -402,6 +435,9 @@ function resolveHit(b, att, def, mode, prev) {
   ev.dmg = dmg;
   if (mode === 'suppress' && tdef.species !== 'Bear') def.suppressed = 1;
   if (mode === 'venom' || defOf(att.hero).species === 'Snake') def.venom = Math.max(def.venom || 0, 2);
+  if (prev.bleed && def.hp > 0) { def.bleed = Math.max(def.bleed || 0, prev.bleed); ev.bleed = prev.bleed; }
+  // Bruiser Grit: melee hits patch the bruiser up.
+  if (prev.melee && defOf(att.hero).passive?.id === 'grit' && att.hp > 0 && att.hp < att.maxHp) { att.hp += 1; ev.leech = 1; }
   log(b, `${nameOf(att)} hit ${nameOf(def)} for ${dmg}${ev.crit ? ' (crit)' : ''}.`);
   if (def.hp <= 0) {
     def.ko = 1; def.overwatch = false; ev.ko = 1;
@@ -434,6 +470,66 @@ export function apply(b, action) {
     events.push({ typ: 'move', uid: u.uid, path: info.path, cost: info.cost, from: { x: u.x, y: u.y } });
     events.push(...stepMove(b, u, info.path));
     checkEnd(b);
+    return { ok: true, events, status: b.status };
+  }
+
+  // Abilities with cooldowns / level unlocks (data-driven, see hero template).
+  const ablId = action.type === 'shootProp' || action.type === 'move' ? null : (action.mode || action.type);
+  const abl = ablId ? abilityOf(u, ablId) : null;
+  if (abl && abl.unlock && (u.lv || 1) < abl.unlock) return { ok: false, reason: `${abl.name} unlocks at level ${abl.unlock}` };
+  if (abl && abl.cd && cooldownLeft(u, abl.id) > 0) return { ok: false, reason: `${abl.name} is recharging (${cooldownLeft(u, abl.id)} turns)` };
+  const startCd = () => { if (abl && abl.cd) { u.cd ||= {}; u.cd[abl.id] = abl.cd; } };
+
+  if (action.type === 'secondwind') {
+    if (!abl) return { ok: false, reason: 'Unknown ability' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const heal = Math.min(Math.max(1, Math.round(u.maxHp * (abl.heal || 0.35))), u.maxHp - u.hp);
+    u.hp += heal; u.bleed = 0; u.venom = 0; startCd();
+    log(b, `${nameOf(u)} catches a second wind (+${heal}).`);
+    return { ok: true, events: [{ typ: 'heal', uid: u.uid, target: u.uid, heal, ability: abl.id }], status: b.status };
+  }
+
+  if (action.type === 'howl') {
+    if (!abl) return { ok: false, reason: 'Unknown ability' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const r = abl.radius || 5;
+    const shaken = [], rallied = [];
+    for (const o of b.units) {
+      if (o.hp <= 0 || MANH(o.x, o.y, u.x, u.y) > r) continue;
+      if (o.side === u.side) { o.rallied = 1; rallied.push(o.uid); } else { o.shaken = 1; shaken.push(o.uid); }
+    }
+    startCd();
+    log(b, `${nameOf(u)} howls. ${shaken.length} shaken.`);
+    return { ok: true, events: [{ typ: 'howl', uid: u.uid, radius: r, shaken, rallied, ability: abl.id }], status: b.status };
+  }
+
+  if (action.type === 'pounce' || action.mode === 'pounce') {
+    if (!abl) return { ok: false, reason: 'Unknown ability' };
+    const t = b.units.find((x) => x.uid === action.target);
+    if (!t || t.side === u.side || t.hp <= 0) return { ok: false, reason: 'No foe there' };
+    const d0 = MANH(u.x, u.y, t.x, t.y);
+    if (d0 > (abl.range || 4)) return { ok: false, reason: 'Too far to pounce' };
+    let dest = { x: u.x, y: u.y };
+    if (d0 > 1) {
+      const spots = DIRS4.map(([dx, dy]) => ({ x: t.x + dx, y: t.y + dy }))
+        .filter((p) => walkable(b, p.x, p.y, u.uid) && MANH(u.x, u.y, p.x, p.y) <= (abl.range || 4) + 1)
+        .sort((a, c) => MANH(u.x, u.y, a.x, a.y) - MANH(u.x, u.y, c.x, c.y));
+      if (!spots.length) return { ok: false, reason: 'No room to land' };
+      dest = spots[0];
+    }
+    if (u.ap < abl.ap) return { ok: false, reason: 'Not enough AP' };
+    spend(u, abl.ap);
+    startCd();
+    const events = [];
+    if (dest.x !== u.x || dest.y !== u.y) {
+      const from = { x: u.x, y: u.y };
+      u.x = dest.x; u.y = dest.y; u.moved = 1;
+      u.facing = t.x > u.x ? 0 : t.x < u.x ? 2 : t.y > u.y ? 1 : 3;
+      events.push({ typ: 'pounce', uid: u.uid, from, to: { ...dest }, target: t.uid });
+      log(b, `${nameOf(u)} pounces.`);
+    }
+    const prev = previewShot(b, u, t, 'pounce');
+    if (prev && prev.ok) events.push(resolveHit(b, u, t, 'pounce', prev));
     return { ok: true, events, status: b.status };
   }
 
@@ -473,6 +569,7 @@ export function apply(b, action) {
     if (!prev.ok) return { ok: false, reason: prev.reason };
     if (!spend(u, prev.ap)) return { ok: false, reason: 'Not enough AP' };
     u.acted = 1;
+    if (!(defOf(u.hero).abilities || []).some((a) => a.kind === 'breach')) u.charges = Math.max(0, (u.charges || 0) - 1);
     const { x, y } = action;
     const events = [{ typ: 'throw', uid: u.uid, x, y }];
     log(b, `${nameOf(u)} throws a breach charge.`);
@@ -554,10 +651,14 @@ export function apply(b, action) {
     if (prev && prev.ok) log(b, `${nameOf(u)} is out of ammo and goes in with fists.`);
   }
   if (!prev || !prev.ok) return { ok: false, reason: prev?.reason || 'Cannot shoot' };
-  const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : 2;
+  const mab = abilityOf(u, mode);
+  const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : (mab && mab.cd ? mab.ap : 2);
+  if (mab && mab.cd && cooldownLeft(u, mab.id) > 0) return { ok: false, reason: `${mab.name} is recharging` };
+  if (mab && mab.unlock && (u.lv || 1) < mab.unlock) return { ok: false, reason: `${mab.name} unlocks at level ${mab.unlock}` };
   if (mode === 'roll' && u.rollUsed) return { ok: false, reason: 'Already used this turn' };
   if (!spend(u, ap)) return { ok: false, reason: 'Not enough AP' };
   if (mode === 'roll') u.rollUsed = 1;
+  if (mab && mab.cd) { u.cd ||= {}; u.cd[mab.id] = mab.cd; }
   events.push(resolveHit(b, u, t, mode, prev));
   return { ok: true, events, status: b.status };
 }
@@ -606,6 +707,14 @@ function startUnitTurn(b, u) {
   u.fortify = 0;
   b.acting = u.uid;
   b.side = u.side;
+  if (u.cd) for (const k of Object.keys(u.cd)) { if (u.cd[k] > 0) u.cd[k] -= 1; }
+  if (u.bleed > 0) {
+    u.hp = Math.max(0, u.hp - 1);
+    u.bleed -= 1;
+    log(b, `${nameOf(u)} bleeds.`);
+    events.push({ typ: 'bleed', uid: u.uid, hp: u.hp });
+    if (u.hp <= 0) { u.ko = 1; checkEnd(b); if (b.status !== 'active') return { ok: true, events, status: b.status }; return advanceQueue(b, events); }
+  }
   if (u.venom > 0) {
     u.hp = Math.max(0, u.hp - 1);
     u.venom -= 1;
@@ -652,7 +761,7 @@ function endUnitTurn(b, timedOut) {
   } else if (timedOut && u) {
     log(b, `${nameOf(u)} runs out of time.`);
   }
-  if (u) u.suppressed = 0;
+  if (u) { u.suppressed = 0; u.shaken = 0; u.rallied = 0; }
   checkEnd(b);
   if (b.status !== 'active') return { ok: true, events, status: b.status };
   return advanceQueue(b, events);
@@ -690,10 +799,10 @@ export function blastRadiusOf(t) {
 export function previewProp(b, att, x, y, mode = 'shot') {
   if (!att || att.hp <= 0) return { ok: false, reason: 'No shooter' };
   if (!isExplosiveAt(b, x, y)) return { ok: false, reason: 'Nothing to shoot' };
-  const defn = defOf(att.hero);
-  const w = defn.weapon;
+  const gun = gunOf(att);
+  const w = gun || melOf(att);
   const dist = MANH(att.x, att.y, x, y);
-  const melee = mode === 'melee' || w.typ === 'melee';
+  const melee = mode === 'melee' || !gun;
   const range = melee ? 1 : (w.range + (att.rangeBonus || 0));
   if (!melee && (att.ammo || 0) <= 0) return { ok: false, reason: 'Out of ammo', empty: true, dist };
   if (dist > range) return { ok: false, reason: 'Out of range', dist };
@@ -738,7 +847,7 @@ export const CHARGE = { range: 4, radius: 1, dmg: 4, ap: 2 };
 
 export function previewCharge(b, u, x, y) {
   if (!u || u.hp <= 0) return { ok: false, reason: 'No thrower' };
-  const has = (defOf(u.hero).abilities || []).some((a) => a.kind === 'breach');
+  const has = (defOf(u.hero).abilities || []).some((a) => a.kind === 'breach') || (u.charges || 0) > 0;
   if (!has) return { ok: false, reason: 'No charges' };
   const t = tile(b.map, x, y);
   if (!t) return { ok: false, reason: 'Off the map' };
@@ -808,7 +917,7 @@ function approachScore(b, u, x, y, foes) {
     const after = MANH(x, y, f.x, f.y);
     best = Math.max(best, (before - after) * 18);
     const ghost = { ...u, x, y };
-    const mode = (defOf(u.hero).weapon.typ === 'melee' || (u.ammo || 0) <= 0) ? 'melee' : 'shot';
+    const mode = (!gunOf(u) || (u.ammo || 0) <= 0 || (u.mel && defOf(u.hero).template)) ? 'melee' : 'shot';
     const prev = previewShot(b, ghost, f, mode);
     if (prev && prev.ok) best = Math.max(best, 20 + prev.chance * 0.5 + (prev.flanked ? 16 : 0) - prev.cover * 6);
   }
@@ -848,17 +957,30 @@ export function think(b) {
 
   for (const u of mine) {
     const defn = defOf(u.hero);
-    const modes = ['aimed', 'shot', 'venom', 'suppress', 'melee', 'roll', 'knife'];
+    const modes = ['aimed', 'shot', 'venom', 'suppress', 'melee', 'roll', 'knife', 'maul', 'pounce'];
+    const abls = abilitiesOf(u);
+    const ready = (id) => { const a = abls.find((x) => x.id === id || x.kind === id); return a && !(a.cd && cooldownLeft(u, a.id) > 0) ? a : null; };
+    // Second Wind when hurt; Howl first while foes are close and AP remains to follow up.
+    const sw = ready('secondwind');
+    if (sw && u.ap >= sw.ap && u.hp <= u.maxHp * 0.5) consider({ type: 'secondwind', uid: u.uid }, 70 + (u.maxHp - u.hp) * 6);
+    const hw = ready('howl');
+    if (hw && u.ap >= hw.ap + 2 && !u.acted && foes.some((f) => MANH(u.x, u.y, f.x, f.y) <= Math.min(2, hw.radius || 5))) {
+      consider({ type: 'howl', uid: u.uid }, 150 + foes.filter((f) => MANH(u.x, u.y, f.x, f.y) <= (hw.radius || 5)).length * 10);
+    }
     for (const f of foes) {
       for (const mode of modes) {
-        if (!['shot', 'melee'].includes(mode) && !defn.abilities.some((a) => a.kind === mode || a.id === mode)) continue;
-        if (mode === 'melee' && defn.weapon.typ !== 'melee' && (u.ammo || 0) > 0) continue;
+        if (!['shot', 'melee'].includes(mode) && !abls.some((a) => a.kind === mode || a.id === mode)) continue;
+        if (mode === 'melee' && gunOf(u) && !u.mel && defn.weapon.typ !== 'melee' && (u.ammo || 0) > 0) continue;
+        const ab = abls.find((a) => a.id === mode);
+        if (ab && ab.cd && cooldownLeft(u, ab.id) > 0) continue;
         const prev = previewShot(b, u, f, mode);
         if (!prev || !prev.ok) continue;
         const ap = prev.ap || 2;
         if (u.ap < ap) continue;
         let score = 40 + prev.chance + prev.dmg[0] * 8 + (prev.flanked ? 20 : 0) - prev.cover * 8;
         if (f.hp <= prev.dmg[1]) score += 30;
+        if (prev.bleed && f.hp > prev.dmg[1]) score += 12;
+        if (mode === 'pounce') score += prev.dist > 1 ? 14 : -20;
         consider({ type: mode, uid: u.uid, target: f.uid, mode }, score);
       }
       if (defn.abilities.some((a) => a.kind === 'lunge') && u.ap >= 2) {
@@ -895,7 +1017,7 @@ export function think(b) {
   // makes the straight-line approach look bad), walk the real path toward the nearest foe.
   if (!best || best.type === 'overwatch' || (best.type === 'move' && bestScore < 8)) {
     const u = (best && mine.find((x) => x.uid === best.uid)) || mine[0];
-    if (u && (u.ammo || 0) <= 0 && defOf(u.hero).weapon.typ !== 'melee') {
+    if (u && (((u.ammo || 0) <= 0 && defOf(u.hero).weapon.typ !== 'melee') || (u.mel && defOf(u.hero).template))) {
       const step = closeInStep(b, u, foes);
       if (step) return { type: 'move', uid: u.uid, x: step.x, y: step.y };
     }
@@ -949,6 +1071,9 @@ export function resolveTactics(s, b) {
       s.heroes.tutorialDone = true;
       res.tutorial = true;
       res.shardDrop = tutorialShardGift(s);
+      res.item = rollBattleLoot(s, 'tutorial');
+    } else if (b.kind !== 'tutorial') {
+      res.item = rollBattleLoot(s, b.kind);
     }
   }
   if (b.pvp && b.kind === 'street') {
@@ -965,6 +1090,11 @@ export function resolveTactics(s, b) {
     if (b.highStakes && u.hp <= 0) {
       const lost = resetAfterKo(rec);
       lost.id = u.hero; lost.name = defOf(u.hero).name;
+      // The winner also strips anything worth having off the body (worn starter kit is left).
+      lost.items = [];
+      for (const [sl, it] of Object.entries(rec.equip || {})) {
+        if (ITEMS[it] && ITEMS[it].q !== 'worn') { lost.items.push(it); delete rec.equip[sl]; }
+      }
       res.lost.push(lost);
       continue;
     }

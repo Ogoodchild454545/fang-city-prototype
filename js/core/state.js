@@ -7,11 +7,13 @@ import { newSeed } from './rng.js';
 import { newBase, gain, setClearLoot } from './base.js';
 import { rollClearDrop } from './shards.js';
 import { ensurePvp } from './pvp.js';
+import { ensureItems } from './items.js';
+import { kitFits } from './loadout.js';
 setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 export function newGame(now, seed = newSeed()) {
   const s = {
@@ -35,6 +37,8 @@ export function newGame(now, seed = newSeed()) {
     tutorial: 0,
   };
   for (const d of DISTRICTS) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
+  s.stash = {};
+  ensureItems(s); // Rook's starter kit on, spare starter pieces in the stash
   return s;
 }
 
@@ -111,6 +115,17 @@ export function migrate(s, now = Date.now()) {
     s.kit ||= {};
     s.v = 5;
   }
+  if (s.v === 5 && s.base) {
+    // v0.9: Rook is a Bruiser with a paper-doll inventory. Everyone keeps their unlocked operators,
+    // Rook gets his starter kit, and any Workshop mod that no longer fits his class goes back to stock.
+    ensureHeroes(s);
+    s.stash ||= {};
+    for (const [id, rec] of Object.entries(s.heroes.owned)) {
+      if (rec.gear && !kitFits(id, rec.gear)) { s.kit ||= {}; s.kit[rec.gear] = (s.kit[rec.gear] || 0) + 1; rec.gear = null; }
+    }
+    ensureItems(s);
+    s.v = 6;
+  }
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
   s.missions ||= {}; s.bosses ||= {}; s.troopLv ||= {}; s.queue ||= []; s.army ||= {}; s.extraHousing ||= 0;
@@ -119,6 +134,7 @@ export function migrate(s, now = Date.now()) {
   if (s.parts == null) s.parts = 0;
   s.kit ||= {};
   ensureHeroes(s);
+  ensureItems(s);
   ensurePvp(s);
   return s;
 }

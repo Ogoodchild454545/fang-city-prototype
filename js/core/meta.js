@@ -8,6 +8,7 @@ import { generateRivalBase, baseToRaidLayout, rivalLoot, RAID_W, RAID_H } from '
 import { turretOf } from './buildings.js';
 import { rngNext, rngPick, rngInt } from './rng.js';
 import { rollMissionDrop } from './shards.js';
+import { rollMissionLoot } from './items.js';
 
 export const dayKey = (now) => new Date(now).toISOString().slice(0, 10);
 const prevDay = (now) => dayKey(now - 86400000);
@@ -241,6 +242,7 @@ export function resolveBattle(state, now) {
       if (missionCleared(state, g) === b.meta.si) { state.missions[g] = b.meta.si + 1; out.missionFirst = true; }
       state.stats.missionWins = (state.stats.missionWins || 0) + 1;
       out.shardDrop = rollMissionDrop(state, !!out.missionFirst);
+      out.item = rollMissionLoot(state, !!out.missionFirst);
     }
     if (b.kind === 'district') { state.districts[b.meta.districtId].owner = 'player'; out.district = b.meta.districtId; }
     if (b.kind === 'raid') { state.rivals = state.rivals.filter((x) => x.id !== b.meta.rivalId); state.stats.raidWins = (state.stats.raidWins || 0) + 1; }

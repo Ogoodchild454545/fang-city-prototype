@@ -6,6 +6,7 @@ import * as Audio from './audio.js';
 import { openLoadout } from './loadout.js';
 import { rankName, xpToNext, PERKS, pickPerk } from '../core/progress.js';
 import { KIT } from '../core/loadout.js';
+import { statsFor, equippedIds } from '../core/items.js';
 import {
   SHARDS_TO_UNLOCK, MAX_STARS, STAR_COST, progressOf, shardCount, setPin,
   spendUniversal, featuredHero, featuredUntil, formatDrop,
@@ -23,7 +24,7 @@ export function render(ctx) {
     <div class="armyhead">
       <div>
         <div class="h">Operators</div>
-        <div class="tiny dim">Rook is yours from the street lesson. Everyone else is unlocked with 30 shards — found in bushes, missions and Ice crates. Pin a target to boost their drop rate.</div>
+        <div class="tiny dim">Tap an operator for their inventory and abilities. Every crew starts with Rook; more operators join with 30 shards from bushes, missions and Ice crates.</div>
       </div>
       <div class="row">
         ${s.heroes.tutorialDone ? '' : '<button class="btn gold" data-act="startTutorial">Street lesson</button>'}
@@ -38,7 +39,8 @@ export function render(ctx) {
       ${syn.length ? ' · Synergy: ' + syn.map((g) => `<b>${esc(g.name)}</b>`).join(', ') : ''}
     </div>
     <div class="herogrid">
-      ${HERO_ORDER.map((id) => card(s, id, owned[id], squad.includes(id), feat, now)).join('')}
+      ${HERO_ORDER.filter((id) => owned[id]).map((id) => card(s, id, owned[id], squad.includes(id), feat, now)).join('')}
+      ${(() => { const n = HERO_ORDER.filter((id) => !owned[id]).length; return n ? `<article class="hcard recruit" data-act="recruitList"><div class="rcico">?</div><div class="hmeta"><div class="hn">Recruit</div><div class="tiny dim">${n} more operators can join your crew. Collect 30 shards to unlock one — pin a target to boost their drops.</div><button class="btn sm" style="margin-top:4px">Shard progress</button></div></article>` : ''; })()}
     </div>
   </div>`;
 }
@@ -61,7 +63,8 @@ function card(s, id, rec, inSquad, feat, now) {
   const pinned = s.heroes.pin === id;
   const featured = feat === id;
   const canPin = id !== 'rook';
-  return `<article class="hcard ${have ? '' : 'locked'} ${inSquad ? 'in' : ''} ${pinned ? 'pinned' : ''} ${featured ? 'feat' : ''}" data-act="${have ? 'toggleSquad' : 'heroInfo'}" data-id="${id}">
+  const st = have ? statsFor(id, { stars: rec.stars, lv: rec.lv, perks: rec.perks, gear: rec.gear, equip: rec.equip || {} }) : null;
+  return `<article class="hcard ${have ? '' : 'locked'} ${inSquad ? 'in' : ''} ${pinned ? 'pinned' : ''} ${featured ? 'feat' : ''}" data-act="${have ? 'openHero' : 'heroInfo'}" data-id="${id}">
     <img src="${h.portrait}" alt="${esc(h.name)}">
     ${inSquad ? '<span class="squadtag">SQUAD</span>' : ''}
     ${featured ? '<span class="feattag">FEATURED</span>' : ''}
@@ -70,12 +73,14 @@ function card(s, id, rec, inSquad, feat, now) {
       <div class="hn">${esc(h.name)} ${have ? starsRow(prog.stars) : ''} <span class="tiny dim">${esc(h.species)} · ${esc((classOf(h) || {}).name || h.role)}</span></div>
       <div class="tiny gold">${(() => { const pk = speciesPerk(h.species); return pk ? `${esc(pk.name)} — ${esc(pk.text)}` : ''; })()}</div>
       <div class="hbio tiny dim">${esc(h.bio || h.blurb)}</div>
-      <div class="tiny">HP ${h.hp}${prog.stars > 1 ? `+${prog.stars - 1}` : ''} · AP ${h.ap} · Aim ${h.aim}${prog.stars > 1 ? `+${prog.stars - 1}` : ''} · ${esc(h.weapon.name)} ${h.weapon.dmg[0]}–${h.weapon.dmg[1]}</div>
+      ${st ? `<div class="tiny">HP ${st.hp} · AP ${st.ap} · Aim ${st.aim}${st.mel ? ` · ${esc(st.mel.name)} ${st.mel.dmg[0] + st.mdmg}–${st.mel.dmg[1] + st.mdmg}` : ''}${st.gun ? ` · ${esc(st.gun.name)} ${st.gun.dmg[0] + st.rdmg}–${st.gun.dmg[1] + st.rdmg}` : ''} · ${equippedIds(rec).length} gear</div>`
+        : `<div class="tiny">HP ${h.hp} · AP ${h.ap} · Aim ${h.aim} · ${esc(h.weapon.name)} ${h.weapon.dmg[0]}–${h.weapon.dmg[1]}</div>`}
       ${have ? xpbar(rec) : ''}
       ${h.passive && h.passive.name ? `<div class="tiny dim">${esc(h.passive.name)} — ${esc(h.passive.text)}</div>` : ''}
       ${id === 'rook' ? '<div class="tiny dim">Story operator — given in the street lesson.</div>' : bar(prog.have, prog.need)}
       ${have && rec.pendingPerk ? perkRow(id, rec) : ''}
       <div class="row" style="gap:4px;margin-top:4px;flex-wrap:wrap">
+        ${have ? `<button class="btn sm gold" data-act="openHero" data-id="${id}">Gear &amp; abilities</button><button class="btn sm ${inSquad ? '' : 'dim'}" data-act="toggleSquad" data-id="${id}">${inSquad ? 'In squad ✓' : 'Add to squad'}</button>` : ''}
         ${canPin ? `<button class="btn sm ${pinned ? 'gold' : ''}" data-act="pinHero" data-id="${id}">${pinned ? 'Unpin' : 'Pin'}</button>` : ''}
         ${s.heroes.universal && (prog.need || !have) ? `<button class="btn sm" data-act="useUniversal" data-id="${id}">Use universal</button>` : ''}
       </div>
@@ -103,8 +108,12 @@ function perkRow(id, rec) {
 }
 
 export const actions = {
+  recruitList(ctx) {
+    const s = ctx.state;
+    const rows = HERO_ORDER.filter((id) => !s.heroes.owned[id]).map((id) => card(s, id, null, false, featuredHero(ctx.now()), ctx.now())).join('');
+    ctx.modal(`<div class="h" style="font-size:20px">Recruit operators</div><div class="tiny dim" style="margin-bottom:6px">Locked until you collect 30 shards. Pin one to boost their drops.</div><div class="herogrid">${rows}</div>`, { cls: 'wide' });
+  },
   toggleSquad(ctx, el) {
-    if (el.closest('button')) return; // let inner buttons fire their own act
     const id = el.dataset.id;
     const squad = ctx.state.heroes.squad.slice();
     const i = squad.indexOf(id);
@@ -131,7 +140,7 @@ export const actions = {
     const r = setPin(ctx.state, cur === id ? null : id);
     if (!r.ok) return ctx.toast(r.reason);
     ctx.toast(r.pin ? `${HEROES[r.pin].name} is pinned. Their shards drop more often.` : 'Pin cleared.');
-    ctx.render();
+    if (el.closest('.overlay')) actions.recruitList(ctx); else ctx.render();
   },
   useUniversal(ctx, el) {
     const id = el.dataset.id;

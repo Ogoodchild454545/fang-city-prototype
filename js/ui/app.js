@@ -20,13 +20,14 @@ import * as Tactics from './tactics.js';
 import * as Heroes from './heroes.js';
 import * as Loadout from './loadout.js';
 import * as Editor from './editor.js';
+import * as Character from './character.js';
 import { formatDrop } from '../core/shards.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
 if (params.has('reset')) storage.clear();
 
-const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes, loadout: Loadout, editor: Editor };
+const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes, loadout: Loadout, editor: Editor, hero: Character };
 const NAV = [
   ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['missions', '🎯', 'Missions'], ['city', '📍', 'City'], ['jobs', '💼', 'Jobs'], ['shop', '⚖️', 'Market'],
 ];
@@ -75,7 +76,7 @@ function render() {
   if (s.tactics && ctx.tab !== 'tactics') ctx.tab = 'tactics';
   else if (s.battle && ctx.tab !== 'battle') ctx.tab = 'battle';
   const scr = SCREENS[ctx.tab];
-  const inBattle = ctx.tab === 'battle' || ctx.tab === 'tactics' || ctx.tab === 'editor';
+  const inBattle = ctx.tab === 'battle' || ctx.tab === 'tactics' || ctx.tab === 'editor' || ctx.tab === 'hero';
   $('#topbar').style.display = inBattle ? 'none' : '';
   $('#nav').style.display = inBattle ? 'none' : '';
   $('#topbar').innerHTML = topbar();
@@ -83,6 +84,7 @@ function render() {
   $('#app').classList.toggle('mode-battle', ctx.tab === 'battle');
   $('#app').classList.toggle('mode-tactics', ctx.tab === 'tactics');
   $('#app').classList.toggle('mode-editor', ctx.tab === 'editor');
+  $('#app').classList.toggle('mode-hero', ctx.tab === 'hero');
   $('#nav').innerHTML = nav();
   syncBattleMute();
   const el = $('#screen');
@@ -177,6 +179,7 @@ const GLOBAL_ACTIONS = {
   nav: (c, el) => c.go(el.dataset.tab),
   closeModal: (c, el) => { if (el && el.dataset && el.dataset.then) c.sub.afterBattle = el.dataset.then; closeModal(); },
   toggleMute: () => { Audio.toggleMute(); render(); },
+  openHero: (c, el, e) => { if (e && e.target && e.target.closest('button') && e.target.closest('button') !== el) return; c.closeModal && c.closeModal(); Character.openCharacter(c, el.dataset.id); },
   openEditor: (c, el) => { c.sub.editorBack = c.tab === 'editor' ? (c.sub.editorBack || 'heroes') : c.tab; c.closeModal && c.closeModal(); Editor.openEditor(c, el && el.dataset && el.dataset.id); },
 };
 function unlockAudio() { Audio.unlock(); syncBattleMute(); }
@@ -249,7 +252,7 @@ function startNewGame() {
   baseTip('Welcome to the wasteland. Tap BUILD to put up your first Knock-off Stall.');
   if (!ctx.fast) {
     modal(`<div class="h" style="font-size:22px">Rook is ready</div>
-      <p class="small">You start with one unique operator — Rook the wolf. A short street lesson will teach you action points, cover and hit chance. Other operators are unlocked with shards from bushes, missions and Ice crates. Home-base troops stay for missions and raids.</p>
+      <p class="small">Every crew starts with the same operator — <b>Rook</b>, a wolf Bruiser who fights up close. Tap him in My Crew to open his inventory: weapons, armour and gear change his stats, and he learns new wolf abilities as he levels up. A short street lesson teaches action points, cover and his Pounce. Other operators are unlocked later with shards.</p>
       <div class="row" style="margin-top:12px">
         <button class="btn red block" data-act="startTutorial">Start the lesson</button>
         <button class="btn block" data-act="closeModal">Look around first</button>

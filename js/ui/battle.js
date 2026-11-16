@@ -1,5 +1,6 @@
 // Battle screen renderer. All rules come from core/battle.js; this file draws the board,
 // turns taps into actions, and animates the events those actions return.
+import { ITEMS, QUALITY } from '../core/items.js';
 import { GANGS, SPECIES, ROLES, GEAR, TROOPS, BOSSES } from '../core/data.js';
 import * as B from '../core/battle.js';
 import { aiNextAction } from '../core/ai.js';
@@ -302,6 +303,7 @@ function finish(ctx) {
     ${res.kind === 'raid' ? `<div>${starRow(res.stars || 0)}</div><div class="tiny dim">${res.pct}% of the base wrecked</div>` : ''}
     ${res.district ? `<div class="h gold">District taken! Income bonus applied.</div>` : ''}
     ${res.missionFirst ? `<div class="h gold">Mission cleared! The next one is open.</div>` : ''}
+    ${res.item && ITEMS[res.item] ? `<div class="small" style="color:${QUALITY[ITEMS[res.item].q].col}">New gear: ${esc(ITEMS[res.item].name)} — equip it on an operator in My Crew.</div>` : ''}
     ${res.shardDrop ? `<div class="small gold">${esc(formatDrop(res.shardDrop))}${res.shardDrop.unlocked ? ' — they joined your operators!' : ''}</div>` : ''}
     ${res.lost && (res.lost.cash || res.lost.influence) ? `<div class="small red">Storage full: ${res.lost.cash ? money(res.lost.cash) : ''}${res.lost.cash && res.lost.influence ? ' and ' : ''}${res.lost.influence ? ico('influence') + ' ' + fmt(res.lost.influence) + ' Rep' : ''} left behind. Build more Strongboxes or Ledgers.</div>` : ''}
     <div class="rewards">${parts.join('')}</div>

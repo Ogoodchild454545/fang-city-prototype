@@ -1,4 +1,5 @@
 // Mock storefront. Shows how monetisation would look; no payment code exists in the prototype.
+import { ITEMS } from '../core/items.js';
 import { SHOP } from '../core/data.js';
 import { CRATES, featuredHero, featuredUntil, pityOf, openCrate, formatDrop } from '../core/shards.js';
 import { HEROES } from '../core/heroes.js';
@@ -89,7 +90,8 @@ export const actions = {
     if (!r.ok) return ctx.toast(r.reason);
     const pity = r.pity ? 'Pity hit! ' : '';
     const text = r.universal && !r.id ? `${pity}+${r.added} universal shards` : (pity + formatDrop(r));
-    ctx.toast(r.unlocked ? `${text} — they joined your operators!` : text);
+    const gear = r.item && ITEMS[r.item] ? ` + gear: ${ITEMS[r.item].name}` : '';
+    ctx.toast(r.unlocked ? `${text} — they joined your operators!${gear}` : text + gear);
     ctx.render();
   },
   buy(ctx, el) {

@@ -3,7 +3,7 @@ import asyncio, json, sys, os, time
 from playwright.async_api import async_playwright
 
 BASE = os.environ.get('BASE', 'http://localhost:8765/')
-OUT = os.path.join(os.path.dirname(__file__), '..', 'screenshots')
+OUT = os.environ.get('SHOTS') or os.path.join(os.path.dirname(__file__), '..', 'screenshots')
 V1 = os.environ.get('V1SAVE', '/tmp/v1save.json')
 errors = []
 
@@ -395,14 +395,17 @@ async def main():
         if await page.locator('[data-act="research"][data-t="fox"]:not([disabled])').count():
             await tap(page, '[data-act="research"][data-t="fox"]')
         await tap(page, '[data-act="crewTab"][data-t="army"]')
-        # hire Ma Grey (Den is already 3)
-        await tap(page, '[data-act="bossInfo"][data-id="magrey"]')
-        await page.wait_for_selector('.overlay')
-        if await page.locator('[data-act="hireBoss"][data-id="magrey"]').count():
-            await tap(page, '[data-act="hireBoss"][data-id="magrey"]')
-        await close_modal(page)
-        assert await ev(page, "!!window.__game.state.bosses.magrey"), 'Ma Grey hire failed: ' + str(await page.locator('.toast').all_inner_texts())
-        print('bosses', await ev(page, "JSON.stringify(window.__game.state.bosses)"))
+        # v0.9: the crew column holds only Rook; tap him for the character sheet and equip a stash item
+        assert await page.locator('.crewcol .opslot').count() == 1, 'crew column should show only Rook'
+        assert await page.locator('.bslot[data-act="bossInfo"]').count() == 0, 'no bosses on the crew screen'
+        await tap(page, '.crewcol .opslot[data-id="rook"]')
+        await page.wait_for_selector('.charscr')
+        await tap(page, '.sitem[data-id="gilet"]')
+        await tap(page, '[data-act="charEquip"]')
+        assert await ev(page, "window.__game.state.heroes.owned.rook.equip.body === 'gilet'"), 'equip from stash failed'
+        await shot(page, '23-rook-inventory')
+        await tap(page, '[data-act="charBack"]')
+        await page.wait_for_selector('.armyscr')
 
         # ---- shop + jobs
         await tap(page, '[data-act="nav"][data-tab="shop"]')

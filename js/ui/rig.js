@@ -17,7 +17,7 @@ const RU = {
 };
 
 export const RIGS = {
-  rook:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 78 },
+  rook:   { kind: 'biped', parts: BIPED_PARTS, weapon: 'melee', height: 78, weaponArt: 'tyreiron' },
   brick:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 74 },
   lumen:  { kind: 'biped', parts: BIPED_PARTS, weapon: 'rifle', height: 82 },
   vesper: { kind: 'snake', parts: SNAKE_PARTS, weapon: 'pistol', height: 76, imageFacing: -1 },
@@ -45,6 +45,7 @@ const FITS = {
     headPivot: [0.50, 0.86], headMul: 1.0,
     stance: 7.5, hipTuck: -6, thighSx: 1,
     jointArm: '#6a4a32', jointLeg: '#3a3a42', jointNeck: '#8a7a68',
+    weaponGrip: [0.5, 0.14], weaponTip: [0.5, 0.97],
   },
   lumen: {
     torsoPivot: [0.54, 0.56], neck: [0.54, 0.09],
@@ -176,11 +177,35 @@ function srcOf(id, part) { return `${PART_DIR}${id}-${part}.png`; }
 
 export function hasRig(id) { return !!RIGS[id]; }
 
+// Procedural weapon art (original, drawn in code): Rook's tyre iron — a greasy L-bar with a socket end.
+function drawWeaponArt(kind) {
+  const c = document.createElement('canvas');
+  c.width = 48; c.height = 240;
+  const g = c.getContext('2d');
+  if (kind === 'tyreiron') {
+    const steel = g.createLinearGradient(14, 0, 34, 0);
+    steel.addColorStop(0, '#3a3a3e'); steel.addColorStop(0.45, '#9a9a9e'); steel.addColorStop(0.6, '#6a6a70'); steel.addColorStop(1, '#2a2a2e');
+    g.fillStyle = steel;
+    g.beginPath(); g.roundRect(18, 6, 12, 214, 5); g.fill();                 // shaft
+    g.beginPath(); g.moveTo(18, 206); g.lineTo(30, 206); g.lineTo(44, 226); g.lineTo(34, 234); g.closePath(); g.fill(); // bent end
+    g.fillStyle = '#222226'; g.beginPath(); g.ellipse(39, 230, 7, 6, 0.6, 0, Math.PI * 2); g.fill();   // socket
+    g.fillStyle = '#0c0c0e'; g.beginPath(); g.ellipse(39, 230, 3.5, 3, 0.6, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#5a1a14'; g.fillRect(17, 10, 14, 44);                      // taped grip
+    g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 2;
+    for (let y = 14; y < 54; y += 7) { g.beginPath(); g.moveTo(17, y); g.lineTo(31, y + 4); g.stroke(); }
+    g.fillStyle = 'rgba(20,14,8,.45)'; g.fillRect(20, 120, 6, 40);            // grease
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(23, 58, 2, 140);         // highlight
+  }
+  c.naturalWidth = c.width; c.naturalHeight = c.height; c.complete = true;
+  return c;
+}
+
 export function preloadRigs() {
   for (const id of Object.keys(RIGS)) {
     for (const part of RIGS[id].parts) {
       const src = srcOf(id, part);
       if (images[src]) continue;
+      if (part === 'weapon' && RIGS[id].weaponArt && typeof document !== 'undefined') { images[src] = drawWeaponArt(RIGS[id].weaponArt); continue; }
       const im = new Image();
       im.src = src;
       images[src] = im;
