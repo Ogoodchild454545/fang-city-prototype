@@ -25,6 +25,7 @@ import * as Facilities from './facilities.js';
 import { formatDrop } from '../core/shards.js';
 import { THEMES, loadTheme, saveTheme, themeAttr } from '../core/themes.js';
 import * as P from '../core/progression.js';
+import * as Actors from './actors.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
@@ -118,6 +119,8 @@ function applyTheme() {
 }
 function settingsHtml() {
   return `<div class="h" style="font-size:22px">Settings</div>
+    <div class="sect">Unit style <span class="tiny dim" style="text-transform:none;letter-spacing:0">· how fighters look in battle (trial)</span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">${[['fig', '♟ Figurines', 'Painted miniatures on round bases'], ['classic', '🎬 Classic', 'Animated cut-out fighters']].map(([id, n, d]) => `<button class="btn ${Actors.unitStyle() === id ? 'primary' : ''}" data-act="setUnitStyle" data-id="${id}" title="${d}">${n}${Actors.unitStyle() === id ? ' ✓' : ''}</button>`).join('')}</div>
     <div class="sect">Theme <span class="tiny dim" style="text-transform:none;letter-spacing:0">· menus and screens; battles keep their own look</span></div>
     <div class="themegrid">${THEMES.map((t) => `<button class="themeopt ${t.id === theme ? 'on' : ''}" data-act="setTheme" data-id="${t.id}">
       <span class="tsw">${t.sw.map((c) => `<i style="background:${c}"></i>`).join('')}</span>
@@ -250,6 +253,7 @@ const GLOBAL_ACTIONS = {
   closeModal: (c, el) => { if (el && el.dataset && el.dataset.then) c.sub.afterBattle = el.dataset.then; closeModal(); },
   toggleMute: () => { Audio.toggleMute(); render(); refreshSettings(); },
   openSettings: (c) => c.modal(settingsHtml(), { cls: 'wide' }),
+  setUnitStyle: (c, el) => { Actors.setUnitStyle(el.dataset.id); refreshSettings(); },
   setTheme: (c, el) => { theme = saveTheme(window.localStorage, el.dataset.id); applyTheme(); refreshSettings(); },
   openHero: (c, el, e) => { if (e && e.target && e.target.closest('button') && e.target.closest('button') !== el) return; c.closeModal && c.closeModal(); Character.openCharacter(c, el.dataset.id); },
   openTrack: (c) => openTrack(c),

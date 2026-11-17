@@ -109,8 +109,8 @@ const images = {};
 export function hasActor(id) { return !!ACTORS[id]; }
 
 export function preloadActors() {
-  for (const id of ACTOR_IDS) {
-    const src = ACTORS[id].idle;
+  const srcs = ACTOR_IDS.map((id) => ACTORS[id].idle).concat(Object.values(FIGS).map((f) => f.img));
+  for (const src of srcs) {
     if (images[src]) continue;
     const im = new Image();
     im.src = src;
@@ -306,10 +306,11 @@ function scaledDef(id) {
 }
 if (typeof window !== 'undefined') window.__setUnitScale = (k) => setUnitScale(k);
 
-export function drawActor(g, unit, worldX, worldY, z, now) {
+export function drawActor(g, unit, worldX, worldY, z, now, hl = 0) {
   if (!ACTORS[unit.hero]) return null;
   const def = scaledDef(unit.hero);
   const a = ensureAnim(unit);
+  if (STYLE === 'fig') return drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl);
   if (Rig.hasRig(unit.hero) && Rig.rigReady(unit.hero)) {
     const anchors = Rig.drawRig(g, unit, def, a, worldX, worldY, z, now);
     if (anchors) {
@@ -434,7 +435,7 @@ function drawMuzzle(g, x, y, z, amt, facing) {
 }
 
 export function actorHeight(id) {
-  return (ACTORS[id] ? worldHeight(id) : 21) * UNIT_SCALE;
+  return (ACTORS[id] ? worldHeight(id) * (STYLE === 'fig' && FIGS[id] ? FIGS[id].h || 1 : 1) + (STYLE === 'fig' ? BASE.th : 0) : 21) * UNIT_SCALE;
 }
 
 function hexRgba(hex, a) {
@@ -443,3 +444,238 @@ function hexRgba(hex, a) {
   const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
   return `rgba(${r},${g},${b},${a})`;
 }
+
+// ---------------------------------------------------------------- figurine style (v0.13 trial)
+// Demeo-style board pieces: each unit is a painted miniature glued to a round tabletop base
+// (dark base, team-coloured rim). Pieces move like rigid board pieces: a hop per tile with a
+// landing squash, tilting on the edge of the base to lean into an attack, rocking when hit and
+// tipping over flat when knocked out. Rook and Anvil have bespoke miniature paintings; every
+// other unit stands its classic painted stamp on the same base. The classic look (rigs and
+// stamps) stays one Settings switch away: "Unit style: Figurines / Classic".
+const STYLE_KEY = 'fangcity.unitStyle';
+function initialStyle() {
+  try {
+    const q = new URLSearchParams(location.search).get('style');
+    if (q === 'classic' || q === 'fig') { localStorage.setItem(STYLE_KEY, q); return q; }
+    const v = localStorage.getItem(STYLE_KEY);
+    return v === 'classic' ? 'classic' : 'fig';
+  } catch (e) { return 'fig'; }
+}
+let STYLE = typeof window !== 'undefined' ? initialStyle() : 'classic';
+export function unitStyle() { return STYLE; }
+export function isFig() { return STYLE === 'fig'; }
+export function setUnitStyle(v) {
+  STYLE = v === 'classic' ? 'classic' : 'fig';
+  try { localStorage.setItem(STYLE_KEY, STYLE); } catch (e) { /* private mode */ }
+  return STYLE;
+}
+// Hop timing per tile (ms) when moving as a board piece.
+export const FIG_STEP_MS = 190;
+
+export const FIGS = {
+  rook: { img: 'assets/actors/rook-fig.png', origin: [0.45, 0.992], gunTip: [0.03, 0.62], head: [0.40, 0.08], imageFacing: -1, h: 1.04 },
+  anvil: { img: 'assets/actors/anvil-fig.png', origin: [0.46, 0.992], gunTip: [0.98, 0.57], head: [0.62, 0.08], h: 1.0 },
+};
+// base in world px: radius across, depth (ellipse), thickness
+const BASE = { rx: 9.5, ry: 4.3, th: 2.6 };
+
+function figPose(unit, a, now) {
+  const t = a.t, f = a.facing;
+  let rot = 0, ox = 0, oy = 0, sx = 1, sy = 1, sway = 0, lift = 0;
+  if (a.clip === 'walk') {
+    const p = a.hop != null ? a.hop : (t / (FIG_STEP_MS / 1000)) % 1;
+    lift = Math.sin(p * Math.PI) * 6.5;               // arc over the tile
+    const land = Math.max(0, 1 - p / 0.22);           // squash just after touching down
+    const take = Math.max(0, (p - 0.86) / 0.14);      // crouch before the next hop
+    const sq = 0.13 * land * land + 0.07 * take;
+    sx = 1 + sq; sy = 1 - sq;
+    rot = f * 7 * DEG * Math.sin(p * Math.PI);        // lean into the hop
+  } else if (a.clip === 'shoot') {
+    if (t < 0.10) { rot = -f * 4 * DEG * (t / 0.10); }
+    else if (t < 0.18) {
+      if (a.muzzle === 0 && t > 0.11) a.muzzle = 1;
+      rot = -f * 9 * DEG; ox = -f * 1.5;
+    } else {
+      const k = Math.min(1, (t - 0.18) / 0.30);
+      rot = -f * 9 * DEG * Math.exp(-k * 4) * Math.cos(k * 9);
+      ox = -f * 1.5 * (1 - k);
+    }
+  } else if (a.clip === 'melee') {
+    // rock back, then pitch hard forward on the front edge of the base and settle
+    if (t < 0.12) { rot = -f * 8 * DEG * (t / 0.12); }
+    else if (t < 0.22) { const k = (t - 0.12) / 0.10; rot = f * (-8 + 34 * k) * DEG; ox = f * 6 * k; }
+    else { const k = Math.min(1, (t - 0.22) / 0.2); rot = f * 26 * DEG * (1 - k) * Math.cos(k * 4); ox = f * 6 * (1 - k); }
+  } else if (a.clip === 'hit') {
+    const k = Math.min(1, t / 0.36);
+    rot = -f * 16 * DEG * Math.exp(-k * 3.2) * Math.cos(k * 15);
+    ox = -f * 3 * Math.exp(-k * 6);
+    lift = 2.5 * Math.exp(-k * 8) * (1 - k);
+  } else if (a.clip === 'ko') {
+    // tips over backwards, bounces once and lies flat on the board
+    const k = Math.min(1, t / 0.6);
+    let ang;
+    if (k < 0.62) { const e = k / 0.62; ang = 90 * e * e; }
+    else { const e = (k - 0.62) / 0.38; ang = 90 - 14 * Math.sin(e * Math.PI) * (1 - e * 0.4); }
+    rot = -f * ang * DEG;
+    sy = 1 - 0.04 * Math.min(1, k * 2);
+  } else if (a.clip === 'revive') {
+    const k = Math.min(1, t / 0.7);
+    const e = 1 - Math.pow(1 - k, 2);
+    rot = -f * 90 * DEG * (1 - e);
+    lift = Math.sin(e * Math.PI) * 5;
+  } else if (a.clip === 'ability') {
+    // a little jump with a spin-free stomp: hop up, slam down with a squash
+    const k = Math.min(1, t / 0.6);
+    lift = Math.sin(Math.min(1, k / 0.6) * Math.PI) * 7;
+    if (k > 0.6) { const e = (k - 0.6) / 0.4; const sq = 0.14 * Math.exp(-e * 5); sx = 1 + sq; sy = 1 - sq; }
+    if (k < 0.15) { const sq = 0.08 * k / 0.15; sx = 1 + sq; sy = 1 - sq; }
+    if (a.muzzle === 0 && unit.hero === 'lumen' && k > 0.5) a.muzzle = 1;
+  } else {
+    // gentle idle sway: a weighted piece that never quite settles
+    const ph = (now / 1000) + (unit.uid ? unit.uid.charCodeAt(unit.uid.length - 1) : 0) * 0.37;
+    sway = Math.sin(ph * Math.PI * 2 / 3.1) * 1.5 * DEG;
+    rot = Math.sin(ph * Math.PI * 2 / 4.3) * 0.6 * DEG;
+  }
+  return { rot, ox, oy, sx, sy, sway, lift, facing: f, muzzle: a.muzzle, flash: a.flash };
+}
+
+// Matrix for the whole piece: feet point on the board, then a rigid tilt that pivots on whichever
+// edge of the base the piece is rocking over (that is what makes it read as a solid object).
+function pieceMatrix(footX, footY, z, pose) {
+  const m = new DOMMatrix();
+  m.translateSelf(footX + pose.ox * z, footY - pose.lift * z);
+  if (pose.rot) {
+    const px = Math.sign(pose.rot) * BASE.rx * 0.92 * z;
+    m.translateSelf(px, 0); m.rotateSelf(pose.rot / DEG); m.translateSelf(-px, 0);
+  }
+  m.scaleSelf(pose.sx, pose.sy);
+  return m;
+}
+
+function drawBase(g, z, side, hl, now, flash) {
+  const rx = BASE.rx * z, ry = BASE.ry * z, th = BASE.th * z;
+  const rim = side === 'player' ? '#5aa8ff' : '#ff5a48';
+  // side band of the cylinder
+  g.fillStyle = '#121214';
+  g.beginPath();
+  g.ellipse(0, 0, rx, ry, 0, 0, Math.PI);
+  g.lineTo(-rx, -th);
+  g.ellipse(0, -th, rx, ry, 0, Math.PI, 0, true);
+  g.closePath(); g.fill();
+  // team-colour rim band
+  g.save();
+  g.globalAlpha = 0.9;
+  g.strokeStyle = rim; g.lineWidth = 1.1 * z;
+  g.beginPath(); g.ellipse(0, -th * 0.45, rx - 0.3 * z, ry, 0, 0, Math.PI); g.stroke();
+  g.restore();
+  // top face: painted tarmac with a little grit
+  const grd = g.createLinearGradient(0, -th - ry, 0, -th + ry);
+  grd.addColorStop(0, '#3a3834'); grd.addColorStop(1, '#22211f');
+  g.fillStyle = grd;
+  g.beginPath(); g.ellipse(0, -th, rx, ry, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.05)';
+  for (let i = 0; i < 6; i++) { const aa = i * 2.1, rr = (0.25 + (i % 3) * 0.2); g.fillRect(Math.cos(aa) * rx * rr, -th + Math.sin(aa) * ry * rr, 0.9 * z, 0.6 * z); }
+  g.strokeStyle = rim; g.lineWidth = 0.8 * z;
+  g.beginPath(); g.ellipse(0, -th, rx - 0.4 * z, ry - 0.2 * z, 0, 0, Math.PI * 2); g.stroke();
+  // highlight on the near lip
+  g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 0.5 * z;
+  g.beginPath(); g.ellipse(0, -th, rx - 0.4 * z, ry - 0.2 * z, 0, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+  if (hl) {
+    // selection glow ring, breathing slowly; brighter gold for the unit that is acting
+    const k = 0.6 + 0.4 * Math.sin(now / 260);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.shadowColor = hl === 2 ? '#f0d060' : rim; g.shadowBlur = 6 * z;
+    g.strokeStyle = hl === 2 ? `rgba(240,208,96,${0.55 + 0.4 * k})` : hexRgba(rim, 0.45 + 0.4 * k);
+    g.lineWidth = 1.4 * z;
+    g.beginPath(); g.ellipse(0, -th * 0.5, rx + 1.6 * z, ry + 0.9 * z, 0, 0, Math.PI * 2); g.stroke();
+    g.restore();
+  }
+  if (flash > 0) {
+    g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * flash;
+    g.fillStyle = '#fff'; g.beginPath(); g.ellipse(0, -th, rx, ry, 0, 0, Math.PI * 2); g.fill(); g.restore();
+  }
+}
+
+function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
+  const fig = FIGS[unit.hero];
+  const src = fig ? fig.img : def.idle;
+  const im = images[src];
+  const fo = fig ? fig.origin : def.origin;
+  const gt = fig ? fig.gunTip : def.gunTip;
+  const imgFacing = fig ? (fig.imageFacing || 1) : (def.imageFacing || 1);
+  const pose = figPose(unit, a, now);
+  const h = def.height * (fig ? fig.h || 1 : 1) * z;
+  const w = im && im.naturalWidth ? h * (im.naturalWidth / im.naturalHeight) : h * 0.45;
+  const th = BASE.th * z;
+  const ko = a.clip === 'ko' || unit.hp <= 0;
+
+  // board shadow: stays on the ground, shrinks while the piece is in the air
+  const air = Math.max(0, pose.lift) / 8;
+  g.save();
+  g.fillStyle = `rgba(0,0,0,${0.42 - 0.18 * air})`;
+  g.beginPath();
+  g.ellipse(worldX + pose.ox * z + (ko ? -pose.facing * h * 0.32 * Math.min(1, Math.abs(pose.rot) / (80 * DEG)) : 0), worldY + 0.8 * z,
+    (BASE.rx + 1.5) * z * (1 - 0.25 * air) + (ko ? h * 0.28 * Math.min(1, Math.abs(pose.rot) / (80 * DEG)) : 0), (BASE.ry + 1) * z * (1 - 0.25 * air), 0, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+
+  const M = pieceMatrix(worldX, worldY, z, pose);
+  const T0 = g.getTransform();
+  if (!g.__noShadow) { const dp = T0.transformPoint(new DOMPoint(worldX, worldY)); a.devX = dp.x; a.devY = dp.y; }
+  g.save();
+  g.setTransform(T0.multiply(M));
+  drawBase(g, z, unit.side, ko ? 0 : hl, now, pose.flash);
+  // the miniature, glued to the top of the base; idle sway pivots on its feet
+  g.translate(0, -th);
+  if (pose.sway) g.rotate(pose.sway);
+  const flip = pose.facing * imgFacing;
+  g.scale(flip, 1);
+  const oxp = fo[0] * w, oyp = fo[1] * h;
+  if (im && im.complete && im.naturalWidth) {
+    if (ko) g.filter = 'saturate(0.55) brightness(0.8)';
+    g.drawImage(im, -oxp, -oyp, w, h);
+    g.filter = 'none';
+    if (pose.flash > 0) {
+      g.globalCompositeOperation = 'lighter';
+      g.globalAlpha = 0.65 * pose.flash;
+      g.drawImage(im, -oxp, -oyp, w, h);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+    }
+  } else {
+    g.fillStyle = def.colour;
+    g.fillRect(-w * 0.25, -h, w * 0.5, h);
+  }
+  g.restore();
+
+  // anchors in world space
+  const local = (lx, ly) => {
+    const sw = pose.sway || 0, c = Math.cos(sw), s = Math.sin(sw);
+    const x0 = lx * flip, y0 = ly;
+    const p = M.transformPoint(new DOMPoint(x0 * c - y0 * s, x0 * s + y0 * c - th));
+    return { x: p.x, y: p.y };
+  };
+  const tip = local((gt[0] - fo[0]) * w + (pose.recoil || 0), (gt[1] - fo[1]) * h);
+  const hd = fig && fig.head ? fig.head : [0.5, 0.10];
+  const head = ko ? { x: worldX - pose.facing * h * 0.45, y: worldY - 10 * z } : local((hd[0] - fo[0]) * w, (hd[1] - fo[1]) * h);
+
+  if (a.clip === 'ability' && a.t < 0.7) {
+    const k = Math.sin(Math.min(1, a.t / 0.7) * Math.PI);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    const rad = (14 + 10 * k) * z;
+    const grd = g.createRadialGradient(worldX, worldY - th, 2 * z, worldX, worldY - th, rad);
+    grd.addColorStop(0, `rgba(255,240,200,${0.4 * k})`);
+    grd.addColorStop(0.5, hexRgba(def.colour || '#88ffcc', 0.3 * k));
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.ellipse(worldX, worldY - th, rad, rad * 0.45, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  if (pose.muzzle > 0 && !def.melee) drawMuzzle(g, tip.x, tip.y, z, pose.muzzle, pose.facing);
+  a.gunX = tip.x; a.gunY = tip.y;
+  a.headX = head.x; a.headY = head.y;
+  return { headX: head.x, headY: head.y, footX: worldX, footY: worldY, gunX: tip.x, gunY: tip.y, z, w, h };
+}
+if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, playClip, ensureAnim };

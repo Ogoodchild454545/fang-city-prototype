@@ -114,3 +114,10 @@ Gore Charge (`pounce`) and Horn Slam (`maul`) and adds two new kinds: `brace` (+
 turn) and `taunt` (foes in radius get -25 aim at anyone else; the AI avoids other targets). Passive
 `bulwark` cuts 1 damage from hits on adjacent allies. `unlock: { kind: 'level', lv: 10 }` grants him
 in `grantsFor` at player level 10; level-unlock heroes are kept out of the shard pools.
+
+## Figurine art (v0.13 trial)
+In the default **Figurines** unit style each hero is a painted miniature on a round base. To give a new hero
+bespoke miniature art, generate a full-body 3/4 "painted 32mm resin miniature" on plain white with **no base**,
+cut it out to a transparent PNG about 760 px tall (`assets/actors/<id>-fig.png`), and add an entry to `FIGS` in
+`js/ui/actors.js` with `origin` (feet point), `gunTip`, `head`, `imageFacing` (-1 if the art faces left) and `h`
+(height multiplier). Without an entry the hero's classic stamp is stood on the base automatically.

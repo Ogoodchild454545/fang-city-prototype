@@ -789,7 +789,7 @@ function draw(ctx) {
       if (u.flash && u.flash.uid === un.uid && now < u.flash.until) {
         const a = Actors.ensureAnim(un); a.flash = Math.max(a.flash, 0.7);
       }
-      const pose = Actors.drawActor(g, un, sx, sy, z, now);
+      const pose = Actors.drawActor(g, un, sx, sy, z, now, acting ? 2 : (sel && sel.uid === un.uid) ? 1 : 0);
       if (pose) { cx = pose.headX; cy = pose.headY; r = 12 * z; }
     } else {
       const bob = un.hp > 0 ? Math.sin(now / 380 + un.uid.charCodeAt(1)) * 1.6 * z : 0;
@@ -815,7 +815,7 @@ function draw(ctx) {
       g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
     }
     // rings for actors (feet/head hint of who is up)
-    if (Actors.hasActor(un.hero) && !dead) {
+    if (Actors.hasActor(un.hero) && !dead && !Actors.isFig()) {
       // XCOM-style team disc under the feet: blue for your crew, red for the rivals.
       g.fillStyle = un.side === 'player' ? 'rgba(77,143,224,0.18)' : 'rgba(224,64,52,0.2)';
       g.beginPath(); g.ellipse(sx, sy, 8 * z, 3.5 * z, 0, 0, Math.PI * 2); g.fill();
@@ -972,7 +972,13 @@ function loop(ctx) {
     const pts = [a.from, ...a.path];
     const seg = Math.min(pts.length - 1, Math.max(0, (pts.length - 1) * t));
     const i = Math.min(pts.length - 2, Math.floor(seg));
-    const frac = seg - i;
+    let frac = seg - i;
+    if (Actors.isFig() && !a.leap) {
+      // board-piece hop: ease each tile so the piece lands and settles before the next hop
+      const mv = b && b.units.find((x) => x.uid === a.uid);
+      if (mv && mv.anim) mv.anim.hop = t >= 1 ? 0 : frac;
+      frac = frac * frac * (3 - 2 * frac);
+    }
     const A = pts[i], B = pts[i + 1];
     a.x = A.x + (B.x - A.x) * frac;
     a.y = A.y + (B.y - A.y) * frac;
@@ -1100,10 +1106,10 @@ async function playEvents(ctx, events) {
         Actors.faceToward(mover, start.x, start.y, dest.x, dest.y);
         Actors.playClip(mover, 'walk');
       }
-      u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * 140), x: start.x, y: start.y };
+      u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * (Actors.isFig() ? Actors.FIG_STEP_MS : 140)), x: start.x, y: start.y };
       await wait(u.pathAnim.dur);
       u.pathAnim = null;
-      if (mover) Actors.playClip(mover, 'idle');
+      if (mover) { if (mover.anim) mover.anim.hop = null; Actors.playClip(mover, 'idle'); }
     }
     if (ev.typ === 'shot' || ev.typ === 'overwatch' || ev.mode) {
       const att = b.units.find((x) => x.uid === ev.uid);
