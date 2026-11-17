@@ -13,6 +13,11 @@ import * as Rig from './rig.js';
 const DEG = Math.PI / 180;
 
 export const ACTORS = {
+  anvil: {
+    idle: 'assets/actors/anvil-idle.png',
+    height: 84, breath: 3.0, walk: 0.62,
+    origin: [0.47, 0.985], gunTip: [0.93, 0.58], colour: '#4a4a4e',
+  },
   rook: {
     idle: 'assets/actors/rook-idle.png',
     height: 78, breath: 2.15, walk: 0.46,
@@ -284,7 +289,7 @@ function poseOf(unit, now) {
 // painted reference sizes; on the map a 1.8 m wolf or fox stands 21 px — about 0.7 of a
 // door (31 px) and half a full room wall (40 px). Bigger species a little taller, rats shorter.
 // See docs/unit-scale.md.
-const SPECIES_H = { Wolf: 27, Fox: 27, Badger: 28, Bear: 32, Croc: 31, Snake: 27, Rat: 20 };
+const SPECIES_H = { Wolf: 27, Fox: 27, Badger: 28, Bear: 32, Croc: 31, Snake: 27, Rat: 20, Rhino: 31 };
 function worldHeight(id) {
   let sp = '';
   try { sp = (defOf(id) || {}).species || ''; } catch (e) { sp = ''; }

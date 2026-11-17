@@ -105,3 +105,12 @@ Rook's set:
 3. New ability *kinds* need a branch in `apply()` (tactics core), an AI score in `think()`, an icon in
    `ICONS` (tactics UI) and, ideally, a sound in `audio.js`. Variants of existing kinds (another
    `melee: true` hit with different `dmgAdd`/`bleed`/`cd`) need no code.
+
+## Second hero from the template: Anvil (v0.12)
+
+Anvil (Rhino, `classId: 'tank'`) is Rook's block with new numbers: HP 26, Move 3, Speed 4, Aim 60,
+`template.base.armor: 1` (template armour now adds into `statsFor`). He reuses existing kinds for
+Gore Charge (`pounce`) and Horn Slam (`maul`) and adds two new kinds: `brace` (+armour until his next
+turn) and `taunt` (foes in radius get -25 aim at anyone else; the AI avoids other targets). Passive
+`bulwark` cuts 1 damage from hits on adjacent allies. `unlock: { kind: 'level', lv: 10 }` grants him
+in `grantsFor` at player level 10; level-unlock heroes are kept out of the shard pools.

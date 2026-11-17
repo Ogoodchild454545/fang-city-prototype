@@ -87,7 +87,7 @@ function heroTab(ctx) {
   const ops = HERO_ORDER.filter((id) => s.heroes.owned[id]);
   let sel = ctx.sub.crewHero;
   if (!ops.includes(sel)) sel = ops[0];
-  const more = HERO_ORDER.length - ops.length;
+  const more = HERO_ORDER.filter((id) => !s.heroes.owned[id] && HEROES[id].unlock?.kind !== 'level').length;
   return `
   <div class="armyscr heroonly">
     <div class="bosscol crewcol"><div class="sect" style="margin-top:0">Operators ${ops.length}</div>

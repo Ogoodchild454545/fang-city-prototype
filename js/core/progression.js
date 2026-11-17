@@ -27,6 +27,7 @@ export const UNLOCKS = [
   { lv: 7, id: 'jobs', name: 'Operator jobs', ico: '💼', text: 'Send spare operators on 1–8 hour jobs.' },
   { lv: 7, id: 'crafting', name: 'Factory', ico: '🏭', text: 'Build a Factory: craft gear from blueprints you find.' },
   { lv: 7, id: 'rep', name: 'Rep', ico: '⭐', text: 'Earn Rep from ops and the Pirate Radio.' },
+  { lv: 10, id: 'tank', name: 'Anvil joins', ico: '🦏', text: 'Anvil, a rhino Tank, joins your crew for free.' },
   { lv: 10, id: 'squad4', name: '4 v 4 ops', ico: '👥', text: 'Full squads of four.' },
   { lv: 10, id: 'allslots', name: 'All 13 gear slots', ico: '🎒', text: 'Every gear slot open on every operator.' },
   { lv: 10, id: 'bestgear', name: 'Best gear button', ico: '✨', text: 'Auto-equip the strongest kit in one tap.' },
@@ -58,6 +59,10 @@ export function grantsFor(s, lv) {
   if (lv >= 5 && !s.heroes.owned.vesper && !s.player.gotMedic) {
     grantHero(s, 'vesper');
     s.player.gotMedic = 1;
+  }
+  if (lv >= 10 && !s.heroes.owned.anvil && !s.player.gotTank) {
+    grantHero(s, 'anvil');
+    s.player.gotTank = 1;
   }
 }
 

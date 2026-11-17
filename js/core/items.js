@@ -194,7 +194,7 @@ export function statsFor(heroId, { stars = 1, lv = 1, perks = [], gear = null, e
   const tb = (d.template && d.template.base) || {};
   return {
     hp: d.hp + sb.hp + lb.hp + pm.hp + (km.hp || 0) + (bear ? 3 : 0) + (km.hpClass || 0) + im.hp,
-    armor: (km.armor || 0) + im.armor,
+    armor: (km.armor || 0) + (tb.armor || 0) + im.armor,
     mdmg: (km.mdmg || 0) + im.mdmg,
     rdmg: (km.rdmg || 0) + im.rdmg,
     aim: d.aim + sb.aim + lb.aim + pm.aim + (km.aim || 0) + im.aim,

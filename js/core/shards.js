@@ -37,7 +37,7 @@ export const CRATES = {
 };
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
-const FEATURE_POOL = HERO_ORDER.filter((id) => id !== 'rook');
+const FEATURE_POOL = HERO_ORDER.filter((id) => id !== 'rook' && HEROES[id].unlock?.kind !== 'level');
 
 export function weekIndex(now) {
   return Math.floor((now || Date.now()) / WEEK_MS);
@@ -53,7 +53,7 @@ export function featuredUntil(now) {
 }
 
 export function collectable(s) {
-  return HERO_ORDER.filter((id) => id !== 'rook');
+  return HERO_ORDER.filter((id) => id !== 'rook' && HEROES[id].unlock?.kind !== 'level');
 }
 
 function weightFor(s, id, now) {

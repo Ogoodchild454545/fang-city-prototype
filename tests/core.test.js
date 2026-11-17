@@ -303,7 +303,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 8);
+  assert.equal(s.v, 9);
   assert.equal(s.crew, undefined);
   assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
@@ -312,7 +312,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 8 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 9 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
@@ -331,7 +331,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
   const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
   const teeth = s2.teeth, cash0 = s2.cash;
   const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
-  assert.equal(s.v, 8);
+  assert.equal(s.v, 9);
   assert.equal(s.gang, undefined);
   assert.equal(s.crew, undefined);
   assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
@@ -409,7 +409,7 @@ test('a new player starts with Rook only; others are collectable', () => {
   assert.deepEqual(Object.keys(s.heroes.owned), ['rook']);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.equal(s.heroes.tutorialDone, false);
-  assert.equal(HERO_ORDER.length, 8);
+  assert.equal(HERO_ORDER.length, 9);
   finishTutorial(s);
   assert.equal(s.heroes.tutorialDone, true);
   assert.ok(!s.heroes.owned.pip, 'Pip is no longer a free unlock');
@@ -514,7 +514,7 @@ test('v3 save migrates to v5 with Rook and starting ammo', () => {
   delete s3.heroes;
   delete s3.tactics;
   const s = migrate(s3, T0);
-  assert.equal(s.v, 8);
+  assert.equal(s.v, 9);
   assert.ok(s.heroes.owned.rook);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.ok((s.ammo || 0) >= 30);
@@ -1151,7 +1151,7 @@ test('v0.11 save migration: v7 saves keep gear and get blueprints, factory and l
   s.v = 7; delete s.blueprints; delete s.factory; delete s.player.itemsGot;
   for (const id of ['crowbar', 'raincoat', 'flaregun']) delete s.stash[id];
   const m = migrate(JSON.parse(JSON.stringify(s)), T0);
-  assert.equal(m.v, 8); assert.deepEqual(m.blueprints, {}); assert.equal(m.factory, null);
+  assert.equal(m.v, 9); assert.deepEqual(m.blueprints, {}); assert.equal(m.factory, null);
   for (const id of ['crowbar', 'raincoat', 'flaregun']) assert.equal(IT.stashCount(m, id), 1, id);
 });
 
@@ -1288,7 +1288,7 @@ test('v0.9 save migration: v5 saves keep operators, Rook gets his kit, misfit Wo
   delete s5.heroes.owned.ivory.equip;
   s5.kit = {};
   const s = migrate(JSON.parse(serialize(s5)), T0);
-  assert.equal(s.v, 8);
+  assert.equal(s.v, 9);
   assert.ok(s.heroes.owned.ivory, 'unlocked operators are kept');
   const rook = s.heroes.owned.rook;
   assert.equal(rook.lv, 4); assert.deepEqual(rook.perks, ['iron']);
@@ -1502,7 +1502,7 @@ test('v0.10 save migration: v6 saves get a level from play so far and keep their
   s6.heroes.tutorialDone = true; s6.stats.battles = 12;
   s6.heroes.owned.rook.equip.gloves = 'tape';
   const s = migrate(JSON.parse(serialize(s6)), T0);
-  assert.equal(s.v, 8);
+  assert.equal(s.v, 9);
   assert.ok(s.player.lv >= 3 && s.player.lv <= 10, 'level ' + s.player.lv);
   assert.equal(s.energy.n, 10);
   assert.equal(s.heroes.owned.rook.equip.gloves, 'tape', 'worn kit is kept');
@@ -1510,3 +1510,51 @@ test('v0.10 save migration: v6 saves get a level from play so far and keep their
 });
 
 console.log(`\n${pass} tests passed`);
+
+test('v0.12 Anvil: rhino Tank from Rook\'s template, joins at player Lv 10; Brace, Gore Charge, Taunt, Horn Slam, Bulwark', () => {
+  const d = HEROES.anvil, rook = HEROES.rook;
+  assert.equal(d.classId, 'tank'); assert.equal(d.species, 'Rhino');
+  assert.deepEqual(d.template.slots, rook.template.slots, 'same 13-slot paper doll as Rook');
+  assert.ok(d.hp > rook.hp && d.speed < rook.speed && d.move < rook.move, 'more HP, slower, shorter move');
+  const st = IT.statsFor('anvil', { equip: d.template.start.equip });
+  assert.ok(st.armor >= 2, 'base armour + stab vest');
+  // joins free at Lv 10, not before; never from shards
+  const s = newGame(T0, 31);
+  PG.setPlayerLevel(s, 9, T0); assert.ok(!s.heroes.owned.anvil);
+  PG.setPlayerLevel(s, 10, T0); assert.ok(s.heroes.owned.anvil);
+  IT.ensureItems(s); assert.equal(s.heroes.owned.anvil.equip.primary, 'sawnoff');
+  assert.ok(!SH.featurePool || !SH.featurePool().includes?.('anvil'));
+  // battle kit
+  const b = T.startBattle({ map: tutorialMap(), player: ['anvil', 'rook'], enemy: ['slab', 'knack'], seed: 9, label: 'x', kind: 'custom', pvp: false,
+    loadout: { recs: { anvil: { stars: 1, lv: 5, perks: [], gear: null, equip: { ...d.template.start.equip } }, rook: { stars: 1, lv: 1, perks: [], gear: null, equip: { ...rook.template.start.equip } } }, ammo: { anvil: 4, rook: 6 }, medkits: {} } });
+  const a = b.units.find((u) => u.hero === 'anvil'), r = b.units.find((u) => u.hero === 'rook');
+  const [f1, f2] = b.units.filter((u) => u.side === 'enemy');
+  a.x = 7; a.y = 9; r.x = 8; r.y = 9; f1.x = 9; f1.y = 11; f2.x = 6; f2.y = 11; f1.hp = f2.hp = 40; f1.maxHp = f2.maxHp = 40;
+  b.acting = a.uid; b.side = 'player'; a.ap = a.maxAp;
+  const br = T.apply(b, { type: 'brace', uid: a.uid });
+  assert.ok(br.ok, br.reason); assert.equal(a.brace, 2); assert.equal(a.cd.brace, 3);
+  const tt = T.apply(b, { type: 'taunt', uid: a.uid });
+  assert.ok(tt.ok, tt.reason); assert.ok(f1.taunt === a.uid && f2.taunt === a.uid);
+  const vsRook = T.previewShot(b, f1, r, 'shot'); f1.taunt = 0; const calm = T.previewShot(b, f1, r, 'shot'); f1.taunt = a.uid;
+  if (vsRook.ok && calm.ok) assert.ok(calm.chance - vsRook.chance >= 20, 'Taunted: ~-25 at anyone else');
+  f1.x = 7; f1.y = 10;
+  const pm = T.previewShot(b, a, f1, 'pounce'), ps = T.previewShot(b, a, f1, 'melee');
+  assert.equal(pm.dmg[0] - ps.dmg[0], 2, 'Gore Charge +2');
+  const hs = T.previewShot(b, a, f1, 'maul'); assert.equal(hs.dmg[0] - ps.dmg[0], 3, 'Horn Slam +3');
+  // Unshakeable: Howl does not shake him
+  b.units.forEach((u) => { u.shaken = 0; });
+  assert.ok(T.abilitiesOf(a).some((x) => x.id === 'maul' && x.name === 'Horn Slam'));
+  // AI with a hurt tank in reach braces or taunts rather than idling
+  let used = false;
+  const b2 = T.startBattle({ map: tutorialMap(), player: ['anvil'], enemy: ['slab', 'knack'], seed: 3, label: 'x', kind: 'custom', pvp: false,
+    loadout: { recs: { anvil: { stars: 1, lv: 5, perks: [], gear: null, equip: { ...d.template.start.equip } } }, ammo: { anvil: 4 }, medkits: {} } });
+  for (let i = 0; i < 80 && b2.status === 'active'; i++) { const act = T.think(b2); if (['brace', 'taunt'].includes(act.type)) used = true; const res = T.apply(b2, act); if (!res.ok) T.apply(b2, { type: 'endTurn' }); }
+  assert.ok(used, 'AI uses the tank kit');
+});
+
+test('v0.12 save migration: v8 saves at Lv 10+ get Anvil', () => {
+  const s = newGame(T0, 33); PG.setPlayerLevel(s, 12, T0);
+  delete s.heroes.owned.anvil; delete s.player.gotTank; s.heroes.squad = s.heroes.squad.filter((x) => x !== 'anvil'); s.v = 8;
+  const m = migrate(JSON.parse(JSON.stringify(s)), T0);
+  assert.equal(m.v, 9); assert.ok(m.heroes.owned.anvil);
+});

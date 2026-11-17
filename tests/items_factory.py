@@ -52,9 +52,9 @@ with sync_playwright() as p:
     pg.evaluate("""async () => { const Ch = await import('./js/ui/character.js'); Ch.openCharacter(window.__game, 'rook'); }""")
     pg.wait_for_timeout(800)
     pg.screenshot(path=f'{OUT}/01-inventory.png')
-    pg.click('.sitem[data-id="goldrifle"]'); pg.wait_for_timeout(400)
+    pg.eval_on_selector('.sitem[data-id="goldrifle"]', 'e => { e.scrollIntoView(); e.click(); }'); pg.wait_for_timeout(400)
     pg.screenshot(path=f'{OUT}/06-item-detail-legendary.png')
-    pg.click('.sitem[data-id="platecarrier"]'); pg.wait_for_timeout(400)
+    pg.eval_on_selector('.sitem[data-id="platecarrier"]', 'e => { e.scrollIntoView(); e.click(); }'); pg.wait_for_timeout(400)
     pg.screenshot(path=f'{OUT}/07-item-compare.png')
     # loot drop on the result screen
     pg.evaluate("""async () => { const T = await import('./js/ui/tactics.js'); const c = window.__game; c.closeModal && c.closeModal(true);

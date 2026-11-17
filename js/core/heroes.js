@@ -22,12 +22,13 @@ export const SPECIES_PERKS = {
   Snake:  { id: 'poison',   name: 'Venom',       text: 'A hitting shot leaves the target poisoned for two turns.' },
   Croc:   { id: 'tough',    name: 'Thick Hide',  text: 'Ignore 1 damage from every hit.' },
   Bear:   { id: 'stout',    name: 'Immovable',   text: '+3 max HP, and you cannot be suppressed.' },
+  Rhino:  { id: 'unshakeable', name: 'Unshakeable', text: 'Cannot be Shaken or suppressed.' },
 };
 
 export const classOf = (h) => (h && CLASSES[h.classId]) || CLASSES[(h && h.classId)] || null;
 export const speciesPerk = (species) => SPECIES_PERKS[species] || null;
 
-export const HERO_ORDER = ['rook', 'pip', 'lumen', 'brick', 'vesper', 'ivory', 'nile', 'marlow'];
+export const HERO_ORDER = ['rook', 'anvil', 'pip', 'lumen', 'brick', 'vesper', 'ivory', 'nile', 'marlow'];
 
 export const HEROES = {
   rook: {
@@ -76,6 +77,49 @@ export const HEROES = {
 
     tags: ['melee', 'wolf', 'bruiser'],
     unlock: { kind: 'start' },
+  },
+  // v0.12: the second hero built on Rook's template. A slow rhino Tank who joins free at player Lv 10
+  // (the fourth op seat). Huge health and armour; poor speed and movement; holds the line for the crew.
+  anvil: {
+    id: 'anvil', name: 'Anvil', species: 'Rhino', role: 'Tank',
+    blurb: 'A rhino in a riot plate. Slow to start, impossible to stop.',
+    portrait: 'assets/heroes/anvil.jpg', thumb: 'assets/heroes/anvil-64.jpg',
+    mood: 'heroic',
+    hp: 26, ap: 4, move: 3, aim: 60, armor: 1, speed: 4,
+    weapon: { name: 'Fists', dmg: [3, 4], range: 1, typ: 'melee' },
+    abilities: [
+      { id: 'melee', name: 'Strike', ap: 2, kind: 'melee', range: 1, melee: true, text: 'Hit with the equipped melee weapon.' },
+      { id: 'shot', name: 'Shotgun', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'brace', name: 'Brace', ap: 1, kind: 'brace', cd: 3, armor: 2, unlock: 1, sfx: 'secondwind',
+        text: 'Riot shield up: +2 armour and cover one step better until your next turn.' },
+      { id: 'pounce', name: 'Gore Charge', ap: 2, kind: 'pounce', range: 4, cd: 3, aim: 5, dmgAdd: 2, melee: true, unlock: 1, sfx: 'pounce',
+        text: 'Charge a foe up to 4 tiles away (overwatch can\'t catch it) and hit with the horn at +2 damage and +5 aim.' },
+      { id: 'taunt', name: 'Taunt', ap: 1, kind: 'taunt', cd: 4, radius: 5, unlock: 3, sfx: 'howl',
+        text: 'Call them out: foes within 5 tiles aim 25% worse at anyone but Anvil until their turn ends.' },
+      { id: 'maul', name: 'Horn Slam', ap: 3, kind: 'maul', range: 1, cd: 3, dmgAdd: 3, bleed: 1, melee: true, unlock: 5, sfx: 'maul',
+        text: 'Drive the horn in: +3 damage and the target bleeds 1 HP for a turn.' },
+    ],
+    passive: { id: 'bulwark', name: 'Bulwark', text: 'Crew standing next to Anvil take 1 less damage from every hit.' },
+    classId: 'tank',
+    template: {
+      class: 'tank',
+      base: { crit: 0, dodge: 0, armor: 1 },
+      slots: ['primary', 'sidearm', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      start: {
+        equip: { primary: 'sawnoff', melee: 'bat', jacket: 'leather', body: 'stabvest', boots: 'workboots' },
+        stash: ['helmet'],
+      },
+    },
+    bio: "Ten years on the door of the Harbour Lights club, two on a prison landing, and not one night where anyone got past him. Anvil came out with a dented riot shield he lifted on the way, a debt to Rook's family, and no interest in running. He walks in at his own pace and stands where the bullets are.",
+    quips: {
+      move: ["I'm coming. Slowly.", "Behind me.", "Make room."],
+      shoot: ["Knock knock.", "Stay down.", "Wrong door."],
+      ko: ["...Took a while.", "Still... standing... mostly."],
+      revive: ["Get behind me.", "Back on the door."],
+      win: ["Doors closed.", "Nobody got past."],
+    },
+    tags: ['tank', 'rhino', 'melee'],
+    unlock: { kind: 'level', lv: 10 },
   },
   pip: {
     id: 'pip', name: 'Pip', species: 'Rat', role: 'Scout',
@@ -403,6 +447,7 @@ export function denLv(s) {
 export function unlockHint(s, id) {
   const h = HEROES[id]; if (!h) return 'Unknown';
   if (id === 'rook') return 'Given in the street lesson';
+  if (h.unlock && h.unlock.kind === 'level' && !s.heroes?.owned?.[id]) return `Joins free at player level ${h.unlock.lv}`;
   if (s.heroes?.owned?.[id]) return 'In the crew';
   const have = s.heroes?.shards?.[id] || 0;
   return `${have}/30 shards to unlock`;
@@ -415,6 +460,7 @@ export function canRecruit(s, id) {
   const u = h.unlock || {};
   if (u.kind === 'start') return { ok: true };
   if (u.kind === 'tutorial') return { ok: false, reason: 'Finishes the street lesson first' };
+  if (u.kind === 'level') return { ok: false, reason: `Joins free at player level ${u.lv}` };
   if (u.den && denLv(s) < u.den) return { ok: false, reason: `The Den must be level ${u.den}` };
   if (u.cash && s.cash < u.cash) return { ok: false, reason: `Need $${u.cash.toLocaleString('en-GB')}` };
   if (u.influence && s.influence < u.influence) return { ok: false, reason: `Need ${u.influence} Rep` };

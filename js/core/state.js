@@ -14,7 +14,7 @@ setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';
-export const STATE_VERSION = 8;
+export const STATE_VERSION = 9;
 
 export function newGame(now, seed = newSeed()) {
   const s = {
@@ -149,6 +149,13 @@ export function migrate(s, now = Date.now()) {
     for (let l = 2; l <= s.player.lv; l++) regrant(s, l);
     s.v = 8;
     s.migratedTo8 = 1;
+  }
+  if (s.v === 8 && s.base) {
+    // v0.12: Anvil (rhino Tank) joins crews already at player Lv 10+; nothing else changes.
+    ensureHeroes(s);
+    ensureProgress(s, now);
+    for (let l = 2; l <= s.player.lv; l++) regrant(s, l);
+    s.v = 9;
   }
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };

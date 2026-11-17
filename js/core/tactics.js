@@ -138,6 +138,8 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (abl && abl.aim) { chance += abl.aim; push(abl.name, abl.aim); }
   if (att.rallied) { chance += 10; push('Rallied', +10); }
   if (att.shaken) { chance -= 15; push('Shaken', -15); }
+  // v0.12 Taunt: a taunted foe struggles to aim at anyone but the rhino who called them out
+  if (att.taunt && att.taunt !== def.uid && b.units.some((x) => x.uid === att.taunt && x.hp > 0)) { chance -= 25; push('Taunted', -25); }
   if (def.dodge) { chance -= def.dodge; push('Dodge', -def.dodge); }
   if (cover === 1) { chance -= 20; push('Half cover', -20); }
   if (cover === 2) { chance -= 40; push('Full cover', -40); }
@@ -259,7 +261,7 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
     aimMod: st.aimMod,
     armor: st.armor, rangeBonus: st.range, mdmg: st.mdmg, rdmg: st.rdmg,
     crit: st.crit, dodge: st.dodge, charges: st.charges, gun: st.gun, mel: st.mel,
-    cd: {}, bleed: 0, shaken: 0, rallied: 0,
+    cd: {}, bleed: 0, shaken: 0, rallied: 0, brace: 0, taunt: 0,
     ap: st.ap, maxAp: st.ap, move, baseMove: move,
     speed: st.speed, init: 0, classId: d.classId || '',
     ammo: opts.ammo == null ? (side === 'enemy' ? 8 : 0) : opts.ammo,
@@ -419,6 +421,9 @@ function resolveHit(b, att, def, mode, prev) {
   const tdef = defOf(def.hero);
   if (tdef.passive?.id === 'hide' || tdef.species === 'Croc') dmg = Math.max(1, dmg - 1);
   if (def.armor) dmg = Math.max(1, dmg - def.armor);
+  if (def.brace) dmg = Math.max(1, dmg - def.brace); // v0.12 Brace: riot shield up
+  // v0.12 Bulwark (Anvil's passive): allies standing next to him take 1 less damage
+  if (b.units.some((o) => o !== def && o.side === def.side && o.hp > 0 && defOf(o.hero).passive?.id === 'bulwark' && MANH(o.x, o.y, def.x, def.y) === 1)) dmg = Math.max(1, dmg - 1);
   const syn = synergiesFor(squadIds(b, def.side));
   if (syn.some((g) => g.name === 'Field Guard') && def.hero === 'vesper') {
     const brick = b.units.find((u) => u.hero === 'brick' && u.side === def.side && u.hp > 0 && MANH(u.x, u.y, def.x, def.y) === 1);
@@ -435,7 +440,7 @@ function resolveHit(b, att, def, mode, prev) {
     def.hp = Math.max(0, def.hp - dmg);
   }
   ev.dmg = dmg;
-  if (mode === 'suppress' && tdef.species !== 'Bear') def.suppressed = 1;
+  if (mode === 'suppress' && tdef.species !== 'Bear' && tdef.species !== 'Rhino') def.suppressed = 1;
   if (mode === 'venom' || defOf(att.hero).species === 'Snake') def.venom = Math.max(def.venom || 0, 2);
   if (prev.bleed && def.hp > 0) { def.bleed = Math.max(def.bleed || 0, prev.bleed); ev.bleed = prev.bleed; }
   // Bruiser Grit: melee hits patch the bruiser up.
@@ -478,7 +483,7 @@ export function apply(b, action) {
   // Abilities with cooldowns / level unlocks (data-driven, see hero template).
   const ablId = action.type === 'shootProp' || action.type === 'move' ? null : (action.mode || action.type);
   const abl = ablId ? abilityOf(u, ablId) : null;
-  if (abl && abl.unlock && (u.lv || 1) < abl.unlock) return { ok: false, reason: `${abl.name} unlocks at level ${abl.unlock}` };
+  if (abl && abl.unlock && (u.alv || u.lv || 1) < abl.unlock) return { ok: false, reason: `${abl.name} unlocks at level ${abl.unlock}` };
   if (abl && abl.cd && cooldownLeft(u, abl.id) > 0) return { ok: false, reason: `${abl.name} is recharging (${cooldownLeft(u, abl.id)} turns)` };
   const startCd = () => { if (abl && abl.cd) { u.cd ||= {}; u.cd[abl.id] = abl.cd; } };
 
@@ -498,11 +503,29 @@ export function apply(b, action) {
     const shaken = [], rallied = [];
     for (const o of b.units) {
       if (o.hp <= 0 || MANH(o.x, o.y, u.x, u.y) > r) continue;
-      if (o.side === u.side) { o.rallied = 1; rallied.push(o.uid); } else { o.shaken = 1; shaken.push(o.uid); }
+      if (o.side === u.side) { o.rallied = 1; rallied.push(o.uid); } else if (defOf(o.hero).species !== 'Rhino') { o.shaken = 1; shaken.push(o.uid); }
     }
     startCd();
     log(b, `${nameOf(u)} howls. ${shaken.length} shaken.`);
     return { ok: true, events: [{ typ: 'howl', uid: u.uid, radius: r, shaken, rallied, ability: abl.id }], status: b.status };
+  }
+
+  // v0.12 tank kit: Brace (shield up) and Taunt (draw fire)
+  if (action.type === 'brace') {
+    if (!abl) return { ok: false, reason: 'Unknown ability' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    u.brace = abl.armor || 2; u.fortify = 1; startCd();
+    log(b, `${nameOf(u)} braces behind the shield.`);
+    return { ok: true, events: [{ typ: 'brace', uid: u.uid, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'taunt') {
+    if (!abl) return { ok: false, reason: 'Unknown ability' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const r = abl.radius || 5, taunted = [];
+    for (const o of b.units) if (o.hp > 0 && o.side !== u.side && MANH(o.x, o.y, u.x, u.y) <= r) { o.taunt = u.uid; taunted.push(o.uid); }
+    startCd();
+    log(b, `${nameOf(u)} roars a challenge. ${taunted.length} taunted.`);
+    return { ok: true, events: [{ typ: 'taunt', uid: u.uid, radius: r, taunted, ability: abl.id }], status: b.status };
   }
 
   if (action.type === 'pounce' || action.mode === 'pounce') {
@@ -656,7 +679,7 @@ export function apply(b, action) {
   const mab = abilityOf(u, mode);
   const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : (mab && mab.cd ? mab.ap : 2);
   if (mab && mab.cd && cooldownLeft(u, mab.id) > 0) return { ok: false, reason: `${mab.name} is recharging` };
-  if (mab && mab.unlock && (u.lv || 1) < mab.unlock) return { ok: false, reason: `${mab.name} unlocks at level ${mab.unlock}` };
+  if (mab && mab.unlock && (u.alv || u.lv || 1) < mab.unlock) return { ok: false, reason: `${mab.name} unlocks at level ${mab.unlock}` };
   if (mode === 'roll' && u.rollUsed) return { ok: false, reason: 'Already used this turn' };
   if (!spend(u, ap)) return { ok: false, reason: 'Not enough AP' };
   if (mode === 'roll') u.rollUsed = 1;
@@ -706,7 +729,7 @@ function startUnitTurn(b, u) {
   u.moved = 0; u.acted = 0; u.dashUsed = 0; u.rollUsed = 0; u.sprint = 0;
   u.move = (u.baseMove || d.move);
   u.overwatch = false;
-  u.fortify = 0;
+  u.fortify = 0; u.brace = 0;
   b.acting = u.uid;
   b.side = u.side;
   if (u.cd) for (const k of Object.keys(u.cd)) { if (u.cd[k] > 0) u.cd[k] -= 1; }
@@ -763,7 +786,7 @@ function endUnitTurn(b, timedOut) {
   } else if (timedOut && u) {
     log(b, `${nameOf(u)} runs out of time.`);
   }
-  if (u) { u.suppressed = 0; u.shaken = 0; u.rallied = 0; }
+  if (u) { u.suppressed = 0; u.shaken = 0; u.rallied = 0; u.taunt = 0; }
   checkEnd(b);
   if (b.status !== 'active') return { ok: true, events, status: b.status };
   return advanceQueue(b, events);
@@ -965,6 +988,14 @@ export function think(b) {
     // Second Wind when hurt; Howl first while foes are close and AP remains to follow up.
     const sw = ready('secondwind');
     if (sw && u.ap >= sw.ap && u.hp <= u.maxHp * 0.5) consider({ type: 'secondwind', uid: u.uid }, 70 + (u.maxHp - u.hp) * 6);
+    // Tank: taunt when two or more foes are close, brace when hurt and in reach of foes
+    const tt = ready('taunt');
+    if (tt && u.ap >= tt.ap && !u.acted) {
+      const near = foes.filter((f) => MANH(u.x, u.y, f.x, f.y) <= (tt.radius || 5)).length;
+      if (near >= 2) consider({ type: 'taunt', uid: u.uid }, 120 + near * 12);
+    }
+    const br = ready('brace');
+    if (br && u.ap >= br.ap && u.ap <= 2 && foes.some((f) => MANH(u.x, u.y, f.x, f.y) <= 7)) consider({ type: 'brace', uid: u.uid }, 55 + (u.maxHp - u.hp) * 3);
     const hw = ready('howl');
     if (hw && u.ap >= hw.ap + 2 && !u.acted && foes.some((f) => MANH(u.x, u.y, f.x, f.y) <= Math.min(2, hw.radius || 5))) {
       consider({ type: 'howl', uid: u.uid }, 150 + foes.filter((f) => MANH(u.x, u.y, f.x, f.y) <= (hw.radius || 5)).length * 10);
@@ -981,6 +1012,7 @@ export function think(b) {
         if (u.ap < ap) continue;
         let score = 40 + prev.chance + prev.dmg[0] * 8 + (prev.flanked ? 20 : 0) - prev.cover * 8;
         if (f.hp <= prev.dmg[1]) score += 30;
+        if (u.taunt && f.uid !== u.taunt && b.units.some((x) => x.uid === u.taunt && x.hp > 0)) score -= 45;
         if (prev.bleed && f.hp > prev.dmg[1]) score += 12;
         if (mode === 'pounce') score += prev.dist > 1 ? 14 : -20;
         consider({ type: mode, uid: u.uid, target: f.uid, mode }, score);

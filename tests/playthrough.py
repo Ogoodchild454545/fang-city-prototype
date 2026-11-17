@@ -365,8 +365,8 @@ async def main():
         await page.wait_for_selector('.armyscr.heroonly .heroshow')
         await shot(page, '18-crew-roster')
         assert await page.locator('.tcard, .tchip, [data-act="train"], [data-act="crewTab"][data-t="upgrades"]').count() == 0, 'troop UI should be hidden'
-        # ?level=20 run: Rook plus Vesper (the free medic at player Lv 5), operators only
-        assert await page.locator('.crewcol .opslot').count() == 2, 'crew column should show Rook and Vesper'
+        # ?level=20 run: Rook, Vesper (free medic at Lv 5) and Anvil (free tank at Lv 10), operators only
+        assert await page.locator('.crewcol .opslot').count() == 3, 'crew column should show Rook, Vesper and Anvil (Lv 10)'
         assert await page.locator('.bslot[data-act="bossInfo"]').count() == 0, 'no bosses on the crew screen'
         assert await ev(page, "Object.keys(window.__game.state.army).length") == 0, 'new game should have no troops'
         await tap(page, '.crewcol .opslot[data-id="rook"]')

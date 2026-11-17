@@ -1169,7 +1169,8 @@ async function playEvents(ctx, events) {
         if (tg) Actors.faceToward(pu, ev.from.x, ev.from.y, tg.x, tg.y);
         Actors.playClip(pu, 'ability');
         const p = toWorld(ev.from.x, ev.from.y);
-        Vfx.spawnCallout(Vfx.ensure(u), p.x * u.cam.z, (p.y - Actors.actorHeight(pu.hero) - 22) * u.cam.z, 'POUNCE', 'crit');
+        const pName = ((defOf(pu.hero).abilities || []).find((a) => a.id === 'pounce') || {}).name || 'Pounce';
+        Vfx.spawnCallout(Vfx.ensure(u), p.x * u.cam.z, (p.y - Actors.actorHeight(pu.hero) - 22) * u.cam.z, pName.toUpperCase(), 'crit');
         u.pathAnim = { uid: ev.uid, path: [ev.to], from: ev.from, t0: performance.now(), dur: 300, x: ev.from.x, y: ev.from.y, leap: 1 };
         await wait(300);
         u.pathAnim = null;
@@ -1195,6 +1196,34 @@ async function playEvents(ctx, events) {
           u.floats.push({ t: performance.now() + 200, x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(f.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: 'RALLIED', heal: 1 });
         }
         await wait(700);
+      }
+    }
+    if (ev.typ === 'brace') {
+      const bu = b.units.find((x) => x.uid === ev.uid);
+      if (bu) {
+        Audio.play('secondwind');
+        Actors.playClip(bu, 'ability');
+        const p = toWorld(bu.x, bu.y);
+        Vfx.spawnCallout(Vfx.ensure(u), p.x * u.cam.z, (p.y - Actors.actorHeight(bu.hero) - 22) * u.cam.z, 'BRACE', 'overwatch');
+        u.floats.push({ t: performance.now() + 150, x: p.x * u.cam.z, y: (p.y - Actors.actorHeight(bu.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: '+2 ARMOUR', heal: 1 });
+        await wait(420);
+      }
+    }
+    if (ev.typ === 'taunt') {
+      const tu = b.units.find((x) => x.uid === ev.uid);
+      if (tu) {
+        Audio.play('howl');
+        Actors.playClip(tu, 'ability');
+        const p = toWorld(tu.x, tu.y);
+        Vfx.spawnCallout(Vfx.ensure(u), p.x * u.cam.z, (p.y - Actors.actorHeight(tu.hero) - 22) * u.cam.z, 'TAUNT', 'crit');
+        u.howlRing = { x: tu.x, y: tu.y, r: ev.radius || 5, t0: performance.now() };
+        u.shake = Math.max(u.shake || 0, 4);
+        for (const id of ev.taunted || []) {
+          const f = b.units.find((x) => x.uid === id); if (!f) continue;
+          const q = toWorld(f.x, f.y);
+          u.floats.push({ t: performance.now() + 200, x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(f.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: 'TAUNTED', heal: 0, dmg: 1 });
+        }
+        await wait(650);
       }
     }
     if (ev.typ === 'bleed') {
@@ -1526,6 +1555,8 @@ const ICONS = {
   maul: '<path d="M4 4l5 7M9 3l4 8M14 3l3 8M19 4l1 7"/><path d="M4 15c3 4 13 4 16 0"/>',
   secondwind: '<path d="M12 21s-8-5-8-11a4.5 4.5 0 018-3 4.5 4.5 0 018 3c0 6-8 11-8 11z"/><path d="M9 12h6M12 9v6"/>',
   howl: '<path d="M4 14l5-1 3-6 2 4 6-1-4 5 2 6-5-3-5 3 1-5z"/><path d="M19 3c1 1 2 3 2 5M16 4c1 1 1.5 2 1.5 3"/>',
+  brace: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6v3H9z"/><path d="M9 13h6M9 16h6"/>',
+  taunt: '<path d="M4 9v6h4l6 5V4L8 9z"/><path d="M17 8c1.5 1 1.5 7 0 8M20 5c3 3 3 11 0 14"/>',
 };
 export function abilityIcon(kind) {
   const d = ICONS[kind] || ICONS.shot;
@@ -1663,7 +1694,7 @@ export function mount(ctx, el) {
 export const actions = {
   tmode(ctx, el) {
     const mode = el.dataset.mode;
-    const inst = ['overwatch', 'dash', 'sprint', 'fortify', 'hunker', 'secondwind', 'howl'];
+    const inst = ['overwatch', 'dash', 'sprint', 'fortify', 'hunker', 'secondwind', 'howl', 'brace', 'taunt'];
     const u = ui(ctx);
     if (!u.sel) return;
     if (inst.includes(mode)) return doAct(ctx, { type: mode, uid: u.sel });

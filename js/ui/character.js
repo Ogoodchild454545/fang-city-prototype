@@ -190,7 +190,7 @@ function abilityPanel(s, c) {
   const perks = (rec.perks || []).map((p) => PERKS[p]?.name).filter(Boolean);
   return `<div class="cabil">
     <div class="sect" style="margin-top:0">Passive</div>
-    <div class="abil"><span class="aico">🐺</span><div><b class="h small">${esc(d.passive?.name || '')}</b><div class="tiny">${esc(d.passive?.text || '')}</div>${pk ? `<div class="tiny dim">${esc(pk.name)} (Wolf): ${esc(pk.text)}</div>` : ''}</div></div>
+    <div class="abil"><span class="aico">${d.species === 'Wolf' ? '🐺' : abilityIcon(d.passive?.id === 'bulwark' ? 'fortify' : 'melee')}</span><div><b class="h small">${esc(d.passive?.name || '')}</b><div class="tiny">${esc(d.passive?.text || '')}</div>${pk ? `<div class="tiny dim">${esc(pk.name)} (${esc(d.species)}): ${esc(pk.text)}</div>` : ''}</div></div>
     <div class="sect">Abilities <span class="tiny dim" style="text-transform:none;letter-spacing:0">· level up with XP from fights to unlock more</span></div>
     ${(d.abilities || []).map(ab).join('')}
     <div class="tiny dim" style="margin-top:4px">Perks: ${perks.length ? esc(perks.join(', ')) : 'none yet'} · a perk pick at levels 3, 5, 7 and 10.</div>

@@ -31,6 +31,14 @@ factions you fight in Missions.
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
 
+## v0.12.0 (Anvil, rhino Tank)
+- **Anvil** (Rhino · Tank), the second hero built on Rook's template (same 13-slot paper doll and rarity gear). Joins **free at player Lv 10** (the 4th op seat); never from shards. `?level=10` adds him for testing.
+- Stats: HP 26 base (30 with starter kit), armour 1 base (2 with the Stab Vest), Aim 60, **Speed 4, Move 3** (Rook: 8 / 5). Starter kit: Sawn-off, Taped Bat, Leather Jacket, Stab Vest, Steel-toe Boots (+ Riot Helmet in the stash).
+- Abilities: Strike, Shotgun, **Brace** (Lv 1, 1 AP, cd 3: +2 armour and better cover until his next turn), **Gore Charge** (Lv 1, 2 AP, cd 3: charge up to 4 tiles, +2 dmg, +5 aim), **Taunt** (Lv 3, 1 AP, cd 4: foes within 5 tiles aim 25% worse at anyone but Anvil), **Horn Slam** (Lv 5, 3 AP, cd 3: +3 dmg, 1 bleed).
+- Passive **Bulwark**: crew next to him take 1 less damage. Species perk **Unshakeable** (Rhino): immune to Shaken and suppression. The AI uses Brace and Taunt too.
+- Fix: abilities now unlock in fights at the higher of operator and player level (matching the sheet).
+- Save v9 (v8 saves at Lv 10+ get Anvil). New test: `tests/anvil.py`.
+
 ## v0.11.0 (items, rarity, Factory, Clinic building)
 - **One rarity system:** Common (grey), Uncommon (green), Rare (blue), Epic (purple), Legendary (orange) with colour frames; old quality tiers map onto it. Every item has a level requirement (Common/Uncommon 1, Rare 3, Epic 6, Legendary 10).
 - **25 new items** (62 total): guns, sidearms, melee, head, jackets, armour, gloves, boots, accessories, grenades and a med kit. Sources: op loot, **level unlocks** (Crowbar Lv 2, Rain Mac Lv 4, Flare Pistol Lv 6, Combat Boots Lv 8, Kevlar Bomber Lv 12) and **won only** (Gilded Kingpin Rifle, Wolf-Fang Knuckles, Ceramic Plate Carrier, Kingpin's Gold Watch from the Rookie Track, PvP wins and vault crates).
