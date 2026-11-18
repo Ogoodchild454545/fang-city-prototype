@@ -379,9 +379,10 @@ async def main():
         await page.wait_for_selector('.armyscr')
         # Operators screen (v0.9.3): one-line header, info pop-up, cards fully on screen
         await tap(page, '[data-act="nav"][data-tab="heroes"]')
-        await page.wait_for_selector('.opsscr .opcard')
-        assert await page.locator('.opsscr .opcard[data-id="rook"]').count() == 1
-        fit = await ev(page, "(()=>{const c=document.querySelector('.opcard[data-id=rook]').getBoundingClientRect();return c.bottom<=innerHeight+1&&c.top>=0})()")
+        # v0.14: the Operators screen is a grid of every operator (owned in colour, the rest greyed)
+        await page.wait_for_selector('.opsscr .optile')
+        assert await page.locator('.opsscr .optile[data-id="rook"]').count() == 1
+        fit = await ev(page, "(()=>{const c=document.querySelector('.optile[data-id=rook]').getBoundingClientRect();return c.bottom<=innerHeight+1&&c.top>=0})()")
         assert fit, 'Rook card should be fully visible'
         await tap(page, '[data-act="opsInfo"]')
         await page.wait_for_selector('.overlay .opsinfo')

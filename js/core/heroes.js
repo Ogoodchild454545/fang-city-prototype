@@ -23,6 +23,7 @@ export const SPECIES_PERKS = {
   Croc:   { id: 'tough',    name: 'Thick Hide',  text: 'Ignore 1 damage from every hit.' },
   Bear:   { id: 'stout',    name: 'Immovable',   text: '+3 max HP, and you cannot be suppressed.' },
   Rhino:  { id: 'unshakeable', name: 'Unshakeable', text: 'Cannot be Shaken or suppressed.' },
+  Hare:   { id: 'lightfoot', name: 'Light Foot', text: '+1 Move, and free to step away from a foe next to her.' },
 };
 
 export const classOf = (h) => (h && CLASSES[h.classId]) || CLASSES[(h && h.classId)] || null;
@@ -43,7 +44,7 @@ export const HEROES = {
     weapon: { name: 'Fists', dmg: [2, 3], range: 1, typ: 'melee' },
     abilities: [
       { id: 'melee', name: 'Strike', ap: 2, kind: 'melee', range: 1, melee: true, text: 'Hit with the equipped melee weapon.' },
-      { id: 'shot', name: 'Sidearm', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'shot', name: 'Shoot', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
       { id: 'pounce', name: 'Pounce', ap: 2, kind: 'pounce', range: 4, cd: 3, aim: 10, melee: true, unlock: 1, sfx: 'pounce',
         text: 'Leap onto a foe up to 4 tiles away (no overwatch can catch the leap), then strike at +10 aim.' },
       { id: 'secondwind', name: 'Second Wind', ap: 1, kind: 'secondwind', cd: 5, heal: 0.35, unlock: 1, sfx: 'secondwind',
@@ -59,11 +60,11 @@ export const HEROES = {
     template: {
       class: 'bruiser',
       base: { crit: 5, dodge: 0 },
-      slots: ['primary', 'sidearm', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
       start: {
-        // v0.10: four slots are open at the start (melee, sidearm, jacket, boots); the rest open
+        // v0.10: four slots are open at the start (melee, gun, jacket, boots); the rest open
         // as Rook levels up, so the tape and dressings wait in the stash.
-        equip: { melee: 'tyreiron', sidearm: 'snub', jacket: 'hoodie', boots: 'trainers' },
+        equip: { melee: 'tyreiron', primary: 'snub', jacket: 'hoodie', boots: 'trainers' },
         stash: ['tape', 'dressings', 'flatcap', 'gilet', 'chain', 'pipebomb'],
       },
     },
@@ -104,7 +105,7 @@ export const HEROES = {
     template: {
       class: 'tank',
       base: { crit: 0, dodge: 0, armor: 1 },
-      slots: ['primary', 'sidearm', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
       start: {
         equip: { primary: 'sawnoff', melee: 'bat', jacket: 'leather', body: 'stabvest', boots: 'workboots' },
         stash: ['helmet'],
@@ -443,6 +444,27 @@ export function denLv(s) {
   const d = den(s);
   return d && d.lv ? d.lv : 1;
 }
+
+// v0.14: operators that are planned but not in the game yet. They show greyed out on the Operators
+// grid (bio, abilities and stats only) and are never in shard pools, squads or PvP copies.
+export const FUTURE_HEROES = {
+  stitch: {
+    id: 'stitch', name: 'Stitch', species: 'Hare', role: 'Medic', classId: 'medic', future: 1,
+    portrait: 'assets/heroes/stitch.jpg', thumb: 'assets/heroes/stitch-64.jpg',
+    hp: 13, ap: 4, move: 6, aim: 62, speed: 8, armor: 0,
+    weapon: { name: 'Snub revolver', dmg: [2, 4], range: 6, typ: 'pistol' },
+    abilities: [
+      { id: 'shot', name: 'Shoot', ap: 2, kind: 'shot', text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'patch', name: 'Field Dressing', ap: 2, kind: 'heal', text: 'Restore 5 HP to an ally within 3 tiles and stop their bleeding.', unlock: 1 },
+      { id: 'drag', name: 'Drag to Cover', ap: 2, kind: 'dash', text: 'Pull an adjacent ally one tile into cover with you.', unlock: 3 },
+      { id: 'revive', name: 'Back on Your Feet', ap: 3, kind: 'heal', text: 'Revive a knocked-out ally next to her at 40% HP. Once per fight.', unlock: 5 },
+    ],
+    passive: { id: 'steady', name: 'Steady Hands', text: 'Heals 1 extra HP on every heal while she has not been hit this turn.' },
+    bio: "A struck-off ward nurse who runs a night clinic above a laundrette on Tanner Street. Every crew in the docks owes her for a bullet pulled or a stitch in the dark, and she keeps a ledger of who. Season 1 ends with her deciding which side of that ledger she is on.",
+    coming: 'Story mode · Season 1 reward',
+  },
+};
+export const FUTURE_ORDER = Object.keys(FUTURE_HEROES);
 
 export function unlockHint(s, id) {
   const h = HEROES[id]; if (!h) return 'Unknown';

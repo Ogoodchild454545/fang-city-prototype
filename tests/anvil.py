@@ -20,7 +20,7 @@ with sync_playwright() as p:
     assert not pg.evaluate("!!window.__game.state.heroes.owned.anvil"), 'not before Lv 10'
     pg.goto(URL + '?fast=1&level=10'); pg.wait_for_selector('#basecv'); pg.wait_for_timeout(700); close(pg)
     s = pg.evaluate("(()=>{const s=window.__game.state; return {v:s.v, owned:Object.keys(s.heroes.owned), eq:s.heroes.owned.anvil && s.heroes.owned.anvil.equip}})()")
-    print('lv10', s); assert s['v'] == 9 and 'anvil' in s['owned'], s
+    print('lv10', s); assert s['v'] == 10 and 'anvil' in s['owned'], s
     pg.click('#nav [data-act="nav"][data-tab="crew"]'); pg.wait_for_timeout(400)
     pg.click('[data-act="crewPick"][data-id="anvil"]'); pg.wait_for_timeout(500)
     shot(pg, '01-crew-tab')

@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.13.0)
+# Fang City: Animal Gangs (playable prototype v0.14.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,33 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.14.0 (readable fights, operators roster, story backgrounds)
+
+- **Tap any piece** (yours or theirs, any turn) for an XCOM-style panel: portrait, HP, armour, AP, move, aim, ammo,
+  weapon, and every buff/debuff with an icon, its name, a plain explanation and turns left. Small status chips sit next
+  to each piece's HP bar. Tapping a rival the first time inspects it and shows your hit chance; tap again (or the
+  attack button in the panel) to fire. If you picked an attack first, one tap fires as before.
+- **Zoom**: pinch on mobile, mouse wheel or the + / − / fit buttons on desktop, from 0.6× to 4.2× (now the same on
+  every screen density). Your zoom is kept between turns until you press fit.
+- **Movement**: figurines hop tile by tile along the whole path (300 ms a tile) with a dust puff on each landing.
+- **Gunshots**: muzzle bloom, a hot tracer with a smoke trail, sparks and grit on a hit; a miss tracer flies past the
+  target and kicks up a ricochet behind it. Shotguns throw a spread of pellets.
+- **Melee**: the attacker lunges into the target; the target flashes (red for blows, white for bullets), is knocked
+  back a little and settles. Rook's specials rake three red claw slashes across the target; Anvil's Gore Charge and
+  Horn Slam land with a shockwave ring, ground cracks, grit and a heavy shake. Effects stay glued to the board when
+  the camera zooms.
+- **Operators** now lists every operator: owned in colour, the rest greyed out with a lock. Tapping a greyed one shows
+  a dossier (how to get them, backstory, stats, weapon, passive, species perk, abilities) with no equipping. Planned
+  operators are listed too: **Stitch**, the hare medic, is the Season 1 story reward. **My Crew** stays separate for
+  picking the current squad (squad seats and a + / ✓ SQUAD toggle on each operator).
+- **Ops**: a cleared op shows ✓ Complete and a Replay button; replays pay about half (cash ×1 instead of ×2, half Rep,
+  half tutorial XP).
+- **Sidearm slot removed**: pistols and revolvers are Gun items. Saves move an equipped sidearm into an empty gun slot,
+  or into the stash (save v10). Loot and the Factory no longer reference a sidearm slot. Rook's "Sidearm" is now "Shoot".
+- **Story backgrounds**: new portraits for Anvil (Harbour Lights club door), Brick (stage door alley) and Marlow
+  (scrapyard), plus Stitch's night clinic. Each figurine base is a tiny diorama of that operator's turf (docks, club,
+  drain, roof, stage door, clinic, warehouse, quay, scrapyard).
 
 ## v0.13.0 (figurine unit style, trial)
 - **Demeo-style board pieces in battle (default for the trial).** Every fighter stands on a round tabletop

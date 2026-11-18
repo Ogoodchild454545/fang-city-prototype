@@ -1,4 +1,4 @@
-// Operator character sheet: paper doll (13 slots), stash grid, live stat panel with gear diff,
+// Operator character sheet: paper doll (12 slots), stash grid, live stat panel with gear diff,
 // tooltips + compare, tap or drag to equip, and the ability / skill panel with level unlocks.
 // Opened by tapping an operator (Crew column, Operators screen). Rules live in core/items.js.
 import { HEROES, defOf, classOf, speciesPerk } from '../core/heroes.js';
@@ -17,7 +17,7 @@ import { abilityIcon } from './tactics.js';
 // v0.11: painted item icons (assets/items/{id}.webp), framed by rarity. No emoji for items.
 export const itemImg = (id, cls = '') => `<img class="iimg ${cls}" src="${itemIcon(id)}" alt="" draggable="false" loading="lazy">`;
 // Empty slots show a faded silhouette of a typical piece for that slot.
-const GHOST = { primary: 'carbine', sidearm: 'pistol9', melee: 'tyreiron', head: 'flatcap', jacket: 'hoodie', body: 'gilet', gloves: 'fingerless', boots: 'workboots', acc1: 'watch', acc2: 'ring', utility: 'pipebomb', consumable: 'dressings', trinket: 'dice' };
+const GHOST = { primary: 'carbine', melee: 'tyreiron', head: 'flatcap', jacket: 'hoodie', body: 'gilet', gloves: 'fingerless', boots: 'workboots', acc1: 'watch', acc2: 'ring', utility: 'pipebomb', consumable: 'dressings', trinket: 'dice' };
 const icoOf = (id) => itemImg(id);
 
 function cs(ctx) {
@@ -205,13 +205,13 @@ export function render(ctx) {
   const lv = rec.lv || 1, need = xpToNext(lv);
   const pct = need ? Math.min(100, ((rec.xp || 0) / need) * 100) : 100;
   const L = SLOTS.filter((x) => ['head', 'jacket', 'body', 'gloves', 'boots', 'consumable'].includes(x.id));
-  const R = SLOTS.filter((x) => ['primary', 'sidearm', 'melee', 'acc1', 'acc2', 'utility', 'trinket'].includes(x.id));
+  const R = SLOTS.filter((x) => ['primary', 'melee', 'acc1', 'acc2', 'utility', 'trinket'].includes(x.id));
   const owned = Object.keys(s.heroes.owned);
   return `<div class="charscr">
     <div class="charhead">
       <button class="btn sm" data-act="charBack">‹ Back</button>
       <div class="cname"><b class="h">${esc(d.name)}</b> <span class="tiny dim">${esc(d.species)} · ${esc((classOf(d) || {}).name || d.role)} · Lv ${lv} ${esc(rankName(lv))}</span>
-        <div class="xpbar" title="XP"><i style="width:${pct}%"></i></div><span class="tiny dim">${need ? `${rec.xp || 0}/${need} XP` : 'Max level'} · ${openSlotCount(s, c.hero)}/13 slots open</span></div>
+        <div class="xpbar" title="XP"><i style="width:${pct}%"></i></div><span class="tiny dim">${need ? `${rec.xp || 0}/${need} XP` : 'Max level'} · ${openSlotCount(s, c.hero)}/${SLOTS.length} slots open</span></div>
       ${owned.length > 1 ? `<select class="csel" data-act="charHero">${owned.map((id) => `<option value="${id}" ${id === c.hero ? 'selected' : ''}>${esc(HEROES[id].name)}</option>`).join('')}</select>` : ''}
       <div class="ctabs"><button class="chip ${c.tab === 'gear' ? 'on' : ''}" data-act="charTab" data-t="gear">Inventory</button><button class="chip ${c.tab === 'skills' ? 'on' : ''}" data-act="charTab" data-t="skills">Abilities</button></div>
     </div>

@@ -154,6 +154,9 @@ export function playClip(unit, clip, opts = {}) {
   a.t0 = performance.now();
   a.t = 0;
   a.hold = opts.hold || 0;
+  a.lunge = opts.lunge || null;   // world-px vector to the target (melee lunge)
+  if (opts.push) a.push = opts.push; else if (clip === 'hit' || clip === 'ko') a.push = null; // world-px knock-back
+  a.flashCol = opts.flashCol || (clip === 'hit' || clip === 'ko' ? a.flashCol : null);
   if (clip === 'shoot' || clip === 'ability') a.muzzle = 0;
   if (clip === 'hit') a.flash = 1;
   if (clip === 'ko') a.flash = 1;
@@ -183,8 +186,8 @@ export function tickAnim(unit, now, paused) {
 
 function clipDur(clip, def) {
   if (clip === 'shoot') return 0.48;
-  if (clip === 'melee') return 0.42;
-  if (clip === 'hit') return 0.36;
+  if (clip === 'melee') return 0.5;
+  if (clip === 'hit') return 0.5;
   if (clip === 'revive') return 0.7;
   if (clip === 'ability') return 0.7;
   return 0;
@@ -470,7 +473,7 @@ export function setUnitStyle(v) {
   return STYLE;
 }
 // Hop timing per tile (ms) when moving as a board piece.
-export const FIG_STEP_MS = 190;
+export const FIG_STEP_MS = 300;
 
 export const FIGS = {
   rook: { img: 'assets/actors/rook-fig.png', origin: [0.45, 0.992], gunTip: [0.03, 0.62], head: [0.40, 0.08], imageFacing: -1, h: 1.04 },
@@ -484,7 +487,7 @@ function figPose(unit, a, now) {
   let rot = 0, ox = 0, oy = 0, sx = 1, sy = 1, sway = 0, lift = 0;
   if (a.clip === 'walk') {
     const p = a.hop != null ? a.hop : (t / (FIG_STEP_MS / 1000)) % 1;
-    lift = Math.sin(p * Math.PI) * 6.5;               // arc over the tile
+    lift = Math.sin(p * Math.PI) * 9;                 // arc over the tile
     const land = Math.max(0, 1 - p / 0.22);           // squash just after touching down
     const take = Math.max(0, (p - 0.86) / 0.14);      // crouch before the next hop
     const sq = 0.13 * land * land + 0.07 * take;
@@ -501,15 +504,24 @@ function figPose(unit, a, now) {
       ox = -f * 1.5 * (1 - k);
     }
   } else if (a.clip === 'melee') {
-    // rock back, then pitch hard forward on the front edge of the base and settle
-    if (t < 0.12) { rot = -f * 8 * DEG * (t / 0.12); }
-    else if (t < 0.22) { const k = (t - 0.12) / 0.10; rot = f * (-8 + 34 * k) * DEG; ox = f * 6 * k; }
-    else { const k = Math.min(1, (t - 0.22) / 0.2); rot = f * 26 * DEG * (1 - k) * Math.cos(k * 4); ox = f * 6 * (1 - k); }
+    // rock back, then the whole piece lunges into the target's tile, hits, and slides home
+    const L = a.lunge || { x: f * 10, y: 0 };
+    const reach = 0.52;
+    let k = 0;
+    if (t < 0.12) { rot = -f * 8 * DEG * (t / 0.12); k = -0.06 * (t / 0.12); lift = 2 * (t / 0.12); }
+    else if (t < 0.22) { const e = (t - 0.12) / 0.10; rot = f * (-8 + 30 * e) * DEG; k = -0.06 + (reach + 0.06) * e * e; lift = 2 + 2 * Math.sin(e * Math.PI); }
+    else { const e = Math.min(1, (t - 0.22) / 0.26); const back = 1 - (1 - e) * (1 - e); rot = f * 22 * DEG * (1 - back) * Math.cos(e * 4); k = reach * (1 - back); }
+    ox = L.x * k; oy = L.y * k;
   } else if (a.clip === 'hit') {
-    const k = Math.min(1, t / 0.36);
-    rot = -f * 16 * DEG * Math.exp(-k * 3.2) * Math.cos(k * 15);
-    ox = -f * 3 * Math.exp(-k * 6);
-    lift = 2.5 * Math.exp(-k * 8) * (1 - k);
+    // knocked back along the blow, rocks on its base, then settles back onto its tile
+    const k = Math.min(1, t / 0.5);
+    const P = a.push || { x: -f * 4, y: 0 };
+    const kb = k < 0.18 ? k / 0.18 : Math.max(0, 1 - (k - 0.18) / 0.82);
+    const kbe = kb * kb * (3 - 2 * kb);
+    const side = Math.sign(P.x || -f) || -f;
+    rot = side * 16 * DEG * Math.exp(-k * 3.2) * Math.cos(k * 15);
+    ox = P.x * kbe; oy = P.y * kbe;
+    lift = 3 * Math.exp(-k * 8) * (1 - k);
   } else if (a.clip === 'ko') {
     // tips over backwards, bounces once and lies flat on the board
     const k = Math.min(1, t / 0.6);
@@ -536,14 +548,14 @@ function figPose(unit, a, now) {
     sway = Math.sin(ph * Math.PI * 2 / 3.1) * 1.5 * DEG;
     rot = Math.sin(ph * Math.PI * 2 / 4.3) * 0.6 * DEG;
   }
-  return { rot, ox, oy, sx, sy, sway, lift, facing: f, muzzle: a.muzzle, flash: a.flash };
+  return { rot, ox, oy, sx, sy, sway, lift, facing: f, muzzle: a.muzzle, flash: a.flash, flashCol: a.flashCol };
 }
 
 // Matrix for the whole piece: feet point on the board, then a rigid tilt that pivots on whichever
 // edge of the base the piece is rocking over (that is what makes it read as a solid object).
 function pieceMatrix(footX, footY, z, pose) {
   const m = new DOMMatrix();
-  m.translateSelf(footX + pose.ox * z, footY - pose.lift * z);
+  m.translateSelf(footX + pose.ox * z, footY + (pose.oy || 0) * z - pose.lift * z);
   if (pose.rot) {
     const px = Math.sign(pose.rot) * BASE.rx * 0.92 * z;
     m.translateSelf(px, 0); m.rotateSelf(pose.rot / DEG); m.translateSelf(-px, 0);
@@ -552,7 +564,7 @@ function pieceMatrix(footX, footY, z, pose) {
   return m;
 }
 
-function drawBase(g, z, side, hl, now, flash) {
+function drawBase(g, z, side, hl, now, flash, theme = 'tarmac') {
   const rx = BASE.rx * z, ry = BASE.ry * z, th = BASE.th * z;
   const rim = side === 'player' ? '#5aa8ff' : '#ff5a48';
   // side band of the cylinder
@@ -568,13 +580,8 @@ function drawBase(g, z, side, hl, now, flash) {
   g.strokeStyle = rim; g.lineWidth = 1.1 * z;
   g.beginPath(); g.ellipse(0, -th * 0.45, rx - 0.3 * z, ry, 0, 0, Math.PI); g.stroke();
   g.restore();
-  // top face: painted tarmac with a little grit
-  const grd = g.createLinearGradient(0, -th - ry, 0, -th + ry);
-  grd.addColorStop(0, '#3a3834'); grd.addColorStop(1, '#22211f');
-  g.fillStyle = grd;
-  g.beginPath(); g.ellipse(0, -th, rx, ry, 0, 0, Math.PI * 2); g.fill();
-  g.fillStyle = 'rgba(255,255,255,0.05)';
-  for (let i = 0; i < 6; i++) { const aa = i * 2.1, rr = (0.25 + (i % 3) * 0.2); g.fillRect(Math.cos(aa) * rx * rr, -th + Math.sin(aa) * ry * rr, 0.9 * z, 0.6 * z); }
+  // top face: a little diorama from the operator's own story (docks, club door, rooftop...)
+  drawBaseTop(g, z, rx, ry, th, theme, now);
   g.strokeStyle = rim; g.lineWidth = 0.8 * z;
   g.beginPath(); g.ellipse(0, -th, rx - 0.4 * z, ry - 0.2 * z, 0, 0, Math.PI * 2); g.stroke();
   // highlight on the near lip
@@ -625,7 +632,7 @@ function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
   if (!g.__noShadow) { const dp = T0.transformPoint(new DOMPoint(worldX, worldY)); a.devX = dp.x; a.devY = dp.y; }
   g.save();
   g.setTransform(T0.multiply(M));
-  drawBase(g, z, unit.side, ko ? 0 : hl, now, pose.flash);
+  drawBase(g, z, unit.side, ko ? 0 : hl, now, pose.flash, BASE_THEME[unit.hero] || 'tarmac');
   // the miniature, glued to the top of the base; idle sway pivots on its feet
   g.translate(0, -th);
   if (pose.sway) g.rotate(pose.sway);
@@ -637,11 +644,11 @@ function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
     g.drawImage(im, -oxp, -oyp, w, h);
     g.filter = 'none';
     if (pose.flash > 0) {
-      g.globalCompositeOperation = 'lighter';
-      g.globalAlpha = 0.65 * pose.flash;
-      g.drawImage(im, -oxp, -oyp, w, h);
+      // hit flash: a tinted copy of the miniature (white for shots, blood red for blows)
+      const tint = tinted(im, src, pose.flashCol || '#ffffff');
+      g.globalAlpha = Math.min(1, 0.9 * pose.flash);
+      g.drawImage(tint, -oxp, -oyp, w, h);
       g.globalAlpha = 1;
-      g.globalCompositeOperation = 'source-over';
     }
   } else {
     g.fillStyle = def.colour;
@@ -679,3 +686,97 @@ function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
   return { headX: head.x, headY: head.y, footX: worldX, footY: worldY, gunX: tip.x, gunY: tip.y, z, w, h };
 }
 if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, playClip, ensureAnim };
+
+// ---------------------------------------------------------------- story bases (v0.14)
+// Each operator's base top is a scrap of the place they come from. Rivals stand on plain tarmac.
+export const BASE_THEME = {
+  rook: 'docks', anvil: 'club', pip: 'drain', lumen: 'roof', brick: 'stagedoor', vesper: 'clinic',
+  ivory: 'warehouse', nile: 'quay', marlow: 'scrap', stitch: 'clinic',
+};
+const BASE_COL = {
+  tarmac: ['#3a3834', '#22211f'], docks: ['#2e3640', '#1a2028'], club: ['#3a1416', '#1c0a0b'], drain: ['#2f302c', '#1b1c19'],
+  roof: ['#34302c', '#1f1c19'], stagedoor: ['#5a3420', '#2e1a10'], clinic: ['#d8d2c0', '#9a9482'], warehouse: ['#55524a', '#2f2d28'],
+  quay: ['#5a4630', '#2e2418'], scrap: ['#4a3a2c', '#2a1f16'],
+};
+function drawBaseTop(g, z, rx, ry, th, theme, now) {
+  const cy = -th;
+  const [c0, c1] = BASE_COL[theme] || BASE_COL.tarmac;
+  const grd = g.createLinearGradient(0, cy - ry, 0, cy + ry);
+  grd.addColorStop(0, c0); grd.addColorStop(1, c1);
+  g.save();
+  g.beginPath(); g.ellipse(0, cy, rx, ry, 0, 0, Math.PI * 2);
+  g.fillStyle = grd; g.fill();
+  g.clip();
+  const L = (x0, y0, x1, y1, col, w) => { g.strokeStyle = col; g.lineWidth = w * z; g.beginPath(); g.moveTo(x0 * z, cy + y0 * z); g.lineTo(x1 * z, cy + y1 * z); g.stroke(); };
+  if (theme === 'docks') {
+    // wet cobbles and a rain puddle catching the lamp
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    for (let r = -2; r <= 2; r++) for (let c = -4; c <= 4; c++) { const x = (c * 2.3 + (r & 1) * 1.15) * z, y = cy + r * 1.7 * z; g.beginPath(); g.ellipse(x, y, 1.0 * z, 0.62 * z, 0, 0, Math.PI * 2); g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 0.35 * z; g.stroke(); g.fillStyle = 'rgba(120,140,160,0.10)'; g.fill(); }
+    g.fillStyle = 'rgba(140,170,200,0.35)'; g.beginPath(); g.ellipse(3.6 * z, cy + 1.2 * z, 2.6 * z, 0.9 * z, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,220,140,0.45)'; g.beginPath(); g.ellipse(3.0 * z, cy + 1.0 * z, 0.9 * z, 0.3 * z, 0, 0, Math.PI * 2); g.fill();
+  } else if (theme === 'club') {
+    // red carpet to the door with a brass edge and a scrap of neon light
+    g.fillStyle = '#7a1418'; g.beginPath(); g.moveTo(-3.4 * z, cy - 5 * z); g.lineTo(3.4 * z, cy - 5 * z); g.lineTo(5.2 * z, cy + 5 * z); g.lineTo(-5.2 * z, cy + 5 * z); g.closePath(); g.fill();
+    L(-3.4, -5, -5.2, 5, '#c9a24a', 0.45); L(3.4, -5, 5.2, 5, '#c9a24a', 0.45);
+    g.fillStyle = 'rgba(255,40,60,0.18)'; g.beginPath(); g.ellipse(-5 * z, cy - 1.5 * z, 4 * z, 2 * z, 0, 0, Math.PI * 2); g.fill();
+  } else if (theme === 'drain') {
+    // tarmac with a drain grate and a spray-paint tag
+    g.fillStyle = '#121310'; g.fillRect(-2.6 * z, cy - 1.2 * z, 5.2 * z, 2.4 * z);
+    for (let i = -2; i <= 2; i++) L(i * 1.0, -1.1, i * 1.0, 1.1, '#3a3b36', 0.35);
+    L(-6.5, 1.8, -4.2, 0.6, 'rgba(240,200,40,0.7)', 0.5); L(-4.2, 0.6, -3.4, 2.2, 'rgba(240,200,40,0.7)', 0.5);
+  } else if (theme === 'roof') {
+    // roof felt, gravel and a little vent cowl
+    g.fillStyle = 'rgba(200,190,170,0.18)';
+    for (let i = 0; i < 26; i++) { const a = i * 2.39, rr = Math.sqrt((i + 0.5) / 26); g.fillRect(Math.cos(a) * rx * rr * 0.92, cy + Math.sin(a) * ry * rr * 0.92, 0.55 * z, 0.4 * z); }
+    g.fillStyle = '#6b6f73'; g.fillRect(4.0 * z, cy - 2.2 * z, 1.8 * z, 1.6 * z); g.fillStyle = '#9aa0a6'; g.fillRect(4.0 * z, cy - 2.2 * z, 1.8 * z, 0.4 * z);
+  } else if (theme === 'stagedoor') {
+    // brick pavers under a caged bulb's warm light
+    for (let r = -3; r <= 3; r++) L(-rx / z, r * 1.4, rx / z, r * 1.4, 'rgba(20,10,5,0.55)', 0.3);
+    for (let r = -3; r <= 3; r++) for (let c = -5; c <= 5; c++) L(c * 2.2 + (r & 1) * 1.1, r * 1.4 - 0.7, c * 2.2 + (r & 1) * 1.1, r * 1.4 + 0.7, 'rgba(20,10,5,0.45)', 0.25);
+    g.fillStyle = 'rgba(255,190,90,0.20)'; g.beginPath(); g.ellipse(-1 * z, cy - 1 * z, 6 * z, 2.6 * z, 0, 0, Math.PI * 2); g.fill();
+  } else if (theme === 'clinic') {
+    // chequered clinic lino with a dropped dressing
+    for (let r = -3; r <= 3; r++) for (let c = -5; c <= 5; c++) if ((r + c) & 1) { g.fillStyle = 'rgba(30,70,70,0.55)'; g.fillRect(c * 2 * z, cy + r * 1.3 * z - 0.65 * z, 2 * z, 1.3 * z); }
+    g.fillStyle = '#f2efe6'; g.fillRect(3.2 * z, cy + 1.0 * z, 2.2 * z, 0.8 * z); L(3.4, 1.4, 5.2, 1.4, '#b83a3a', 0.35);
+  } else if (theme === 'warehouse') {
+    // poured concrete, an expansion joint and a hazard stripe
+    L(-rx / z, 0.6, rx / z, -0.4, 'rgba(0,0,0,0.4)', 0.3);
+    g.save(); g.translate(0, cy + 2.6 * z);
+    for (let i = -6; i <= 6; i++) { g.fillStyle = i & 1 ? '#d8b020' : '#151515'; g.beginPath(); g.moveTo(i * 1.4 * z, -0.7 * z); g.lineTo((i + 1) * 1.4 * z, -0.7 * z); g.lineTo((i + 0.4) * 1.4 * z, 0.7 * z); g.lineTo((i - 0.6) * 1.4 * z, 0.7 * z); g.closePath(); g.fill(); }
+    g.restore();
+  } else if (theme === 'quay') {
+    // wet quay planks and a coil of mooring rope
+    for (let i = -4; i <= 4; i++) L(i * 2.2 - 1, -5, i * 2.2 + 1, 5, 'rgba(20,12,6,0.6)', 0.35);
+    g.strokeStyle = '#b89a62'; g.lineWidth = 0.4 * z;
+    for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(-4 * z, cy + 1 * z, (1.6 - k * 0.45) * z, (0.7 - k * 0.2) * z, 0, 0, Math.PI * 2); g.stroke(); }
+  } else if (theme === 'scrap') {
+    // rusty deck plate, rivets and a yellow-black edge
+    g.fillStyle = 'rgba(150,80,30,0.35)'; g.beginPath(); g.ellipse(-2 * z, cy, 4 * z, 1.6 * z, 0.3, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(220,210,190,0.5)';
+    for (const [x, y] of [[-6, -1], [-3, -2.5], [2, -2.6], [5.5, -1], [5, 1.8], [-5, 2]]) { g.beginPath(); g.arc(x * z, cy + y * z, 0.35 * z, 0, Math.PI * 2); g.fill(); }
+    g.save(); g.translate(0, cy + 3.2 * z);
+    for (let i = -6; i <= 6; i++) { g.fillStyle = i & 1 ? '#e0b020' : '#111'; g.fillRect(i * 1.3 * z, -0.5 * z, 1.3 * z, 1 * z); }
+    g.restore();
+  } else {
+    g.fillStyle = 'rgba(255,255,255,0.05)';
+    for (let i = 0; i < 6; i++) { const aa = i * 2.1, rr = (0.25 + (i % 3) * 0.2); g.fillRect(Math.cos(aa) * rx * rr, cy + Math.sin(aa) * ry * rr, 0.9 * z, 0.6 * z); }
+  }
+  g.restore();
+}
+
+// Tinted silhouettes for hit flashes, cached per image + colour (no ctx.filter: Safari support varies).
+const TINTS = new Map();
+function tinted(im, src, col) {
+  const key = src + '|' + col;
+  let c = TINTS.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  const k = Math.min(1, 300 / im.naturalHeight);
+  c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+  const x = c.getContext('2d');
+  x.drawImage(im, 0, 0, c.width, c.height);
+  x.globalCompositeOperation = 'source-atop';
+  x.fillStyle = col; x.globalAlpha = 0.85; x.fillRect(0, 0, c.width, c.height);
+  TINTS.set(key, c);
+  return c;
+}

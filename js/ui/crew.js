@@ -2,7 +2,7 @@
 // operator's showcase (portrait, stats, gear, abilities) on the right. Troop training, housing and the Armoury
 // tab are dormant (v0.9.1): the code below (armyTab, trainCard, upgradesTab, troop actions) is kept so troop
 // hiring can return from the base later — flip TROOPS_UI to true to bring it back. Rules live in core/crew.js.
-import { playerLv, busyReason, isUnlocked } from '../core/progression.js';
+import { playerLv, busyReason, isUnlocked, squadCap } from '../core/progression.js';
 import { SPECIES, ROLES, TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER, BOSS_SLOTS, DEPLOY_CAP, GEAR } from '../core/data.js';
 import * as C from '../core/crew.js';
 import * as BS from '../core/base.js';
@@ -34,15 +34,16 @@ function bossSlot(ctx, id, i) {
 // Left column: your operators. A new crew has exactly one — Rook. Tap to open his character sheet.
 function opSlot(ctx, id, on) {
   const s = ctx.state, d = HEROES[id], rec = s.heroes.owned[id];
+  const inSq = (s.heroes.squad || []).includes(id);
   const st = statsFor(id, { stars: rec.stars, lv: rec.lv, perks: rec.perks, gear: rec.gear, equip: rec.equip || {} });
   const n = equippedIds(rec).length;
-  return `<button class="bslot own opslot ${on ? 'sel' : ''}" data-act="${on ? 'openHero' : 'crewPick'}" data-id="${id}" title="${on ? `Open ${esc(d.name)}'s gear and abilities` : `Show ${esc(d.name)}`}">
+  return `<div class="opslotw ${inSq ? 'in' : ''}"><button class="bslot own opslot ${on ? 'sel' : ''}" data-act="${on ? 'openHero' : 'crewPick'}" data-id="${id}" title="${on ? `Open ${esc(d.name)}'s gear and abilities` : `Show ${esc(d.name)}`}">
     <div class="bpor" style="background-image:url(${d.thumb || d.portrait})"><span class="blv">${rec.lv || 1}</span></div>
     <div class="bmeta"><b class="h small">${esc(d.name)}</b>
       <span class="tiny gold">${esc(d.species)} · ${esc((classOf(d) || {}).name || d.role)} · ${esc(rankName(rec.lv || 1))}</span>
       <span class="tiny dim">HP ${st.hp} · ${st.mel ? esc(st.mel.name) : esc(st.gun ? st.gun.name : '')} · ${n} gear</span>
-      ${rec.pendingPerk ? '<span class="tiny green">Perk ready</span>' : '<span class="tiny faint">Tap for inventory</span>'}</div>
-  </button>`;
+      ${rec.pendingPerk ? '<span class="tiny green">Perk ready</span>' : ''}</div>
+  </button><button class="sqtog ${inSq ? 'on' : ''}" data-act="toggleSquad" data-id="${id}" title="${inSq ? 'Take out of the squad' : 'Put in the squad'}">${inSq ? '✓<small>SQUAD</small>' : '+<small>SQUAD</small>'}</button></div>`;
 }
 
 // Main panel: the selected operator, big. Tap the portrait or "Gear & abilities" for the full sheet.
@@ -90,9 +91,10 @@ function heroTab(ctx) {
   const more = HERO_ORDER.filter((id) => !s.heroes.owned[id] && HEROES[id].unlock?.kind !== 'level').length;
   return `
   <div class="armyscr heroonly">
-    <div class="bosscol crewcol"><div class="sect" style="margin-top:0">Operators ${ops.length}</div>
+    <div class="bosscol crewcol"><div class="sect" style="margin-top:0" title="Tap + / ✓ next to an operator to pick who fights">Squad ${(s.heroes.squad || []).length}/${squadCap(s)}</div>
+      <div class="sqseats">${Array.from({ length: 4 }, (_, i) => { const sid = (s.heroes.squad || [])[i]; const lockd = i >= squadCap(s); return `<span class="sqseat ${sid ? 'full' : ''} ${lockd ? 'lock' : ''}" ${sid ? `style="background-image:url(${HEROES[sid].thumb || HEROES[sid].portrait})"` : ''} title="${sid ? esc(HEROES[sid].name) : lockd ? `Seat ${i + 1} opens at player level ${[1, 5, 7, 10][i]}` : 'Empty seat'}">${sid ? '' : lockd ? `🔒<small>Lv ${[1, 5, 7, 10][i]}</small>` : '+'}</span>`; }).join('')}</div>
       ${ops.map((id) => opSlot(ctx, id, id === sel)).join('')}
-      ${more ? `<button class="bslot locked" data-act="nav" data-tab="heroes"><div class="bpor" style="background-image:none">?</div><div class="bmeta"><b class="h small">Recruit</b><span class="tiny faint">${more} more with shards</span></div></button>` : ''}
+      ${more ? `<button class="bslot locked" data-act="nav" data-tab="heroes"><div class="bpor" style="background-image:none">?</div><div class="bmeta"><b class="h small">All operators</b><span class="tiny faint">${more} more to recruit</span></div></button>` : ''}
       <div class="tiny faint" style="padding:4px 2px">Troops will be hired at the base later.</div>
     </div>
     <div class="armymain">${sel ? heroShow(ctx, sel) : '<div class="tiny dim">No operators.</div>'}</div>

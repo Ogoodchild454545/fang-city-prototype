@@ -1,6 +1,7 @@
 // Operators roster: unique collectable heroes, shard progress, pin-a-target, squad of up to 4.
 import { squadCap, isUnlocked, unlockLv, isAvailable } from '../core/progression.js';
-import { HERO_ORDER, HEROES, unlockHint, setSquad, synergiesFor, classOf, speciesPerk, CLASSES } from '../core/heroes.js';
+import { HERO_ORDER, HEROES, FUTURE_HEROES, FUTURE_ORDER, unlockHint, setSquad, synergiesFor, classOf, speciesPerk, CLASSES } from '../core/heroes.js';
+import { abilityIcon } from './tactics.js';
 import { startTutorial } from '../core/tactics.js';
 import { money, fmt, ico, esc } from './fmt.js';
 import * as Audio from './audio.js';
@@ -23,6 +24,7 @@ export function render(ctx) {
   const locked = HERO_ORDER.filter((id) => !owned[id]).length;
   // v0.9.3: one-line header + compact chips; the explanation lives behind (i). Cards scroll sideways.
   return `
+  <div class="tabs crewtabs"><button data-act="nav" data-tab="crew">My Crew</button><button class="on">Operators</button></div>
   <div class="heroscr opsscr">
     <div class="opshead">
       <span class="h opstitle">Operators</span>
@@ -41,9 +43,57 @@ export function render(ctx) {
         <button class="btn sm" data-act="openEditor" title="Map editor">🗺 Maps</button>
       </div>
     </div>
-    <div class="opsrow">
-      ${HERO_ORDER.filter((id) => owned[id]).map((id) => opCard(s, id, owned[id], squad.includes(id), feat)).join('')}
-      ${locked ? `<button class="opcard recruitc" data-act="recruitList"><span class="rq">?</span><b class="h">Recruit</b><span class="tiny dim">${locked} more operators</span><span class="tiny">30 shards unlocks one</span><span class="btn sm">Shard progress</span></button>` : ''}
+    <div class="tiny dim opsgridnote">Every operator in Fang City. Greyed out = not recruited yet: tap for their story, abilities and stats.</div>
+    <div class="opgrid">
+      ${HERO_ORDER.map((id) => opTile(s, id, owned[id], squad.includes(id), feat)).join('')}
+      ${FUTURE_ORDER.map((id) => opTile(s, id, null, false, feat, true)).join('')}
+    </div>
+  </div>`;
+}
+
+// v0.14 Operators grid: one portrait tile per operator in the game. Owned = full colour, others greyed.
+function opTile(s, id, rec, inSquad, feat, future = false) {
+  const h = future ? FUTURE_HEROES[id] : HEROES[id];
+  const cls = classOf(h) || {};
+  const pinned = !future && s.heroes.pin === id;
+  const prog = !future && !rec ? progressOf(s, id) : null;
+  const sub = rec ? `Lv ${rec.lv || 1} · ${esc(rankName(rec.lv || 1))}`
+    : future ? esc(h.coming || 'Coming soon')
+    : h.unlock && h.unlock.kind === 'level' ? `Joins at player Lv ${h.unlock.lv}`
+    : prog && prog.need ? `${prog.have}/${prog.need} shards` : esc(unlockHint(s, id));
+  return `<button class="optile ${rec ? 'own' : 'grey'} ${future ? 'future' : ''} ${inSquad ? 'in' : ''}" data-act="${rec ? 'openHero' : 'heroInfo'}" data-id="${id}" title="${esc(h.name)}${rec ? ' · open gear and abilities' : ' · story, abilities and stats'}">
+    <span class="otp" style="background-image:url(${h.portrait})"></span>
+    ${inSquad ? '<span class="squadtag">SQUAD</span>' : ''}${!rec && !future ? '<span class="otlock">🔒</span>' : ''}${future ? '<span class="feattag">SEASON 1</span>' : feat === id ? '<span class="feattag">FEATURED</span>' : ''}${pinned ? '<span class="pintag">PINNED</span>' : ''}
+    <span class="otm"><b class="h">${esc(h.name)}</b><span class="tiny">${esc(h.species)} · ${esc(cls.name || h.role)}</span><span class="tiny ${rec ? 'gold' : 'dim'}">${sub}</span></span>
+  </button>`;
+}
+
+// Read-only dossier for an operator you don't have (or a planned one): backstory, stats, abilities.
+export function opInfoHtml(s, id) {
+  const future = !!FUTURE_HEROES[id];
+  const h = future ? FUTURE_HEROES[id] : HEROES[id];
+  const cls = classOf(h) || {}, pk = speciesPerk(h.species);
+  const prog = future ? null : progressOf(s, id);
+  const stat = (l, v) => `<div class="hsst"><span>${l}</span><b>${v}</b></div>`;
+  const w = h.weapon || {};
+  const how = future ? h.coming : unlockHint(s, id);
+  const abil = (h.abilities || []).map((a) => `<div class="oiab"><span class="oiabi">${abilityIcon(a.kind)}</span><div><b>${esc(a.name)}</b> <span class="tiny dim">${a.ap ? a.ap + ' AP' : ''}${a.cd ? ` · cooldown ${a.cd}` : ''}${a.unlock ? ` · unlocks at Lv ${a.unlock}` : ''}</span><div class="tiny">${esc(a.text || '')}</div></div></div>`).join('');
+  return `<div class="opinfo">
+    <div class="oiport ${future ? 'future' : ''}" style="background-image:url(${h.portrait})"><span class="oitag">${future ? 'COMING · SEASON 1' : 'NOT IN YOUR CREW'}</span></div>
+    <div class="oibody">
+      <div class="h" style="font-size:24px">${esc(h.name)}</div>
+      <div class="tiny gold">${esc(h.species)} · ${esc(cls.name || h.role)}${cls.blurb ? ` — ${esc(cls.blurb)}` : ''}</div>
+      <div class="tiny oihow">How to get: <b>${esc(how)}</b></div>
+      <div class="sect">Backstory</div>
+      <p class="small oibio">${esc(h.bio || h.blurb || '')}</p>
+      <div class="sect">Stats</div>
+      <div class="hsstats">${stat('HP', h.hp)}${stat('AP', h.ap)}${stat('Move', h.move)}${stat('Aim', h.aim)}${stat('Speed', h.speed)}${stat('Armour', (h.template && h.template.base && h.template.base.armor) || h.armor || 0)}</div>
+      <div class="tiny dim" style="margin-top:4px">Weapon: <b>${esc(w.name || '—')}</b>${w.dmg ? ` ${w.dmg[0]}–${w.dmg[1]} dmg${w.range > 1 ? ` · range ${w.range}` : ''}` : ''}</div>
+      ${h.passive && h.passive.name ? `<div class="tiny" style="margin-top:4px"><b class="gold">${esc(h.passive.name)}</b> — ${esc(h.passive.text)}</div>` : ''}
+      ${pk ? `<div class="tiny"><b class="gold">${esc(pk.name)}</b> (${esc(h.species)}) — ${esc(pk.text)}</div>` : ''}
+      <div class="sect">Abilities</div>
+      <div class="oiabs">${abil}</div>
+      ${prog && prog.need && !(h.unlock && h.unlock.kind === 'level') ? `<div class="sect">Shards</div>${bar(prog.have, prog.need)}<div class="opbtns" style="margin-top:6px"><button class="btn sm ${s.heroes.pin === id ? 'gold' : ''}" data-act="pinHero" data-id="${id}">${s.heroes.pin === id ? 'Unpin' : 'Pin for more shards'}</button>${s.heroes.universal ? `<button class="btn sm" data-act="useUniversal" data-id="${id}">Use universal</button>` : ''}</div>` : ''}
     </div>
   </div>`;
 }
@@ -163,8 +213,8 @@ export const actions = {
     const s = ctx.state, now = ctx.now(), feat = featuredHero(now);
     ctx.modal(`<div class="h" style="font-size:20px">How operators work</div>
       <ul class="small opsinfo">
-        <li>Operators are your heroes for turn-based fights. Every crew starts with <b>Rook</b>.</li>
-        <li>Tap an operator for their full inventory (13 gear slots) and wolf/species abilities. Gear changes their stats in battle.</li>
+        <li>Operators are your heroes for turn-based fights. Every crew starts with <b>Rook</b>. This grid shows every operator in the game: full colour ones are in your crew, greyed ones are still to recruit.</li><li>Pick who fights on the <b>Crew</b> tab.</li>
+        <li>Tap an operator for their full inventory (12 gear slots) and wolf/species abilities. Gear changes their stats in battle.</li>
         <li>Operators level up with XP from fights and unlock abilities and perk picks.</li>
         <li>More operators join with <b>30 shards</b> from bushes, missions and Ice crates. Extra shards add stars.</li>
         <li><b>Pin</b> a locked operator to boost their shard drops. This week's featured operator is <b>${esc(HEROES[feat].name)}</b>.</li>
@@ -195,10 +245,9 @@ export const actions = {
     ctx.render();
   },
   heroInfo(ctx, el) {
-    if (el.closest && false) return;
-    const h = HEROES[el.dataset.id];
-    if (!h) return;
-    ctx.toast(`${h.name}: ${unlockHint(ctx.state, h.id)}. Pin them to boost shard drops.`);
+    const id = el.dataset.id;
+    if (!HEROES[id] && !FUTURE_HEROES[id]) return;
+    ctx.modal(opInfoHtml(ctx.state, id), { cls: 'wide' });
   },
   pinHero(ctx, el) {
     const id = el.dataset.id;
@@ -206,7 +255,7 @@ export const actions = {
     const r = setPin(ctx.state, cur === id ? null : id);
     if (!r.ok) return ctx.toast(r.reason);
     ctx.toast(r.pin ? `${HEROES[r.pin].name} is pinned. Their shards drop more often.` : 'Pin cleared.');
-    if (el.closest('.overlay')) actions.recruitList(ctx); else ctx.render();
+    if (el.closest('.opinfo')) { ctx.closeModal(true); ctx.render(); actions.heroInfo(ctx, el); } else if (el.closest('.overlay')) actions.recruitList(ctx); else ctx.render();
   },
   useUniversal(ctx, el) {
     const id = el.dataset.id;

@@ -1155,7 +1155,7 @@ export function resolveTactics(s, b) {
     res.opId = opId;
     if (win && b.units.filter((u) => u.side === 'player').length >= 2) s.stats.duoWins = (s.stats.duoWins || 0) + 1;
     const tut = OPS_XP[opId];
-    res.playerXp = addPlayerXp(s, tut ? (win && first ? tut : win ? 20 : 10) : (win ? 30 + (first ? 30 : 0) : 10));
+    res.playerXp = addPlayerXp(s, tut ? (win && first ? tut : win ? Math.round(tut / 2) : 10) : (win ? 30 + (first ? 30 : 0) : 10));
   } else if (b.kind === 'street') {
     res.playerXp = addPlayerXp(s, win ? 40 : 15);
   }
@@ -1173,3 +1173,29 @@ export function resolveTactics(s, b) {
 const OPS_XP = { t1: 90, t2: 80, t3: 80, ...Object.fromEntries(Array.from({ length: 30 }, (_, i) => ['o' + (i + 1), 0])) };
 
 export function coverLabel(c) { return c >= 2 ? 'Full cover' : c === 1 ? 'Half cover' : 'No cover'; }
+
+// v0.14: every buff and debuff on a unit, in plain words, for the tap-a-piece status panel and the
+// little icons over pieces. `turns` = turns left (null when it lasts until something happens).
+// Pure read of unit state; the rules that apply them live above.
+export function statusesOf(b, u) {
+  if (!u) return [];
+  const out = [];
+  const add = (id, name, kind, text, turns = null) => out.push({ id, name, kind, text, turns });
+  const d = defOf(u.hero) || {};
+  const nm = (uid) => { const o = b.units.find((x) => x.uid === uid); return o ? nameOf(o) : 'them'; };
+  if (u.hp <= 0) add('ko', 'Knocked out', 'debuff', 'Down and out of the fight unless a medic revives them.');
+  if (u.bleed > 0) add('bleed', 'Bleeding', 'debuff', `Loses 1 HP at the start of each of their turns. ${u.bleed} HP to lose in total.`, u.bleed);
+  if (u.venom > 0) add('venom', 'Poisoned', 'debuff', `Venom: loses 1 HP at the start of each of their turns.`, u.venom);
+  if (u.shaken) add('shaken', 'Shaken', 'debuff', '-15 aim on every shot and strike until the end of their next turn.', 1);
+  if (u.suppressed) add('suppressed', 'Suppressed', 'debuff', 'Pinned down: -20 aim until the end of their next turn.', 1);
+  if (u.taunt && b.units.some((x) => x.uid === u.taunt && x.hp > 0)) add('taunted', 'Taunted', 'debuff', `Called out by ${nm(u.taunt)}: -25 aim against anyone except ${nm(u.taunt)} until the end of their next turn.`, 1);
+  if (u.rallied) add('rallied', 'Rallied', 'buff', '+10 aim until the end of their next turn.', 1);
+  if (u.brace) add('braced', 'Braced', 'buff', `Shield up: takes ${u.brace} less damage from every hit until their next turn.`, 1);
+  if (u.fortify && !u.brace) add('hunkered', 'Hunkered', 'buff', 'Cover counts one step better (half cover becomes full) until their next turn.', 1);
+  if (u.overwatch) add('overwatch', 'Overwatch', 'buff', 'Will shoot the first enemy who moves into range (−15 aim on that shot).', null);
+  if (u.sprint) add('sprint', 'Sprinting', 'buff', `+${u.sprint} move this turn.`, 1);
+  if (u.hp > 0 && b.units.some((o) => o !== u && o.side === u.side && o.hp > 0 && defOf(o.hero).passive?.id === 'bulwark' && MANH(o.x, o.y, u.x, u.y) === 1)) add('bulwark', 'Bulwark', 'buff', 'Standing next to Anvil: takes 1 less damage from every hit.', null);
+  if (u.hp > 0 && d.species === 'Badger' && !u.stubbornUsed) add('stubborn', 'Stubborn', 'buff', 'The first hit that would knock them out leaves them on 1 HP instead.', null);
+  if (u.hp > 0 && u.ammo != null && u.ammo <= 0 && gunOf(u)) add('noammo', 'Out of ammo', 'debuff', 'Cannot shoot until resupplied; melee only.', null);
+  return out;
+}

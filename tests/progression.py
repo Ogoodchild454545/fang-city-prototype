@@ -48,7 +48,7 @@ async def main():
         await close_modal(page)
         s = await ev(page, "(()=>{const s=window.__game.state; return {lv:s.player.lv, e:s.energy.n, v:s.v, eq:s.heroes.owned.rook.equip}})()")
         print('new game', s)
-        assert s['lv'] == 1 and s['e'] == 10 and s['v'] == 9 and len(s['eq']) == 4
+        assert s['lv'] == 1 and s['e'] == 10 and s['v'] == 10 and len(s['eq']) == 4
         # Lv 1: Cash only, locked tabs are greyed teasers, energy in the header
         assert await page.locator('.res.cash').count() == 1
         assert await page.locator('.res.inf').count() == 0 and await page.locator('.res.teeth').count() == 0

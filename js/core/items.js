@@ -9,8 +9,8 @@ import { rngNext } from './rng.js';
 
 // Paper-doll slots, in screen order. `acc` has two sockets (acc1, acc2).
 export const SLOTS = [
-  { id: 'primary', name: 'Primary weapon', short: 'Primary', kind: 'primary', ico: '🔫' },
-  { id: 'sidearm', name: 'Sidearm', short: 'Sidearm', kind: 'sidearm', ico: '🔫' },
+  // v0.14: one gun slot. Pistols, revolvers and long guns all go in it (the sidearm slot is gone).
+  { id: 'primary', name: 'Gun', short: 'Gun', kind: 'primary', ico: '🔫' },
   { id: 'melee', name: 'Melee weapon', short: 'Melee', kind: 'melee', ico: '🔧' },
   { id: 'head', name: 'Head', short: 'Head', kind: 'head', ico: '🧢' },
   { id: 'jacket', name: 'Jacket / coat', short: 'Jacket', kind: 'jacket', ico: '🧥' },
@@ -62,10 +62,10 @@ export const ITEMS = {
   carbine: { name: 'Dockside Carbine', slot: 'primary', q: 'street', wpn: W('Carbine', [3, 5], 8, 'rifle'), carry: 2, text: 'Old but true. Ammo goes further.' },
   sawnoff: { name: 'Sawn-off Shotgun', slot: 'primary', q: 'street', wpn: W('Sawn-off', [4, 6], 4, 'shotgun'), text: 'Brutal across a table, useless across a yard.' },
   pumpgun: { name: 'Pump Shotgun', slot: 'primary', q: 'tuned', wpn: W('Pump shotgun', [5, 7], 5, 'shotgun'), text: 'Every rack says "leave".' },
-  // --- sidearms ---
-  snub: { name: 'Snub Revolver', slot: 'sidearm', q: 'worn', wpn: W('Snub revolver', [2, 4], 6, 'pistol'), text: 'Five in the drum. Make them count.' },
-  pistol9: { name: 'Nine-mil Pistol', slot: 'sidearm', q: 'street', wpn: W('9mm pistol', [2, 4], 7, 'pistol'), aim: 4, text: 'Nothing fancy. It just works.' },
-  magnum: { name: 'Bulldog Magnum', slot: 'sidearm', q: 'custom', wpn: W('Magnum', [3, 6], 6, 'pistol'), crit: 5, text: 'Loud enough to end arguments.' },
+  // --- pistols (gun slot since v0.14) ---
+  snub: { name: 'Snub Revolver', slot: 'primary', q: 'worn', wpn: W('Snub revolver', [2, 4], 6, 'pistol'), text: 'Five in the drum. Make them count.' },
+  pistol9: { name: 'Nine-mil Pistol', slot: 'primary', q: 'street', wpn: W('9mm pistol', [2, 4], 7, 'pistol'), aim: 4, text: 'Nothing fancy. It just works.' },
+  magnum: { name: 'Bulldog Magnum', slot: 'primary', q: 'custom', wpn: W('Magnum', [3, 6], 6, 'pistol'), crit: 5, text: 'Loud enough to end arguments.' },
   // --- melee ---
   tyreiron: { name: 'Tyre Iron', slot: 'melee', q: 'worn', wpn: W('Tyre iron', [4, 6], 1, 'melee'), text: 'Lifted from a dock lorry. Still has the grease.' },
   knuckles: { name: 'Brass Knuckles', slot: 'melee', q: 'street', wpn: W('Brass knuckles', [3, 5], 1, 'melee'), crit: 8, speed: 1, text: 'Fast hands find the soft spots.' },
@@ -112,9 +112,9 @@ export const ITEMS = {
   huntrifle: { name: 'Bolt-action Hunting Rifle', slot: 'primary', q: 'tuned', wpn: W('Hunting rifle', [5, 7], 10, 'rifle'), aim: 6, bp: 1, text: 'Made for deer. Works on rats.' },
   lmg: { name: 'Dockyard LMG', slot: 'primary', q: 'custom', wpn: W('LMG', [5, 8], 7, 'rifle'), speed: -2, carry: 2, bp: 1, text: 'Came off a boat in a piano crate.' },
   goldrifle: { name: 'Gilded Kingpin Rifle', slot: 'primary', q: 'legend', wpn: W('Gilded rifle', [6, 9], 9, 'rifle'), crit: 8, aim: 5, src: 'reward', text: 'Gold-plated, engraved, and absolutely loaded.' },
-  flaregun: { name: 'Flare Pistol', slot: 'sidearm', q: 'street', wpn: W('Flare pistol', [2, 4], 5, 'pistol'), crit: 4, src: 'level', unlockLv: 6, text: 'Meant for boats in trouble. Now it is you.' },
-  machinepistol: { name: 'Machine Pistol', slot: 'sidearm', q: 'tuned', wpn: W('Machine pistol', [2, 5], 5, 'pistol'), speed: 1, bp: 1, text: 'Small, ugly, never stops talking.' },
-  silenced: { name: 'Suppressed .22', slot: 'sidearm', q: 'custom', wpn: W('Suppressed .22', [3, 5], 7, 'pistol'), aim: 8, dodge: 3, bp: 1, text: 'Nobody hears it. Nobody sees you.' },
+  flaregun: { name: 'Flare Pistol', slot: 'primary', q: 'street', wpn: W('Flare pistol', [2, 4], 5, 'pistol'), crit: 4, src: 'level', unlockLv: 6, text: 'Meant for boats in trouble. Now it is you.' },
+  machinepistol: { name: 'Machine Pistol', slot: 'primary', q: 'tuned', wpn: W('Machine pistol', [2, 5], 5, 'pistol'), speed: 1, bp: 1, text: 'Small, ugly, never stops talking.' },
+  silenced: { name: 'Suppressed .22', slot: 'primary', q: 'custom', wpn: W('Suppressed .22', [3, 5], 7, 'pistol'), aim: 8, dodge: 3, bp: 1, text: 'Nobody hears it. Nobody sees you.' },
   crowbar: { name: 'Crowbar', slot: 'melee', q: 'worn', wpn: W('Crowbar', [3, 5], 1, 'melee'), src: 'level', unlockLv: 2, text: 'Opens doors. And heads.' },
   cleaver: { name: 'Butcher\'s Cleaver', slot: 'melee', q: 'street', wpn: W('Cleaver', [4, 7], 1, 'melee'), crit: 5, text: 'From the back room at Moretti\'s.' },
   karambit: { name: 'Karambit', slot: 'melee', q: 'tuned', wpn: W('Karambit', [4, 6], 1, 'melee'), crit: 10, speed: 1, bp: 1, text: 'A claw you can put in your pocket.' },
@@ -173,12 +173,12 @@ export function defaultEquip(heroId) {
 export function weaponsFor(heroId, ids) {
   const d = defOf(heroId);
   const pick = (kind) => ids.map((id) => ITEMS[id]).find((it) => it && it.slot === kind && it.wpn);
-  const prim = pick('primary'), side = pick('sidearm'), mel = pick('melee');
+  const prim = pick('primary'), mel = pick('melee');
   const base = d.weapon;
   const baseGun = base.typ !== 'melee' ? base : (d.template && d.template.fallbackGun) || null;
   const baseMel = base.typ === 'melee' ? base : null;
   return {
-    gun: prim ? prim.wpn : side ? side.wpn : baseGun,
+    gun: prim ? prim.wpn : baseGun,
     mel: mel ? mel.wpn : baseMel,
   };
 }
@@ -356,7 +356,7 @@ export function craftItem(s) {
 // ---------- v0.10 slot unlocks + Best gear ----------
 // Four slots are open at the start; the rest open with the operator's level (or the player's
 // account level, whichever is higher), so every slot is open by level 10.
-export const SLOT_UNLOCK = { melee: 1, sidearm: 1, jacket: 1, boots: 1, gloves: 2, head: 2, consumable: 3, body: 4, primary: 5, acc1: 6, utility: 7, acc2: 8, trinket: 10 };
+export const SLOT_UNLOCK = { melee: 1, primary: 1, jacket: 1, boots: 1, gloves: 2, head: 2, consumable: 3, body: 4, acc1: 6, utility: 7, acc2: 8, trinket: 10 };
 export const slotLevel = (s, heroId) => Math.max((s.heroes.owned[heroId] || {}).lv || 1, (s.player && s.player.lv) || 1);
 export const slotOpen = (s, heroId, slotId) => slotLevel(s, heroId) >= (SLOT_UNLOCK[slotId] || 1);
 export const openSlotCount = (s, heroId) => SLOT_IDS.filter((sl) => slotOpen(s, heroId, sl)).length;

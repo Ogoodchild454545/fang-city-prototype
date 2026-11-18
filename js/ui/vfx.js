@@ -198,13 +198,13 @@ export function tick(fx, dt) {
   if (!fx) return;
   const now = performance.now();
   const left = [];
-  const order = { smoke: 0, debris: 1, flash: 2, ember: 3, spark: 4, casing: 5, tracer: 6, callout: 7 };
+  const order = { ring: 0, crack: 0, dust: 0, smoke: 0, debris: 1, flash: 2, ember: 3, spark: 4, casing: 5, tracer: 6, bolt: 6, mflash: 6, claw: 7, callout: 8 };
   const bits = fx.bits.slice().sort((a, c) => (order[a.typ] ?? 5) - (order[c.typ] ?? 5));
   for (const b of bits) {
     const age = now - b.t0;
     if (age < 0) { left.push(b); continue; } // not started (staggered smoke)
     if (age > b.life) continue;
-    if (b.typ === 'casing' || b.typ === 'debris' || b.typ === 'spark' || b.typ === 'ember' || b.typ === 'smoke') {
+    if (b.typ === 'casing' || b.typ === 'debris' || b.typ === 'spark' || b.typ === 'ember' || b.typ === 'smoke' || b.typ === 'dust') {
       b.x += b.vx * dt * 60;
       b.y += b.vy * dt * 60;
       if (b.typ === 'casing' || b.typ === 'debris') {
@@ -221,9 +221,9 @@ export function tick(fx, dt) {
         b.vy += 0.12 * dt * 60;
       } else if (b.typ === 'ember') {
         b.vy += 0.04 * dt * 60;
-      } else if (b.typ === 'smoke') {
-        b.vy *= 0.98;
-        b.vx *= 0.98;
+      } else if (b.typ === 'smoke' || b.typ === 'dust') {
+        b.vy *= 0.94;
+        b.vx *= 0.94;
       }
     }
     left.push(b);
@@ -231,12 +231,23 @@ export function tick(fx, dt) {
   fx.bits = left;
 }
 
+// Bits are spawned in world px at the zoom of that moment; if the camera zooms after (cut-in pans,
+// pinch), scale them so they stay glued to the board.
 export function draw(g, fx, z) {
   if (!fx) return;
   const now = performance.now();
   for (const b of fx.bits) {
+    if (now - b.t0 < 0) continue;
+    if (b.z0 == null) b.z0 = b.zs || z;
+    const kz = z / b.z0;
+    if (kz !== 1) { g.save(); g.scale(kz, kz); }
+    drawBit(g, b, b.z0, now);
+    if (kz !== 1) g.restore();
+  }
+}
+function drawBit(g, b, z, now) {
+  {
     const age = now - b.t0;
-    if (age < 0) continue;
     const u = Math.max(0, Math.min(1, age / b.life));
     if (b.typ === 'tracer') {
       const head = Math.min(1, age / b.dur);
@@ -326,6 +337,100 @@ export function draw(g, fx, z) {
       g.fillStyle = `rgba(255,160,40,${0.85 * fade})`;
       g.beginPath(); g.arc(b.x, b.y, 1.4 * z, 0, Math.PI * 2); g.fill();
       g.restore();
+    } else if (b.typ === 'bolt') {
+      // v0.14 gunshot: a hot bullet streak (white core, amber glow) that leaves a fading smoke line
+      const head = Math.min(1, age / b.dur);
+      const xB = b.x0 + (b.x1 - b.x0) * head, yB = b.y0 + (b.y1 - b.y0) * head;
+      const tl = Math.max(0, head - 0.35);
+      const xA = b.x0 + (b.x1 - b.x0) * tl, yA = b.y0 + (b.y1 - b.y0) * tl;
+      const after = head < 1 ? 0 : (age - b.dur) / Math.max(1, b.life - b.dur);
+      g.save();
+      g.lineCap = 'round';
+      // smoke trail along the whole path, fading out
+      g.strokeStyle = `rgba(190,190,200,${0.22 * (1 - after) * Math.min(1, age / 60)})`;
+      g.lineWidth = 2.2 * z * b.width;
+      g.beginPath(); g.moveTo(b.x0, b.y0); g.lineTo(xB, yB); g.stroke();
+      if (head < 1 || after < 0.25) {
+        const f = head < 1 ? 1 : 1 - after / 0.25;
+        g.globalCompositeOperation = 'lighter';
+        g.strokeStyle = b.miss ? `rgba(255,170,90,${0.45 * f})` : `rgba(255,150,40,${0.55 * f})`;
+        g.lineWidth = 4.2 * z * b.width;
+        g.beginPath(); g.moveTo(xA, yA); g.lineTo(xB, yB); g.stroke();
+        g.strokeStyle = `rgba(255,250,225,${0.95 * f})`;
+        g.lineWidth = 1.3 * z * b.width;
+        g.beginPath(); g.moveTo(xA, yA); g.lineTo(xB, yB); g.stroke();
+        g.fillStyle = `rgba(255,255,240,${f})`;
+        g.beginPath(); g.arc(xB, yB, 1.6 * z * b.width, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+    } else if (b.typ === 'mflash') {
+      // muzzle bloom: a hard star for one or two frames, then a soft glow
+      const k = 1 - u;
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      const r = (10 + 8 * (1 - k)) * z * b.scale;
+      const grd = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
+      grd.addColorStop(0, `rgba(255,255,230,${k})`); grd.addColorStop(0.3, `rgba(255,200,80,${0.8 * k})`); grd.addColorStop(1, 'rgba(255,90,0,0)');
+      g.fillStyle = grd; g.beginPath(); g.arc(b.x, b.y, r, 0, Math.PI * 2); g.fill();
+      if (u < 0.45) {
+        g.translate(b.x, b.y); g.rotate(b.ang);
+        g.fillStyle = `rgba(255,240,190,${0.95 * k})`;
+        const L = (16 + 6 * b.scale) * z * b.scale;
+        g.beginPath(); g.moveTo(0, -2.4 * z); g.lineTo(L, 0); g.lineTo(0, 2.4 * z); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(-1 * z, -1 * z); g.lineTo(L * 0.35, -6 * z); g.lineTo(2 * z, 0); g.lineTo(L * 0.35, 6 * z); g.lineTo(-1 * z, 1 * z); g.closePath(); g.fill();
+      }
+      g.restore();
+    } else if (b.typ === 'dust') {
+      const fade = u < 0.2 ? u / 0.2 : 1 - (u - 0.2) / 0.8;
+      const r = (b.r + b.grow * u) * z;
+      g.save();
+      g.fillStyle = `rgba(${b.col || '150,140,125'},${(b.a || 0.35) * fade})`;
+      g.beginPath(); g.ellipse(b.x, b.y, r, r * 0.55, 0, 0, Math.PI * 2); g.fill();
+      g.restore();
+    } else if (b.typ === 'ring') {
+      // ground shockwave (flat ellipse in iso)
+      const e = 1 - Math.pow(1 - u, 2);
+      const r = (b.r0 + (b.r1 - b.r0) * e) * z;
+      g.save();
+      g.strokeStyle = `rgba(${b.col || '255,220,170'},${0.8 * (1 - u)})`;
+      g.lineWidth = (3 * (1 - u) + 0.6) * z;
+      g.beginPath(); g.ellipse(b.x, b.y, r, r * 0.5, 0, 0, Math.PI * 2); g.stroke();
+      g.restore();
+    } else if (b.typ === 'crack') {
+      const grow = Math.min(1, age / 90);
+      const fade = u < 0.6 ? 1 : 1 - (u - 0.6) / 0.4;
+      g.save();
+      g.strokeStyle = `rgba(10,8,6,${0.85 * fade})`;
+      g.lineWidth = 1.1 * z; g.lineCap = 'round';
+      for (const ln of b.lines) {
+        g.beginPath(); g.moveTo(b.x, b.y);
+        let px = b.x, py = b.y;
+        for (let i = 0; i < ln.length; i++) { const q = ln[i]; if (i / ln.length > grow) break; px = b.x + q[0] * z; py = b.y + q[1] * z; g.lineTo(px, py); }
+        g.stroke();
+      }
+      g.restore();
+    } else if (b.typ === 'claw') {
+      // three claw rakes cut across the target, drawn on fast, glowing red, then bleeding out
+      const draw = Math.min(1, age / b.cut);
+      const fade = age < b.cut ? 1 : 1 - (age - b.cut) / (b.life - b.cut);
+      g.save();
+      g.translate(b.x, b.y); g.rotate(b.ang);
+      g.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        const off = (i - 1) * 5.2 * z, lag = i * 0.12;
+        const d = Math.max(0, Math.min(1, (draw - lag) / (1 - lag * 0.9)));
+        if (d <= 0) continue;
+        const L = 26 * z * b.scale;
+        const x0 = -L / 2, x1 = x0 + L * d;
+        const bend = 4 * z;
+        const path = () => { g.beginPath(); g.moveTo(x0, off - bend * 0.3); g.quadraticCurveTo((x0 + x1) / 2, off + bend, x1, off - bend * 0.3 + (x1 - x0) * 0.08); };
+        g.globalCompositeOperation = 'lighter';
+        g.strokeStyle = `rgba(255,30,30,${0.55 * fade})`; g.lineWidth = 5.5 * z * b.scale; path(); g.stroke();
+        g.globalCompositeOperation = 'source-over';
+        g.strokeStyle = `rgba(140,0,6,${0.95 * fade})`; g.lineWidth = 2.6 * z * b.scale; path(); g.stroke();
+        g.strokeStyle = `rgba(255,190,180,${0.9 * fade})`; g.lineWidth = 0.8 * z * b.scale; path(); g.stroke();
+      }
+      g.restore();
     } else if (b.typ === 'callout') {
       const enter = Math.min(1, age / 110);
       const pop = enter < 1 ? 0.6 + 0.7 * (1 - Math.pow(1 - enter, 3)) : 1 - 0.08 * u;
@@ -346,4 +451,96 @@ export function draw(g, fx, z) {
       g.restore();
     }
   }
+}
+
+// ---------------------------------------------------------------- v0.14 hit effects
+// A gunshot: muzzle bloom at the barrel, a bright tracer to the target, then impact sparks and a
+// puff of grit on a hit, or a tracer that carries on past the target into a ricochet on a miss.
+// Coordinates are world-buffer px (already * z). `pellets` > 1 for shotguns.
+export function spawnShot(fx, gx, gy, tx, ty, z, opts = {}) {
+  const n0 = fx.bits.length;
+  const now = performance.now();
+  const hit = !!opts.hit, pellets = opts.pellets || 1;
+  const ang = Math.atan2(ty - gy, tx - gx);
+  fx.bits.push({ typ: 'mflash', x: gx, y: gy, ang, t0: now, life: 140, scale: pellets > 1 ? 1.25 : 1 });
+  fx.bits.push({ typ: 'dust', x: gx + Math.cos(ang) * 6 * z, y: gy + Math.sin(ang) * 6 * z, vx: Math.cos(ang) * 0.6, vy: -0.25, r: 2.5, grow: 9, t0: now + 30, life: 650, col: '170,170,175', a: 0.3 });
+  const dist = Math.hypot(tx - gx, ty - gy) || 1;
+  for (let i = 0; i < pellets; i++) {
+    const spread = pellets > 1 ? (i - (pellets - 1) / 2) * 0.07 + (Math.random() - 0.5) * 0.04 : 0;
+    let ex, ey;
+    if (hit) {
+      ex = tx + Math.cos(ang + Math.PI / 2) * spread * dist * 0.5; ey = ty + Math.sin(ang + Math.PI / 2) * spread * dist * 0.5;
+    } else {
+      // a miss sails past the target and ends on the ground or a wall behind it
+      const over = dist + (38 + Math.random() * 20) * z;
+      const a2 = ang + (opts.missSide || 1) * (0.09 + Math.random() * 0.05) + spread;
+      ex = gx + Math.cos(a2) * over; ey = gy + Math.sin(a2) * over + 8 * z;
+    }
+    const d2 = Math.hypot(ex - gx, ey - gy);
+    const dur = Math.max(70, Math.min(170, d2 / z * 0.9));
+    fx.bits.push({ typ: 'bolt', x0: gx, y0: gy, x1: ex, y1: ey, t0: now, dur, life: dur + 420, width: pellets > 1 ? 0.7 : 1, miss: !hit });
+    const land = now + dur;
+    if (hit) {
+      for (let k = 0; k < (pellets > 1 ? 4 : 12); k++) {
+        const a = ang + Math.PI + (Math.random() - 0.5) * 2.4, sp = 1.4 + Math.random() * 3.2;
+        fx.bits.push({ typ: 'spark', x: ex, y: ey, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, t0: land, life: 160 + Math.random() * 200, len: 3 + Math.random() * 5 });
+      }
+      fx.bits.push({ typ: 'flash', x: ex, y: ey, t0: land, life: 140, scale: 0.28, core: 1 });
+      fx.bits.push({ typ: 'dust', x: ex, y: ey, vx: Math.cos(ang) * 0.5, vy: -0.2, r: 1.5, grow: 6, t0: land, life: 420, col: '120,110,100', a: 0.4 });
+    } else {
+      for (let k = 0; k < 7; k++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 1 + Math.random() * 2.6;
+        fx.bits.push({ typ: 'spark', x: ex, y: ey, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t0: land, life: 150 + Math.random() * 160, len: 2 + Math.random() * 4 });
+      }
+      fx.bits.push({ typ: 'dust', x: ex, y: ey, vx: 0, vy: -0.35, r: 2, grow: 8, t0: land, life: 560, col: '140,130,115', a: 0.45 });
+    }
+  }
+  for (let i = n0; i < fx.bits.length; i++) fx.bits[i].zs = z;
+}
+
+// Wolf claw special: three red rakes cut across the target's body.
+export function spawnClaws(fx, x, y, z, facing = 1, scale = 1) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'claw', x, y, ang: facing >= 0 ? 0.62 : Math.PI - 0.62, t0: performance.now(), cut: 120, life: 620, scale });
+  for (let k = 0; k < 8; k++) {
+    const a = (facing >= 0 ? 0.6 : Math.PI - 0.6) + (Math.random() - 0.5) * 1.4, sp = 1 + Math.random() * 2.4;
+    fx.bits.push({ typ: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t0: performance.now() + 60, life: 220, len: 3 });
+  }
+  for (let i = n0; i < fx.bits.length; i++) fx.bits[i].zs = z;
+}
+
+// Heavy ground impact (rhino charge / horn slam): shockwave ring, cracks, grit and dust.
+export function spawnImpact(fx, x, y, z, scale = 1) {
+  const n0 = fx.bits.length;
+  const now = performance.now();
+  fx.bits.push({ typ: 'ring', x, y, r0: 4, r1: 30 * scale, t0: now, life: 420 });
+  fx.bits.push({ typ: 'ring', x, y, r0: 2, r1: 18 * scale, t0: now + 70, life: 360, col: '255,170,90' });
+  const lines = [];
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3 + Math.random() * 0.5, L = (8 + Math.random() * 9) * scale, pts = [];
+    let px = 0, py = 0;
+    for (let k = 1; k <= 4; k++) { px = Math.cos(a) * L * k / 4 + (Math.random() - 0.5) * 2; py = (Math.sin(a) * L * k / 4) * 0.5 + (Math.random() - 0.5); pts.push([px, py]); }
+    lines.push(pts);
+  }
+  fx.bits.push({ typ: 'crack', x, y, lines, t0: now, life: 1100 });
+  for (let i = 0; i < 9; i++) {
+    const a = Math.random() * Math.PI * 2;
+    fx.bits.push({ typ: 'dust', x: x + Math.cos(a) * 4 * z, y: y + Math.sin(a) * 2 * z, vx: Math.cos(a) * 1.2, vy: Math.sin(a) * 0.5 - 0.3, r: 3, grow: 10 * scale, t0: now + i * 12, life: 700, a: 0.4 });
+  }
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = 1.6 + Math.random() * 3;
+    fx.bits.push({ typ: 'debris', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5, rot: Math.random() * 3, rv: (Math.random() - 0.5) * 0.5, t0: now, life: 520, w: 1.5 + Math.random() * 2, h: 1 + Math.random() * 1.5, tone: 0.5 + Math.random() * 0.4 });
+  }
+  for (let i = n0; i < fx.bits.length; i++) fx.bits[i].zs = z;
+}
+
+// Landing puff under a board piece.
+export function spawnDust(fx, x, y, z, n = 3) {
+  const n0 = fx.bits.length;
+  const now = performance.now();
+  for (let i = 0; i < n; i++) {
+    const s = i - (n - 1) / 2;
+    fx.bits.push({ typ: 'dust', x: x + s * 5 * z, y: y + 1 * z, vx: s * 0.5, vy: -0.15, r: 1.6, grow: 5, t0: now, life: 380, a: 0.3 });
+  }
+  for (let i = n0; i < fx.bits.length; i++) fx.bits[i].zs = z;
 }

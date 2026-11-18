@@ -35,7 +35,7 @@ export const OPS = [
 ];
 export const OP_BY_ID = Object.fromEntries(OPS.map((o) => [o.id, o]));
 
-export const opXp = (op, win, first) => (op.tut ? (op.lesson ? 90 : 80) : (win ? 30 + (first ? 30 : 0) : 10));
+export const opXp = (op, win, first = true) => (op.tut ? Math.round((op.lesson ? 90 : 80) / (first ? 1 : 2)) : (win ? 30 + (first ? 30 : 0) : 10));
 export const isCleared = (s, id) => !!(s.ops && s.ops.cleared && s.ops.cleared[id]);
 export function opStatus(s, op) {
   if (op.tut) {
@@ -52,9 +52,11 @@ export function nextOp(s) {
   const open = OPS.filter((o) => !opStatus(s, o).locked);
   return open.find((o) => !opStatus(s, o).cleared) || open[open.length - 1] || OPS[0];
 }
+// First clear pays double; a replay of a completed op pays about half of that (cash, Rep and XP).
 export function opReward(s, op, first) {
   const cash = first ? op.cash * 2 : op.cash;
-  const influence = isUnlocked(s, 'rep') && !op.tut ? Math.round(op.cash / 12) : 0;
+  const rep = isUnlocked(s, 'rep') && !op.tut ? Math.round(op.cash / 12) : 0;
+  const influence = first ? rep : Math.round(rep / 2);
   return { cash, influence };
 }
 

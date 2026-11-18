@@ -82,7 +82,7 @@ function boxOf(list) {
 // Fit every living unit into the safe rect; if that would make operators too small, keep a
 // readable zoom and slide the view so the focus unit (and its nearest foe when it fits) stays
 // fully clear of the HUD.
-function fitCam(b, cv, focus) {
+function fitCam(b, cv, focus, userZ) {
   const us = (b.units || []).filter((un) => un.hp > 0);
   const pts = us.length ? us : [{ x: Math.floor((b.map.w || 12) / 2), y: Math.floor((b.map.h || 10) / 2) }];
   const dpr = window.devicePixelRatio || 1;
@@ -90,7 +90,7 @@ function fitCam(b, cv, focus) {
   const sw = S.r - S.l, sh = S.b - S.t;
   const B = boxOf(pts);
   const fitZ = Math.min(sw / (B.maxX - B.minX), sh / (B.maxY - B.minY));
-  const z = Math.max(1.2 * dpr, Math.min(1.55 * dpr, fitZ));
+  const z = userZ ? userZ * dpr : Math.max(1.2 * dpr, Math.min(1.55 * dpr, fitZ));
   let x = (S.l + S.r) / 2 - ((B.minX + B.maxX) / 2) * z;
   let y = (S.t + S.b) / 2 - ((B.minY + B.maxY) / 2) * z;
   if (focus && focus.hp > 0) {
@@ -666,19 +666,19 @@ function draw(ctx) {
     // Re-renders recreate the canvas at the same size: keep the camera. Only refit when the
     // viewport really changed (rotation, resize).
     if (!u.cam || u.camW !== cv.width || u.camH !== cv.height) {
-      u.cam = fitCam(b, cv, T.actingUnit(b));
+      u.cam = fitCam(b, cv, T.actingUnit(b), u.userZ);
       u.glide = null;
     }
     u.camW = cv.width; u.camH = cv.height;
   }
-  if (!u.cam) u.cam = fitCam(b, cv, T.actingUnit(b));
+  if (!u.cam) u.cam = fitCam(b, cv, T.actingUnit(b), u.userZ);
   const fx0 = Vfx.ensure(u);
   {
     const act = T.actingUnit(b);
     if (act && act.hp > 0 && u.camFor !== act.uid && !fx0.pan) {
       const first = !u.camFor;
       u.camFor = act.uid;
-      if (!first) glideTo(u, fitCam(b, cv, act));
+      if (!first) glideTo(u, fitCam(b, cv, act, u.userZ));
     }
     if (!fx0.pan) applyGlide(u);
   }
@@ -786,7 +786,7 @@ function draw(ctx) {
     let cx = sx, cy = sy - 10 * z, r = 16 * z;
     g.save();
     if (Actors.hasActor(un.hero)) {
-      if (u.flash && u.flash.uid === un.uid && now < u.flash.until) {
+      if (u.flash && u.flash.uid === un.uid && now < u.flash.until && !Actors.isFig()) {
         const a = Actors.ensureAnim(un); a.flash = Math.max(a.flash, 0.7);
       }
       const pose = Actors.drawActor(g, un, sx, sy, z, now, acting ? 2 : (sel && sel.uid === un.uid) ? 1 : 0);
@@ -853,6 +853,15 @@ function draw(ctx) {
     }
     if (un.overwatch && un.hp > 0) {
       drawOverwatchEye(g, cx, barY - 6 * z, z * 0.7);
+    }
+    // v0.14: small status chips to the left of the HP bar (XCOM style), and a marker on the inspected piece
+    if (!dead) drawStatusChips(g, T.statusesOf(b, un), cx - bw / 2 - 1.6 * z, barY + 0.9 * z, z);
+    if (u.inspect === un.uid) {
+      g.strokeStyle = un.side === 'player' ? 'rgba(140,200,255,.95)' : 'rgba(255,200,90,.95)';
+      g.lineWidth = 1 * z; g.setLineDash([2.2 * z, 1.6 * z]);
+      g.lineDashOffset = -now / 60;
+      g.beginPath(); g.ellipse(sx, sy, 9.5 * z, 4.3 * z, 0, 0, Math.PI * 2); g.stroke();
+      g.setLineDash([]);
     }
     if (sel && u.mode === 'breach' && u.hover && un.hp > 0 && Math.abs(un.x - u.hover.x) + Math.abs(un.y - u.hover.y) <= T.CHARGE.radius && T.previewCharge(b, sel, u.hover.x, u.hover.y).ok) {
       // Into-the-Breach style damage preview on everyone in the blast, friend or foe.
@@ -983,7 +992,10 @@ function loop(ctx) {
     a.x = A.x + (B.x - A.x) * frac;
     a.y = A.y + (B.y - A.y) * frac;
     if (a.leap) { const lift = Math.sin(Math.PI * t) * 0.7; a.x -= lift; a.y -= lift; }
-    if (a.stepI !== i) { a.stepI = i; Audio.play('footstep'); }
+    if (a.stepI !== i) {
+      if (a.stepI != null && Actors.isFig() && !a.leap && u.cam) { const lp = toWorld(pts[i].x, pts[i].y); Vfx.spawnDust(Vfx.ensure(u), lp.x * u.cam.z, lp.y * u.cam.z, u.cam.z, 3); }
+      a.stepI = i; Audio.play('footstep');
+    }
     if (t >= 1) u.pathAnim = null;
   }
   if (b && !u.busy) syncTimer(u, b);
@@ -995,18 +1007,50 @@ function loop(ctx) {
   raf = requestAnimationFrame(() => loop(ctx));
 }
 
+// Zoom about a screen point (device px). Zoom is stored relative to dpr so it behaves the same on
+// every screen, and remembered (u.userZ) so turn hand-offs keep the player's zoom.
+const ZMIN = 0.6, ZMAX = 4.2;
+function zoomAt(u, sx, sy, f) {
+  if (!u.cam) return;
+  const dpr = window.devicePixelRatio || 1;
+  const before = fromScreen(u, sx, sy);
+  u.glide = null;
+  u.cam.z = Math.max(ZMIN * dpr, Math.min(ZMAX * dpr, u.cam.z * f));
+  u.userZ = u.cam.z / dpr;
+  const p = toWorld(before.x, before.y);
+  u.cam.x = sx - p.x * u.cam.z;
+  u.cam.y = sy - p.y * u.cam.z;
+}
+
 function bindCanvas(ctx) {
   const cv = document.getElementById('tacv');
   if (!cv || cv._bound) return;
   cv._bound = true;
   const u = ui(ctx);
   let drag = null, last = null;
+  const pts = new Map();
+  let pinch = null;
+  const pinchDist = () => { const [a, c] = [...pts.values()]; return Math.hypot(a.x - c.x, a.y - c.y) || 1; };
+  const pinchMid = () => { const [a, c] = [...pts.values()]; return { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 }; };
   cv.addEventListener('pointerdown', (e) => {
     cv.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) { pinch = { d: pinchDist() }; last = null; drag = null; return; }
     last = { x: e.clientX, y: e.clientY, t: Date.now(), moved: 0 };
     drag = { x: e.clientX, y: e.clientY };
   });
+  const lift = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
+  cv.addEventListener('pointerup', lift);
+  cv.addEventListener('pointercancel', lift);
   cv.addEventListener('pointermove', (e) => {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size === 2) {
+      const d = pinchDist(), m = pinchMid();
+      const rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      zoomAt(u, (m.x - rect.left) * dpr, (m.y - rect.top) * dpr, d / pinch.d);
+      pinch.d = d;
+      return;
+    }
     if (drag && last) {
       const dx = e.clientX - last.x, dy = e.clientY - last.y;
       if (Math.abs(dx) + Math.abs(dy) > 3) {
@@ -1040,13 +1084,7 @@ function bindCanvas(ctx) {
     e.preventDefault();
     const dpr = window.devicePixelRatio || 1;
     const rect = cv.getBoundingClientRect();
-    const sx = (e.clientX - rect.left) * dpr, sy = (e.clientY - rect.top) * dpr;
-    const before = fromScreen(u, sx, sy);
-    u.glide = null;
-    u.cam.z = Math.max(0.45, Math.min(1.8, u.cam.z * (e.deltaY > 0 ? 0.92 : 1.08)));
-    const p = toWorld(before.x, before.y);
-    u.cam.x = sx - p.x * u.cam.z;
-    u.cam.y = sy - p.y * u.cam.z;
+    zoomAt(u, (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr, e.deltaY > 0 ? 0.9 : 1.11);
   }, { passive: false });
 }
 
@@ -1057,14 +1095,34 @@ function defaultMode(sel, foe) {
   return 'shot';
 }
 
+// XCOM-style inspect: any piece can be tapped at any time to open its status panel.
+function setInspect(ctx, uid) {
+  const u = ui(ctx);
+  if (u.inspect === uid) return;
+  u.inspect = uid || null;
+  ctx.render();
+}
+const EXPLICIT_ATTACK = ['shot', 'aimed', 'melee', 'knife', 'roll', 'venom', 'suppress', 'pounce', 'maul', 'lunge'];
+
 function clickTile(ctx, x, y) {
   const b = ctx.state.tactics, u = ui(ctx);
-  if (!b || u.busy || b.status !== 'active' || b.side !== 'player') return;
-  const sel = T.actingUnit(b);
-  if (!sel || sel.side !== 'player' || sel.hp <= 0) return;
-  u.sel = sel.uid;
+  if (!b || b.status !== 'active') return;
   const occ = T.unitAt(b, x, y);
   const down = koAt(b, x, y);
+  const myTurn = !u.busy && b.side === 'player';
+  const sel = T.actingUnit(b);
+  const canAct = myTurn && sel && sel.side === 'player' && sel.hp > 0;
+  const heal = u.mode === 'patch' || u.mode === 'medkit' || u.mode === 'heal' || u.mode === 'revive';
+  // Pure inspection: rival turn, tapping an ally (unless healing) or a knocked-out piece.
+  if (!canAct) { const t = occ || down; setInspect(ctx, t ? t.uid : null); return; }
+  if ((occ && occ.side === 'player' && !heal) || (!occ && down && !heal)) { setInspect(ctx, (occ || down).uid); return; }
+  // Enemy: first tap inspects (and shows the hit chance) unless an attack was picked; second tap or Confirm fires.
+  if (occ && occ.side === 'enemy' && u.inspect !== occ.uid && !(u.modePicked && EXPLICIT_ATTACK.includes(u.mode))) {
+    u.hover = { x, y, uid: occ.uid };
+    setInspect(ctx, occ.uid); return;
+  }
+  if (u.inspect) { u.inspect = null; }
+  u.sel = sel.uid;
   if ((u.mode === 'patch' || u.mode === 'medkit' || u.mode === 'heal' || u.mode === 'revive') && (occ || down)) {
     const t = occ || down;
     if (t.side === 'player') {
@@ -1087,6 +1145,36 @@ function clickTile(ctx, x, y) {
   if (sel && T.walkable(b, x, y, sel.uid)) {
     return doAct(ctx, { type: 'move', uid: sel.uid, x, y });
   }
+  ctx.render();
+}
+
+// The XCOM-style panel for the inspected piece: vitals, every buff and debuff in plain words.
+function inspectHtml(b, u) {
+  const un = u.inspect && b.units.find((x) => x.uid === u.inspect);
+  if (!un) return '';
+  const d = defOf(un.hero), cls = classOf(d);
+  const sts = T.statusesOf(b, un);
+  const gun = T.gunOf(un), mel = un.mel;
+  const foe = un.side === 'enemy';
+  const sel = T.actingUnit(b);
+  let atk = '';
+  if (foe && un.hp > 0 && sel && sel.side === 'player' && b.side === 'player' && !u.busy) {
+    const mode = EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(sel, un);
+    const prev = T.previewShot(b, sel, un, mode);
+    const nm = (defOf(sel.hero).abilities.find((a) => a.id === mode) || {}).name || (mode === 'melee' ? 'Strike' : 'Shoot');
+    atk = prev && prev.ok
+      ? `<button class="btn red tiact" data-act="tconfirm" data-uid="${un.uid}">${esc(nm)} · ${prev.chance}%</button>`
+      : `<div class="tinone">${esc((prev && prev.reason) || 'Out of reach')}</div>`;
+  }
+  const pct = Math.max(0, Math.round(100 * un.hp / un.maxHp));
+  return `<div class="tinsp ${foe ? 'foe' : ''}" id="tinsp">
+    <div class="tihead"><img src="${d.thumb || d.portrait}" alt=""><div><b>${esc(d.name)}</b><span>${foe ? 'Rival' : 'Your crew'} · ${esc((cls && cls.name) || d.role || '')} · ${esc(d.species || '')}</span></div><button class="tix" data-act="closeInspect" aria-label="Close">×</button></div>
+    <div class="tihp"><i style="width:${pct}%"></i><span>${Math.max(0, un.hp)}/${un.maxHp} HP</span></div>
+    <div class="tistats"><span><em>Armour</em>${un.armor || 0}</span><span><em>AP</em>${un.ap}/${un.maxAp}</span><span><em>Move</em>${un.move}</span><span><em>Aim</em>${d.aim + (un.aimMod || 0)}</span><span><em>Ammo</em>${gun ? (un.ammo || 0) : '–'}</span>${un.dodge ? `<span><em>Dodge</em>${un.dodge}%</span>` : ''}</div>
+    <div class="tiwep">${gun ? `${esc(gun.name)} ${gun.dmg[0]}–${gun.dmg[1]} · rng ${gun.range + (un.rangeBonus || 0)}` : 'No gun'}${mel ? ` · ${esc(mel.name)} ${mel.dmg[0] + (un.mdmg || 0)}–${mel.dmg[1] + (un.mdmg || 0)}` : ''}</div>
+    <div class="tists">${sts.length ? sts.map((st) => `<div class="tist ${st.kind}"><i>${statusSvg(st.id)}</i><div><b>${esc(st.name)}${st.turns != null ? `<small>${st.id === 'bleed' || st.id === 'venom' ? `${st.turns} left` : `${st.turns} turn${st.turns > 1 ? 's' : ''}`}</small>` : ''}</b><span>${esc(st.text)}</span></div></div>`).join('') : '<div class="tinone">No buffs or debuffs.</div>'}</div>
+    ${atk}
+  </div>`;
 }
 
 async function playEvents(ctx, events) {
@@ -1103,6 +1191,7 @@ async function playEvents(ctx, events) {
       const mover = b.units.find((x) => x.uid === ev.uid);
       if (mover && ev.path.length) {
         const dest = ev.path[ev.path.length - 1];
+        u.cutFocus = { uids: [mover.uid], until: performance.now() + ev.path.length * 320 + 600 };
         Actors.faceToward(mover, start.x, start.y, dest.x, dest.y);
         Actors.playClip(mover, 'walk');
       }
@@ -1121,7 +1210,7 @@ async function playEvents(ctx, events) {
         u.flash = { uid: def.uid, until: performance.now() + 220, muzzle: !melee };
         u.cutFocus = { uids: [att.uid, def.uid], until: performance.now() + 1600 };
         Actors.faceToward(att, att.x, att.y, def.x, def.y);
-        Actors.playClip(att, melee ? 'melee' : 'shoot');
+        Actors.playClip(att, melee ? 'melee' : 'shoot', melee ? { lunge: { x: tw.x - a.x, y: tw.y - a.y } } : {});
         if (ev.typ === 'overwatch' && ev.target) {
           Vfx.spawnCallout(Vfx.ensure(u), a.x * zz, (a.y - 30) * zz, 'OVERWATCH', 'overwatch');
           Audio.play('overwatch');
@@ -1137,7 +1226,7 @@ async function playEvents(ctx, events) {
           durOut: 420,
         });
         Vfx.nudgeToward(Vfx.ensure(u), midX, midY, ev.crit ? 1.2 : 0.9);
-        await wait(melee ? 80 : 110);
+        await wait(melee ? 170 : 110);
         const an = Actors.ensureAnim(att);
         const gx = an.gunX != null ? an.gunX : (a.x * zz);
         const gy = an.gunY != null ? an.gunY : ((a.y - 16) * zz);
@@ -1145,15 +1234,29 @@ async function playEvents(ctx, events) {
         const tx = tw.x * zz, ty = (tw.y - tH * 0.55) * zz;
         const fac = an.facing || 1;
         if (!melee) {
-          Vfx.spawnTracer(u.fx, gx, gy, ev.hit ? tx : tx + fac * 14 * zz, ev.hit ? ty : ty - 6 * zz, { miss: !ev.hit });
-          Vfx.spawnCasings(u.fx, gx, gy, fac, ev.mode === 'aimed' ? 1 : 1);
+          // v0.14 gunshot: muzzle flash, tracer to the target, sparks on a hit or a ricochet behind on a miss
+          const gun = T.gunOf(att);
+          Vfx.spawnShot(u.fx, gx, gy, tx, ty, zz, { hit: ev.hit, pellets: gun && gun.typ === 'shotgun' ? 5 : 1, missSide: ev.roll % 2 ? 1 : -1 });
+          Vfx.spawnCasings(u.fx, gx, gy, fac, 1);
         }
-        await wait(melee ? 60 : 90);
+        await wait(melee ? 20 : 120);
         if (ev.hit) {
           u.shake = ev.crit ? 11 : 7; Audio.play('hit');
           u.hitstop = performance.now() + (ev.crit ? 120 : 80);
-          Actors.playClip(def, ev.ko ? 'ko' : 'hit');
-          Vfx.spawnSparks(u.fx, tx, ty, ev.crit ? 16 : 10);
+          // knock-back along the line of the attack, red flash for blows, white for bullets
+          const dl = Math.hypot(tw.x - a.x, tw.y - a.y) || 1;
+          const kb = melee ? 6 : 3.5;
+          Actors.playClip(def, ev.ko ? 'ko' : 'hit', { push: { x: (tw.x - a.x) / dl * kb, y: (tw.y - a.y) / dl * kb }, flashCol: melee ? '#ff2a2a' : '#ffffff' });
+          const special = ev.mode === 'pounce' || ev.mode === 'maul' || ev.mode === 'roll' || ev.mode === 'lunge';
+          const ahero = att.hero, fz = Vfx.ensure(u);
+          if (melee && special && (ahero === 'rook' || defOf(ahero).species === 'Wolf')) {
+            Vfx.spawnClaws(fz, tx, ty, zz, fac, ev.mode === 'maul' ? 1.25 : 1);
+          } else if (melee && special && (ahero === 'anvil' || defOf(ahero).species === 'Rhino' || ev.mode === 'roll')) {
+            Vfx.spawnImpact(fz, tw.x * zz, tw.y * zz, zz, ev.mode === 'maul' ? 1.3 : 1);
+            u.shake = Math.max(u.shake || 0, ev.mode === 'maul' ? 14 : 11);
+          } else if (melee) {
+            Vfx.spawnSparks(fz, tx, ty, ev.crit ? 10 : 6);
+          }
           // Callout word above the head, damage number lower and off to the side so they never overprint.
           Vfx.spawnCallout(u.fx, tx, (tw.y - tH - 22) * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
           u.floats.push({ t: performance.now(), x: tx + fac * 13 * zz, y: (tw.y - tH * 0.7) * zz, z0: zz, text: ev.crit ? `-${ev.dmg}!` : `-${ev.dmg}`, heal: 0, crit: ev.crit, dmg: 1 });
@@ -1277,7 +1380,7 @@ async function playEvents(ctx, events) {
     if (ev.typ === 'throw') {
       const th = b.units.find((x) => x.uid === ev.uid);
       if (th) Actors.playClip(th, 'ability');
-      u.mode = null;
+      u.mode = null; u.modePicked = false;
       await wait(320);
     }
     if (ev.typ === 'boom') {
@@ -1525,7 +1628,7 @@ function coach(b, u) {
     return `Tap Hook to <b>Strike</b> with the tyre iron${prev && prev.ok ? ` (<b style="color:${chanceColor(prev.chance)}">${prev.chance}%</b>, ${prev.dmg[0]}–${prev.dmg[1]} dmg)` : ''}. Every melee hit heals Rook 1 HP (Bruiser Grit).`;
   }
   if (rook.hp <= rook.maxHp * 0.5 && !T.cooldownLeft(rook, 'secondwind') && rook.ap >= 1) return 'Hurt? <b>Second Wind</b> heals 35% of his health for 1 AP.';
-  if (dist > 1 && rook.ap >= 2) return dist <= 6 ? 'Just out of <b>Pounce</b> range (4 tiles). Fire the <b>Sidearm</b> — tap it, then tap Hook — to soften him up. Next turn, Pounce.' : 'Out of reach. Walk closer — Pounce reaches 4 tiles, the Sidearm 6.';
+  if (dist > 1 && rook.ap >= 2) return dist <= 6 ? 'Just out of <b>Pounce</b> range (4 tiles). Fire your gun: tap <b>Shoot</b>, then tap Hook, to soften him up. Next turn, Pounce.' : 'Out of reach. Walk closer — Pounce reaches 4 tiles, Shoot 6.';
   return 'Out of AP. <b>End turn</b> — the next fastest operator goes next. Tap Rook later to open his inventory and gear him up.';
 }
 
@@ -1541,6 +1644,56 @@ function queueHtml(b) {
     return `<div class="tq ${on} ${foe} ${dead}" title="${esc(d.name)}"><img src="${d.thumb || d.portrait}" alt="">`
       + `<i class="tqhp"><i style="width:${Math.round(hp * 100)}%"></i></i>${dead ? '<b class="tqko">KO</b>' : ''}</div>`;
   }).join('')}</div>`;
+}
+
+// v0.14 status icons (24x24 stroke paths), shared by the board chips and the inspect panel.
+export const STATUS_ICON = {
+  bleed: { d: 'M12 3c3 5 6 8 6 12a6 6 0 01-12 0c0-4 3-7 6-12z', col: '#d83a32', fill: 1 },
+  venom: { d: 'M12 3c3 5 6 8 6 12a6 6 0 01-12 0c0-4 3-7 6-12zM9 14a3 3 0 003 3', col: '#5fbf3a', fill: 1 },
+  shaken: { d: 'M3 12l3-5 3 10 3-10 3 10 3-10 3 5', col: '#d8a23a' },
+  suppressed: { d: 'M3 7h13M3 12h16M3 17h13M18 5l3 2-3 2M20 15l2 2-2 2', col: '#c8763a' },
+  taunted: { d: 'M12 4v10M12 18v2', col: '#e05a48' },
+  rallied: { d: 'M5 14l7-7 7 7M5 20l7-7 7 7', col: '#e0c15a' },
+  braced: { d: 'M12 3l8 3v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z', col: '#6aa0e0' },
+  hunkered: { d: 'M12 3l8 3v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6zM8 12l3 3 5-6', col: '#6aa0e0' },
+  overwatch: { d: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 110 6 3 3 0 010-6', col: '#e0c15a' },
+  sprint: { d: 'M4 6l6 6-6 6M12 6l6 6-6 6', col: '#7ad08a' },
+  bulwark: { d: 'M4 4h16v7c0 5-4 8-8 10-4-2-8-5-8-10zM12 8v9M8 12h8', col: '#9ab0c8' },
+  stubborn: { d: 'M7 20V9l5-5 5 5v11M7 13h10', col: '#b49a7a' },
+  noammo: { d: 'M6 6l12 12M18 6L6 18', col: '#e07a6a' },
+  ko: { d: 'M5 5l14 14M19 5L5 19', col: '#999' },
+};
+const _sPath = {};
+function statusPath(id) { const ic = STATUS_ICON[id]; if (!ic) return null; return _sPath[id] || (_sPath[id] = new Path2D(ic.d)); }
+export function statusSvg(id) {
+  const ic = STATUS_ICON[id] || STATUS_ICON.ko;
+  return `<svg viewBox="0 0 24 24" fill="${ic.fill ? ic.col : 'none'}" stroke="${ic.col}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ic.d}"/></svg>`;
+}
+// Draws up to three status chips right-to-left ending at (x1, y). Overwatch has its own eye; skip it.
+function drawStatusChips(g, sts, x1, y, z) {
+  const list = sts.filter((s) => s.id !== 'overwatch' && s.id !== 'ko' && s.id !== 'stubborn');
+  if (!list.length) return;
+  list.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'debuff' ? -1 : 1));
+  const sz = 4.6 * z, gap = 0.7 * z;
+  const shown = list.slice(0, 3);
+  shown.forEach((st, i) => {
+    const x = x1 - (i + 1) * sz - i * gap, yy = y - sz / 2;
+    g.fillStyle = st.kind === 'debuff' ? 'rgba(52,10,8,.92)' : 'rgba(10,22,36,.92)';
+    g.beginPath(); g.roundRect(x, yy, sz, sz, 1 * z); g.fill();
+    g.strokeStyle = st.kind === 'debuff' ? 'rgba(255,90,70,.9)' : 'rgba(120,186,255,.9)';
+    g.lineWidth = 0.35 * z; g.stroke();
+    const p = statusPath(st.id); const ic = STATUS_ICON[st.id];
+    if (p) {
+      g.save(); g.translate(x + 0.6 * z, yy + 0.6 * z); g.scale((sz - 1.2 * z) / 24, (sz - 1.2 * z) / 24);
+      g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round';
+      if (ic.fill) { g.fillStyle = ic.col; g.fill(p); } else { g.strokeStyle = ic.col; g.stroke(p); }
+      g.restore();
+    }
+  });
+  if (list.length > 3) {
+    g.fillStyle = '#f3e7c9'; g.font = `bold ${Math.round(3.6 * z)}px Inter, sans-serif`; g.textAlign = 'right';
+    g.fillText(`+${list.length - 3}`, x1 - 3 * sz - 3 * gap, y + 1.3 * z); g.textAlign = 'left';
+  }
 }
 
 const ICONS = {
@@ -1658,6 +1811,8 @@ export function render(ctx) {
     </div>
     ${queueHtml(b)}
     ${banner}
+    <div class="tzoom"><button data-act="tzoom" data-z="in" aria-label="Zoom in">+</button><button data-act="tzoom" data-z="out" aria-label="Zoom out">−</button><button data-act="tzoom" data-z="fit" aria-label="Fit board">⤢</button></div>
+    ${inspectHtml(b, u)}
     ${coachHtml ? `<div class="tcoach ${tip ? 'top' : ''}">${coachHtml}</div>` : ''}
     ${sel ? `
     <div class="tdock">
@@ -1670,7 +1825,7 @@ export function render(ctx) {
         </div>
       </div>
       <div class="ttray">
-        ${tip ? `<div class="ttip"><b>${esc(tip.name)}</b> ${esc(tip.text)}</div>` : ''}
+        ${tip && !u.inspect ? `<div class="ttip"><b>${esc(tip.name)}</b> ${esc(tip.text)}</div>` : ''}
         ${trayBtns.join('')}
       </div>
     </div>` : ''}
@@ -1690,6 +1845,19 @@ export function mount(ctx, el) {
     if (act && act.side === 'player') u.sel = act.uid;
   }
   bindCanvas(ctx);
+  // test/debug hook: replay a list of battle events (used by the v0.14 visual tests)
+  window.__tfx = {
+    play: (evs) => playEvents(ctx, evs),
+    move(uid, x, y) {
+      const bb = ctx.state.tactics, un = bb && bb.units.find((q) => q.uid === uid);
+      const r = un && T.pathTo(bb, un, x, y);
+      const path = r && (r.path || r);
+      if (!path || path.length < 2) return null;
+      const ev = { typ: 'move', uid, path, from: { x: un.x, y: un.y } };
+      un.x = x; un.y = y;
+      return ev;
+    },
+  };
   if (raf) cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => loop(ctx));
   if (b && b.status === 'active' && b.side === 'enemy' && !u.busy && !u.closed) {
@@ -1705,13 +1873,28 @@ export const actions = {
     if (!u.sel) return;
     if (inst.includes(mode)) return doAct(ctx, { type: mode, uid: u.sel });
     if (mode === 'medkit' && u.mode === 'medkit') return doAct(ctx, { type: 'medkit', uid: u.sel, target: u.sel });
-    u.mode = mode; ctx.render();
+    u.mode = mode; u.modePicked = true; ctx.render();
   },
   doHunker(ctx) {
     const u = ui(ctx); if (!u.sel) return;
     doAct(ctx, { type: 'hunker', uid: u.sel });
   },
-  endTacticsTurn(ctx) { doAct(ctx, { type: 'endTurn' }); },
+  endTacticsTurn(ctx) { ui(ctx).inspect = null; doAct(ctx, { type: 'endTurn' }); },
+  closeInspect(ctx) { ui(ctx).inspect = null; ctx.render(); },
+  tconfirm(ctx, el) {
+    const b = ctx.state.tactics, u = ui(ctx);
+    const t = b && b.units.find((x) => x.uid === el.dataset.uid);
+    if (!t) return;
+    u.inspect = t.uid;
+    clickTile(ctx, t.x, t.y);
+  },
+  tzoom(ctx, el) {
+    const u = ui(ctx), cv = document.getElementById('tacv');
+    if (!u.cam || !cv) return;
+    const how = el.dataset.z;
+    if (how === 'fit') { u.userZ = null; glideTo(u, fitCam(ctx.state.tactics, cv, T.actingUnit(ctx.state.tactics))); return; }
+    zoomAt(u, cv.width / 2, cv.height / 2, how === 'in' ? 1.25 : 0.8);
+  },
   retreatFight(ctx) {
     const b = ctx.state.tactics; if (!b) return;
     b.status = 'loss'; b.reason = 'retreat';

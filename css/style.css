@@ -1071,3 +1071,74 @@ em.up{color:#7bd36a}em.dn{color:#ff6b5e}
 @media (max-height:370px){.cslot .sico{width:22px;height:22px}}
 @media (min-width:1100px) and (min-height:680px){.cslot .sico{width:46px;height:46px}.sitem .sico{width:56px;height:56px}.iframe{width:72px;height:72px}}
 .sitem[class*="q-"],.cslot.has[class*="q-"]{border-color:var(--rc)!important}
+
+/* v0.14 Operators grid: every operator in the game, owned in colour, the rest greyed */
+.opsgridnote{margin:-2px 0 6px}
+.opgrid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:8px;padding:2px 2px 10px;align-content:start}
+.optile{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid var(--line2);border-radius:9px;overflow:hidden;background:#0c0a09;color:var(--text);text-align:left;cursor:pointer;min-height:0}
+.optile .otp{display:block;aspect-ratio:1/0.82;background:#000 center 20%/cover no-repeat}
+.optile .otm{display:flex;flex-direction:column;gap:1px;padding:4px 6px 6px;line-height:1.15}
+.optile .otm .h{font-size:15px}
+.optile.own{border-color:rgba(224,165,38,.45)}
+.optile.own:hover{border-color:var(--gold)}
+.optile.in{box-shadow:0 0 0 1px var(--gold),0 0 12px rgba(224,165,38,.25)}
+.optile.grey .otp{filter:grayscale(1) brightness(.55) contrast(1.05)}
+.optile.grey .otm{opacity:.75}
+.optile.grey:hover .otp{filter:grayscale(.85) brightness(.7)}
+.optile .squadtag,.optile .feattag,.optile .pintag{position:absolute;top:5px;left:5px}
+.optile .feattag{left:auto;right:5px}
+.optile .pintag{top:24px}
+.optile .otlock{position:absolute;top:calc(41% - 14px);left:50%;transform:translateX(-50%);font-size:20px;filter:drop-shadow(0 2px 3px #000);opacity:.85}
+.optile.future{border-style:dashed}
+.opinfo{display:grid;grid-template-columns:minmax(150px,34%) 1fr;gap:12px;align-items:start}
+.oiport{position:sticky;top:0;aspect-ratio:1;border-radius:10px;background:#000 center/cover no-repeat;filter:grayscale(.85) brightness(.8);border:1px solid var(--line2)}
+.oiport .oitag{position:absolute;left:6px;bottom:6px;font:700 10px var(--font);letter-spacing:.06em;background:rgba(0,0,0,.75);color:#ddd;padding:2px 6px;border-radius:4px;filter:none}
+.oibody .sect{margin:8px 0 4px}
+.oibio{margin:0;line-height:1.35}
+.oihow{margin-top:4px}
+.oiabs{display:flex;flex-direction:column;gap:5px}
+.oiab{display:grid;grid-template-columns:24px 1fr;gap:6px;align-items:start}
+.oiabi svg{width:20px;height:20px;color:var(--gold)}
+@media (max-height:360px){.opinfo{grid-template-columns:130px 1fr}}
+/* My Crew: squad seats and per-operator squad toggle */
+.sqseats{display:flex;gap:5px;margin:0 0 6px}
+.sqseat{width:34px;height:34px;border-radius:7px;border:1px dashed var(--line2);display:grid;place-items:center;font:700 16px var(--font);color:var(--faint);background:#0c0a09 center/cover no-repeat;line-height:1}
+.sqseat.full{border:1px solid var(--gold)}
+.sqseat.lock{font-size:11px;flex-direction:column;opacity:.6}
+.sqseat small{display:block;font-size:8px}
+.opslotw{display:grid;grid-template-columns:1fr 34px;gap:4px;align-items:stretch}
+.sqtog{border:1px solid var(--line2);border-radius:8px;background:#141110;color:var(--faint);font:700 18px var(--font);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer}
+.sqtog small{font-size:8px;letter-spacing:.06em}
+.sqtog.on{background:linear-gradient(#3a2c10,#1e170a);border-color:var(--gold);color:var(--gold)}
+
+/* v0.14 battle: XCOM-style inspect panel + zoom buttons */
+.tinsp{position:absolute;right:max(8px,env(safe-area-inset-right));top:calc(max(6px,env(safe-area-inset-top)) + 36px);bottom:84px;width:min(250px,38%);display:flex;flex-direction:column;gap:5px;background:rgba(14,11,10,.94);border:1px solid var(--line2);border-top:3px solid var(--blue);border-radius:10px;padding:7px 8px;z-index:7;box-shadow:0 6px 20px rgba(0,0,0,.6);overflow-y:auto;color:#f3e7c9;font-size:12px}
+.tinsp.foe{border-top-color:var(--red)}
+.tihead{display:flex;gap:7px;align-items:center}
+.tihead img{width:40px;height:40px;border-radius:6px;object-fit:cover;flex:none}
+.tihead div{display:flex;flex-direction:column;min-width:0;flex:1}
+.tihead b{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:.3px;line-height:1.1}
+.tihead span{font-size:10.5px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tix{flex:none;width:26px;height:26px;border-radius:6px;border:1px solid var(--line2);background:#221b19;color:#f3e7c9;font-size:17px;line-height:1;cursor:pointer}
+.tihp{position:relative;height:13px;background:#2a1715;border-radius:4px;overflow:hidden;flex:none}
+.tihp i{position:absolute;inset:0 auto 0 0;background:linear-gradient(#73c97e,#3f9a4c)}
+.tinsp.foe .tihp i{background:linear-gradient(#ff6d5a,#c63a2c)}
+.tihp span{position:relative;display:block;text-align:center;font-size:10px;font-weight:700;line-height:13px;text-shadow:0 1px 1px #000}
+.tistats{display:flex;flex-wrap:wrap;gap:3px;flex:none}
+.tistats span{background:#211a18;border:1px solid rgba(255,255,255,.07);border-radius:5px;padding:1px 5px;font-weight:700;font-size:11.5px}
+.tistats em{font-style:normal;font-weight:400;opacity:.65;margin-right:3px;font-size:10px}
+.tiwep{font-size:10.5px;opacity:.8;flex:none}
+.tists{display:flex;flex-direction:column;gap:4px}
+.tist{display:flex;gap:6px;align-items:flex-start;background:#1b1514;border-left:3px solid #6aa0e0;border-radius:5px;padding:4px 5px}
+.tist.debuff{border-left-color:#e0473a;background:#231312}
+.tist i{flex:none;width:20px;height:20px;border-radius:4px;background:#0c0a09;display:grid;place-items:center}
+.tist i svg{width:15px;height:15px}
+.tist b{display:flex;justify-content:space-between;gap:6px;font-size:12px}
+.tist small{font-weight:400;opacity:.7;font-size:10px;white-space:nowrap}
+.tist span{display:block;font-size:10.5px;opacity:.8;line-height:1.3}
+.tinone{font-size:11px;opacity:.6;padding:2px 0}
+.tiact{flex:none;margin-top:2px}
+.tzoom{position:absolute;right:max(8px,env(safe-area-inset-right));top:calc(max(6px,env(safe-area-inset-top)) + 36px);display:flex;flex-direction:column;gap:4px;z-index:5}
+.tzoom button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line2);background:rgba(18,14,13,.88);color:#f3e7c9;font-size:17px;font-weight:700;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.45)}
+.tinsp ~ .tzoom,.tzoom:has(~ .tinsp){display:none}
+@media (max-height:360px){.tinsp{bottom:76px;top:calc(max(4px,env(safe-area-inset-top)) + 32px)}.tzoom button{width:27px;height:27px;font-size:15px}.tzoom{top:38px}}

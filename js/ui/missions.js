@@ -56,12 +56,12 @@ function opCard(ctx, op) {
       <div class="tiny dim">${esc(map.name || '')} · ${op.foes.length} ${op.foes.length === 1 ? 'foe' : 'foes'}</div><div class="opfoes dimmed">${foes}</div></article>`;
   }
   return `<article class="opscard ${st.cleared ? 'done' : 'new'}">
-    <div class="ophd"><b class="h">${esc(op.name)}</b>${op.tut ? '<span class="optag">TUTORIAL · FREE</span>' : st.cleared ? '<span class="optag ok">✓ Cleared</span>' : '<span class="optag new">NEW</span>'}</div>
+    <div class="ophd"><b class="h">${esc(op.name)}</b>${st.cleared ? '<span class="optag ok">✓ Complete</span>' : op.tut ? '<span class="optag">TUTORIAL · FREE</span>' : '<span class="optag new">NEW</span>'}</div>
     <div class="tiny gold">${esc(map.name || 'Docklands')} · ${op.lesson ? '1 v 1' : `${n} v ${op.foes.length}`} · ~${op.foes.length <= 1 ? 3 : op.foes.length <= 2 ? 4 : 5} min</div>
     <div class="tiny dim opblurb">${esc(op.blurb)}</div>
     <div class="opfoes">${foes}<span class="tiny dim">Lv ${op.elv}</span></div>
-    <div class="tiny">${money(r.cash)}${r.influence ? ` · ${ico('influence')} ${r.influence}` : ''} · +${xp} XP${first && !op.tut ? ' <span class="gold">first clear ×2</span>' : ''}</div>
-    <button class="btn ${st.cleared ? '' : 'red'} block" data-act="startOp" data-id="${op.id}">${op.tut ? 'Play · free' : `Play · ⚡1`}</button>
+    <div class="tiny">${money(r.cash)}${r.influence ? ` · ${ico('influence')} ${r.influence}` : ''} · +${xp} XP${first && !op.tut ? ' <span class="gold">first clear ×2</span>' : st.cleared && !op.tut ? ' <span class="dim">replay · ½ rewards</span>' : ''}</div>
+    <button class="btn ${st.cleared ? '' : 'red'} block" data-act="startOp" data-id="${op.id}">${st.cleared ? (op.tut ? '↻ Replay · free' : '↻ Replay · ⚡1') : op.tut ? 'Play · free' : 'Play · ⚡1'}</button>
   </article>`;
 }
 

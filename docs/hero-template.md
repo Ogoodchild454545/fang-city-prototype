@@ -15,10 +15,10 @@ rook: {
   template: {
     class: 'bruiser',
     base: { crit: 5, dodge: 0 },                    // extra base stats the old hero format lacked
-    slots: ['primary', 'sidearm', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots',
+    slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots',
             'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
     start: {
-      equip: { melee: 'tyreiron', sidearm: 'snub', jacket: 'hoodie', boots: 'trainers',
+      equip: { melee: 'tyreiron', primary: 'snub', jacket: 'hoodie', boots: 'trainers',
                gloves: 'tape', consumable: 'dressings' },
       stash: ['flatcap', 'gilet', 'chain', 'pipebomb'],   // given once, on a new game or migration
     },
@@ -51,7 +51,7 @@ the sheet always matches the fight.
 | Move | base + perks + items | tiles per turn (1 AP each) |
 | Ammo / Medkits | gun type + perks + items | how much the hero can carry into a fight |
 
-Weapons come from equipment. The **gun** is the primary, else the sidearm, else a ranged built-in
+Weapons come from equipment. The **gun** is whatever sits in the Gun slot (`primary`; pistols and revolvers go there too since v0.14), else a ranged built-in
 weapon. The **melee weapon** is the melee slot, else a melee built-in weapon. A melee-template
 hero with no gun cannot use gun abilities ("No gun equipped").
 
@@ -59,7 +59,7 @@ hero with no gun cannot use gun abilities ("No gun equipped").
 
 `ITEMS` in `js/core/items.js` holds 37 grounded street items: no magic. Each one has:
 
-- `slot`: primary, sidearm, melee, head, jacket, body, gloves, boots, acc (two sockets), utility,
+- `slot`: primary (the Gun slot), melee, head, jacket, body, gloves, boots, acc (two sockets), utility,
   consumable or trinket.
 - `q`: quality tier. Worn, Street, Tuned or Custom. This sets the frame colour and drop weight.
 - stat fields from the table above.
@@ -89,7 +89,7 @@ Rook's set:
 | Ability | AP | Cooldown | Unlock | Effect |
 |---|---|---|---|---|
 | Strike | 2 | – | – | Hit with the melee weapon (Tyre Iron 4–6, +1 from Knuckle Tape) |
-| Sidearm | 2 | – | – | Fire the gun (Snub Revolver 2–4, range 6, uses ammo) |
+| Shoot | 2 | – | – | Fire the gun (Snub Revolver 2–4, range 6, uses ammo) |
 | Pounce | 2 | 3 | Lv 1 | Leap next to a foe up to 4 tiles away (overwatch can't catch the leap), then strike at +10 aim |
 | Second Wind | 1 | 5 | Lv 1 | Heal 35% of max HP and clear bleed and venom |
 | Maul | 3 | 2 | Lv 3 | Melee hit at +2 damage; the target bleeds 1 HP a turn for 2 turns |

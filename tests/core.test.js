@@ -11,7 +11,7 @@ import { generateRivalBase, baseToRaidLayout, playerBaseLayout, RAID_W, RAID_H }
 import { aiNextActionFor } from '../js/core/ai.js';
 import { DISTRICTS, TROOPS, TROOP_ORDER, BOSSES, MISSIONS } from '../js/core/data.js';
 import * as T from '../js/core/tactics.js';
-import { HERO_ORDER, HEROES, grantHero, finishTutorial, matchup, setSquad, CLASSES, SPECIES_PERKS } from '../js/core/heroes.js';
+import { HERO_ORDER, HEROES, grantHero, finishTutorial, matchup, setSquad, CLASSES, SPECIES_PERKS, FUTURE_HEROES, FUTURE_ORDER } from '../js/core/heroes.js';
 import * as SH from '../js/core/shards.js';
 import { tutorialMap, avenueMap, docklandsMap, describeDocklands, tile } from '../js/core/tmaps.js';
 import * as P from '../js/core/progress.js';
@@ -303,7 +303,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   const ls = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } };
   const old = JSON.parse(v1);
   const s = migrate(JSON.parse(v1), T0);
-  assert.equal(s.v, 9);
+  assert.equal(s.v, 10);
   assert.equal(s.crew, undefined);
   assert.ok(C.armyCount(s) > 0);
   assert.equal(s.districts.rail.owner, 'player');
@@ -312,7 +312,7 @@ test('v0.1 save migrates: progress kept, rackets refunded, old key gone', () => 
   assert.equal(s.rackets, undefined);
   return import('../js/core/state.js').then(({ makeLocalStorage }) => {
     const st = makeLocalStorage(ls).load(T0);
-    assert.ok(st && st.v === 9 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
+    assert.ok(st && st.v === 10 && !store['fangcity.save.v1'] && store['fangcity.save.v2']);
   });
 });
 
@@ -331,7 +331,7 @@ test('v2 save migrates: base kept, individual crew becomes troops, gang choice d
   const stall = place(s2, 'stall').b; BS.finishTimers(s2, T0 + 1e5);
   const teeth = s2.teeth, cash0 = s2.cash;
   const s = migrate(JSON.parse(JSON.stringify(s2)), T0);
-  assert.equal(s.v, 9);
+  assert.equal(s.v, 10);
   assert.equal(s.gang, undefined);
   assert.equal(s.crew, undefined);
   assert.ok(s.army.wolf >= 1 && s.army.rat >= 1 && s.army.fox >= 1);
@@ -514,7 +514,7 @@ test('v3 save migrates to v5 with Rook and starting ammo', () => {
   delete s3.heroes;
   delete s3.tactics;
   const s = migrate(s3, T0);
-  assert.equal(s.v, 9);
+  assert.equal(s.v, 10);
   assert.ok(s.heroes.owned.rook);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.ok((s.ammo || 0) >= 30);
@@ -1087,11 +1087,11 @@ test('v0.9 new game: the crew is only Rook (Wolf Bruiser) with his starter kit; 
   assert.deepEqual(newGame(T0, 99).heroes.owned.rook.equip, s.heroes.owned.rook.equip);
 });
 
-test('v0.9 items: 13 slots, quality tiers, equip/unequip moves items between stash and slots', () => {
-  assert.equal(IT.SLOTS.length, 13);
+test('v0.9 items: 12 slots (13 before v0.14), quality tiers, equip/unequip moves items between stash and slots', () => {
+  assert.equal(IT.SLOTS.length, 12);
   for (const [id, it] of Object.entries(IT.ITEMS)) {
     assert.ok(IT.QUALITY[it.q], id + ' quality'); assert.ok(IT.SLOTS.some((s) => s.kind === it.slot), id + ' slot');
-    if (['primary', 'sidearm', 'melee'].includes(it.slot)) assert.ok(it.wpn && it.wpn.dmg[1] >= it.wpn.dmg[0], id + ' weapon');
+    if (['primary', 'melee'].includes(it.slot)) assert.ok(it.wpn && it.wpn.dmg[1] >= it.wpn.dmg[0], id + ' weapon');
   }
   const s = newGame(T0, 4);
   s.player.lv = 10; // every slot open (v0.10 slots open with level)
@@ -1151,7 +1151,7 @@ test('v0.11 save migration: v7 saves keep gear and get blueprints, factory and l
   s.v = 7; delete s.blueprints; delete s.factory; delete s.player.itemsGot;
   for (const id of ['crowbar', 'raincoat', 'flaregun']) delete s.stash[id];
   const m = migrate(JSON.parse(JSON.stringify(s)), T0);
-  assert.equal(m.v, 9); assert.deepEqual(m.blueprints, {}); assert.equal(m.factory, null);
+  assert.equal(m.v, 10); assert.deepEqual(m.blueprints, {}); assert.equal(m.factory, null);
   for (const id of ['crowbar', 'raincoat', 'flaregun']) assert.equal(IT.stashCount(m, id), 1, id);
 });
 
@@ -1288,7 +1288,7 @@ test('v0.9 save migration: v5 saves keep operators, Rook gets his kit, misfit Wo
   delete s5.heroes.owned.ivory.equip;
   s5.kit = {};
   const s = migrate(JSON.parse(serialize(s5)), T0);
-  assert.equal(s.v, 9);
+  assert.equal(s.v, 10);
   assert.ok(s.heroes.owned.ivory, 'unlocked operators are kept');
   const rook = s.heroes.owned.rook;
   assert.equal(rook.lv, 4); assert.deepEqual(rook.perks, ['iron']);
@@ -1323,7 +1323,7 @@ test('v0.9.1 hero-only crew: new game has no troops; troop fights refuse cleanly
   // the Rook objectives are reachable
   const eq = M.OBJECTIVES.find((o) => /Equip new gear/.test(o.text));
   assert.equal(eq.check(s), false);
-  IT.addItem(s, 'knuckles'); // the lesson's gift; at Lv 1 only melee/sidearm/jacket/boots are open
+  IT.addItem(s, 'knuckles'); // the lesson's gift; at Lv 1 only melee/gun/jacket/boots are open
   const id = Object.keys(s.stash).find((i) => { const sl = IT.targetSlot(s.heroes.owned.rook, i, s, 'rook'); return sl && IT.slotOpen(s, 'rook', sl); });
   assert.ok(IT.equipItem(s, 'rook', id).ok);
   assert.equal(eq.check(s), true);
@@ -1442,14 +1442,14 @@ test('v0.10 ops: short fights, close starts, first-clear XP and cash, locks by l
 
 test('v0.10 gear slots open with level; Best gear fills open slots with the strongest kit', () => {
   const s = newGame(T0, 12);
-  assert.deepEqual(Object.keys(s.heroes.owned.rook.equip).sort(), ['boots', 'jacket', 'melee', 'sidearm']);
+  assert.deepEqual(Object.keys(s.heroes.owned.rook.equip).sort(), ['boots', 'jacket', 'melee', 'primary']);
   assert.equal(IT.openSlotCount(s, 'rook'), 4);
   assert.ok(!IT.equipItem(s, 'rook', 'gilet').ok, 'body armour slot locked at Lv 1');
   assert.ok(!IT.bestGear(s, 'rook').ok, 'Best gear locked before Lv 10');
   s.heroes.owned.rook.lv = 4;
   assert.ok(IT.equipItem(s, 'rook', 'gilet').ok, 'operator level opens the slot');
   PG.setPlayerLevel(s, 10, T0);
-  assert.equal(IT.openSlotCount(s, 'rook'), 13);
+  assert.equal(IT.openSlotCount(s, 'rook'), 12);
   IT.addItem(s, 'machete'); IT.addItem(s, 'stabvest');
   const r = IT.bestGear(s, 'rook');
   assert.ok(r.ok && r.changed > 0);
@@ -1502,7 +1502,7 @@ test('v0.10 save migration: v6 saves get a level from play so far and keep their
   s6.heroes.tutorialDone = true; s6.stats.battles = 12;
   s6.heroes.owned.rook.equip.gloves = 'tape';
   const s = migrate(JSON.parse(serialize(s6)), T0);
-  assert.equal(s.v, 9);
+  assert.equal(s.v, 10);
   assert.ok(s.player.lv >= 3 && s.player.lv <= 10, 'level ' + s.player.lv);
   assert.equal(s.energy.n, 10);
   assert.equal(s.heroes.owned.rook.equip.gloves, 'tape', 'worn kit is kept');
@@ -1556,5 +1556,41 @@ test('v0.12 save migration: v8 saves at Lv 10+ get Anvil', () => {
   const s = newGame(T0, 33); PG.setPlayerLevel(s, 12, T0);
   delete s.heroes.owned.anvil; delete s.player.gotTank; s.heroes.squad = s.heroes.squad.filter((x) => x !== 'anvil'); s.v = 8;
   const m = migrate(JSON.parse(JSON.stringify(s)), T0);
-  assert.equal(m.v, 9); assert.ok(m.heroes.owned.anvil);
+  assert.equal(m.v, 10); assert.ok(m.heroes.owned.anvil);
+});
+
+test('v0.14: no sidearm slot, sidearm saves migrate, statuses, half-reward replays, future operators', () => {
+  assert.ok(!IT.SLOTS.some((x) => x.id === 'sidearm'), 'sidearm slot removed');
+  for (const id of ['snub', 'pistol9', 'magnum']) if (IT.ITEMS[id]) assert.equal(IT.ITEMS[id].slot, 'primary', id + ' is a Gun');
+  // v9 save with a sidearm equipped: moves into the empty gun slot, or to the stash when the gun slot is full
+  const s = newGame(T0, 41); PG.setPlayerLevel(s, 12, T0);
+  const ids = Object.keys(s.heroes.owned);
+  const h1 = s.heroes.owned[ids[0]], h2 = s.heroes.owned[ids[1]];
+  h1.equip = { ...(h1.equip || {}), sidearm: 'magnum' }; delete h1.equip.primary;
+  h2.equip = { ...(h2.equip || {}), primary: 'snub', sidearm: 'pistol9' };
+  s.v = 9;
+  const m = migrate(JSON.parse(JSON.stringify(s)), T0);
+  assert.equal(m.v, 10);
+  const m1 = m.heroes.owned[ids[0]], m2 = m.heroes.owned[ids[1]];
+  assert.ok(!('sidearm' in m1.equip) && !('sidearm' in m2.equip));
+  assert.equal(m1.equip.primary, 'magnum');
+  assert.equal(m2.equip.primary, 'snub');
+  const stash = JSON.stringify(m.items || m.stash || m);
+  assert.ok(stash.includes('pistol9'), 'displaced sidearm kept in the stash');
+  // statuses for the inspect panel
+  const b = T.startBattle({ map: tutorialMap(), player: ['rook'], enemy: ['slab'], seed: 2, label: 'x', kind: 'custom', pvp: false });
+  const foe = b.units.find((u) => u.side === 'enemy');
+  foe.bleed = 3; foe.shaken = 1;
+  const st = T.statusesOf(b, foe);
+  const bl = st.find((x) => x.id === 'bleed');
+  assert.ok(bl && bl.kind === 'debuff' && bl.turns === 3 && bl.text.length > 10);
+  assert.ok(st.some((x) => x.id === 'shaken' && x.kind === 'debuff'));
+  // replays pay about half
+  const op = OPS.OPS.find((o) => !o.tut);
+  const r1 = OPS.opReward(m, op, true), r2 = OPS.opReward(m, op, false);
+  assert.equal(r2.cash * 2, r1.cash); assert.ok(r2.influence <= Math.ceil(r1.influence / 2));
+  // future operators are listed but never in the pools
+  assert.ok(FUTURE_HEROES.stitch && FUTURE_ORDER.includes('stitch'));
+  assert.ok(!HERO_ORDER.includes('stitch') && !HEROES.stitch);
+  assert.ok(FUTURE_HEROES.stitch.bio || FUTURE_HEROES.stitch.story);
 });

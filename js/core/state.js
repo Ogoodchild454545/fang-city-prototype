@@ -14,7 +14,7 @@ setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
 export const OLD_SAVE_KEY = 'fangcity.save.v1';
-export const STATE_VERSION = 9;
+export const STATE_VERSION = 10;
 
 export function newGame(now, seed = newSeed()) {
   const s = {
@@ -156,6 +156,21 @@ export function migrate(s, now = Date.now()) {
     ensureProgress(s, now);
     for (let l = 2; l <= s.player.lv; l++) regrant(s, l);
     s.v = 9;
+  }
+  if (s.v === 9 && s.base) {
+    // v0.14: the sidearm slot is gone; pistols are guns. An equipped sidearm moves into the empty gun
+    // slot, or into the stash if a gun is already equipped. Nothing is lost.
+    ensureHeroes(s);
+    s.stash ||= {};
+    for (const rec of Object.values(s.heroes.owned || {})) {
+      const eq = rec && rec.equip;
+      if (!eq || !eq.sidearm) continue;
+      if (!eq.primary) eq.primary = eq.sidearm;
+      else s.stash[eq.sidearm] = (s.stash[eq.sidearm] || 0) + 1;
+      delete eq.sidearm;
+    }
+    s.v = 10;
+    s.migratedTo10 = 1;
   }
   if (s.v !== STATE_VERSION || !s.base) return null;
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
