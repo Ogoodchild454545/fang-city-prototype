@@ -32,6 +32,10 @@ with sync_playwright() as p:
     pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
     pg.goto(URL + '?reset=1&fast=1&level=10'); pg.wait_for_selector('#basecv'); pg.wait_for_timeout(700); close(pg)
+    # --- v0.14.1: no Shake down button on the Hideout
+    assert not pg.query_selector('[data-act="tap"], .tapbtn'), 'Shake down button removed'
+    assert 'Shake' not in pg.inner_text('#screen')
+    shot(pg, '00-base-no-shakedown')
     # --- save migrated, no sidearm slot anywhere
     st = pg.evaluate("(()=>{const s=window.__game.state; return {v:s.v||s.version, eq:Object.values(s.heroes.owned||{}).map(h=>Object.keys(h.equip||{}))}})()")
     assert all('sidearm' not in e for e in st['eq']), st

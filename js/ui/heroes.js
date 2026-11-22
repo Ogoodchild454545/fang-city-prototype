@@ -63,7 +63,7 @@ function opTile(s, id, rec, inSquad, feat, future = false) {
     : prog && prog.need ? `${prog.have}/${prog.need} shards` : esc(unlockHint(s, id));
   return `<button class="optile ${rec ? 'own' : 'grey'} ${future ? 'future' : ''} ${inSquad ? 'in' : ''}" data-act="${rec ? 'openHero' : 'heroInfo'}" data-id="${id}" title="${esc(h.name)}${rec ? ' · open gear and abilities' : ' · story, abilities and stats'}">
     <span class="otp" style="background-image:url(${h.portrait})"></span>
-    ${inSquad ? '<span class="squadtag">SQUAD</span>' : ''}${!rec && !future ? '<span class="otlock">🔒</span>' : ''}${future ? '<span class="feattag">SEASON 1</span>' : feat === id ? '<span class="feattag">FEATURED</span>' : ''}${pinned ? '<span class="pintag">PINNED</span>' : ''}
+    ${inSquad ? '<span class="squadtag">SQUAD</span>' : ''}${!rec && !future ? '<span class="otlock">🔒</span>' : ''}${future ? '<span class="feattag">COMING SOON</span>' : feat === id ? '<span class="feattag">FEATURED</span>' : ''}${pinned ? '<span class="pintag">PINNED</span>' : ''}
     <span class="otm"><b class="h">${esc(h.name)}</b><span class="tiny">${esc(h.species)} · ${esc(cls.name || h.role)}</span><span class="tiny ${rec ? 'gold' : 'dim'}">${sub}</span></span>
   </button>`;
 }
@@ -79,7 +79,7 @@ export function opInfoHtml(s, id) {
   const how = future ? h.coming : unlockHint(s, id);
   const abil = (h.abilities || []).map((a) => `<div class="oiab"><span class="oiabi">${abilityIcon(a.kind)}</span><div><b>${esc(a.name)}</b> <span class="tiny dim">${a.ap ? a.ap + ' AP' : ''}${a.cd ? ` · cooldown ${a.cd}` : ''}${a.unlock ? ` · unlocks at Lv ${a.unlock}` : ''}</span><div class="tiny">${esc(a.text || '')}</div></div></div>`).join('');
   return `<div class="opinfo">
-    <div class="oiport ${future ? 'future' : ''}" style="background-image:url(${h.portrait})"><span class="oitag">${future ? 'COMING · SEASON 1' : 'NOT IN YOUR CREW'}</span></div>
+    <div class="oiport ${future ? 'future' : ''}" style="background-image:url(${h.portrait})"><span class="oitag">${future ? 'COMING SOON' : 'NOT IN YOUR CREW'}</span></div>
     <div class="oibody">
       <div class="h" style="font-size:24px">${esc(h.name)}</div>
       <div class="tiny gold">${esc(h.species)} · ${esc(cls.name || h.role)}${cls.blurb ? ` — ${esc(cls.blurb)}` : ''}</div>

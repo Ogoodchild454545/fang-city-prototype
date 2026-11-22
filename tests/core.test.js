@@ -1594,3 +1594,18 @@ test('v0.14: no sidearm slot, sidearm saves migrate, statuses, half-reward repla
   assert.ok(!HERO_ORDER.includes('stitch') && !HEROES.stitch);
   assert.ok(FUTURE_HEROES.stitch.bio || FUTURE_HEROES.stitch.story);
 });
+
+test('v0.14.1: Shake down is gone; old saves with its counter or daily job still load', () => {
+  assert.ok(!E.tap && !E.tapValue, 'tap economy removed');
+  const s = newGame(T0, 52); PG.setPlayerLevel(s, 4, T0);
+  assert.ok(!('taps' in s.stats));
+  s.stats.taps = 87; s.stats.collects = 3;
+  s.jobs = { day: 'x', list: [{ id: 'taps', start: 10, claimed: false }, { id: 'collect', start: 0, claimed: false }, { id: 'win', start: 0, claimed: true }] };
+  const back = deserialize(serialize(s), T0);
+  assert.ok(back, 'loads');
+  assert.ok(!('taps' in back.stats));
+  assert.equal(back.jobs.list.length, 3);
+  assert.ok(!back.jobs.list.some((j) => j.id === 'taps'));
+  for (const j of back.jobs.list) assert.ok(M.jobProgress(back, j).t, 'every job has a template');
+  assert.ok(back.jobs.list.find((j) => j.id === 'win').claimed, 'claimed jobs kept');
+});

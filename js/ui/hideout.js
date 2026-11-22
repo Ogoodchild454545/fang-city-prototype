@@ -50,9 +50,6 @@ export function render(ctx) {
       ${stockOn ? `<button class="pillbtn stockpill ${sp.full ? 'gold' : ''}" data-act="collectStockHud" title="Hideout stockpile: tap to collect">📦 <b data-live="hudstock">${money(sp.cash)}</b><span class="tiny dim">${sp.full ? 'FULL' : 'collect'}</span></button>` : ''}
       <button class="pillbtn ${ad ? 'gold' : ''}" data-act="adBoost">${ad ? `x2 cash · <span data-live="adleft"></span>` : '▶ x2 cash (ad)'}</button>
     </div>
-    <div class="hud hud-bl">
-      <button class="tapbtn sm" data-act="tap">Shake<br>down<small data-live="tapv">+${money(E.tapValue(s, now))}</small></button>
-    </div>
     <div class="hud hud-br">
       <button class="bigbtn gold nextop" data-act="startOp" data-id="${nx.id}" title="${esc(nx.name)}"><span class="i">🎯</span>${nx.tut ? 'Next op' : 'Next op'}<small>${esc(nx.name)}${nx.tut ? ' · free' : ' · ⚡1'}</small></button>
       <button class="bigbtn" data-act="nav" data-tab="missions"><span class="i">🗂️</span>Ops</button>
@@ -234,7 +231,6 @@ export function live(ctx, now) {
   if ((obj ? `${obj.index}:${obj.done}` : tr ? `t${tr.i}:${tr.done}` : 'none') !== ctx.sub.objKey && !document.querySelector('.overlay')) return ctx.render();
   if (P.isUnlocked(s, 'stockpile')) { const n = document.querySelector('[data-live="hudstock"]'); const v = money(P.stockpile(s, now).cash); if (n && n.textContent !== v) n.textContent = v; }
   const set = (sel, v) => { const n = document.querySelector(sel); if (n && n.textContent !== v) n.textContent = v; };
-  set('[data-live="tapv"]', '+' + money(E.tapValue(s, now)));
   set('[data-live="builders"]', `${BS.buildersFree(s)}/${s.base.builders}`);
   set('[data-live="ammo"]', fmt(Math.floor(s.ammo || 0)));
   set('[data-live="medkits"]', fmt(Math.floor(s.medkits || 0)));
@@ -318,12 +314,6 @@ function infoModal(ctx, b) {
 }
 
 export const actions = {
-  tap(ctx, el, e) {
-    const v = E.tap(ctx.state, ctx.now());
-    if (v > 0) ctx.floaty('+' + money(v), e.clientX || el.getBoundingClientRect().left + 40, e.clientY || el.getBoundingClientRect().top);
-    else ctx.toast('Storage full: build a Strongbox');
-    ctx.live();
-  },
   adBoost(ctx) {
     const r = E.watchIncomeAd(ctx.state, ctx.now());
     ctx.toast(r.ok ? 'Reward ad (mock) watched: cash production x2 for 30 min' : 'Daily ad limit reached (6)');

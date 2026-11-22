@@ -1,6 +1,6 @@
 // Static game definitions. Pure data: safe to share between client and a future server.
 
-export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.14.0' };
+export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.14.1' };
 
 export const SPECIES = {
   wolf:   { name: 'Wolf',      gang: 'grey',  img: 'assets/wolf.jpg',   base: { muscle: 55, aim: 60, nerve: 62 }, trait: 'pack',  traitName: 'Pack Tactics', traitDesc: '+15% damage when next to an ally' },
@@ -164,7 +164,6 @@ export const JOB_TEMPLATES = [
   { id: 'win',     text: 'Win 2 street fights',               goal: 2,  stat: 'wins',     reward: { influence: 30 } },
   { id: 'train',   text: 'Train 6 troops',                    goal: 6,  stat: 'trains',   reward: { teeth: 10 } },
   { id: 'upgrade', text: 'Start 3 building upgrades',          goal: 3,  stat: 'upgrades', reward: { cash: 1500 } },
-  { id: 'taps',    text: 'Shake down the street 100 times',   goal: 100, stat: 'taps',    reward: { influence: 15 } },
 ];
 
 // Mock storefront. Prices in GBP; nothing is charged in the prototype.

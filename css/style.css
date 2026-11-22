@@ -59,9 +59,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 .hero .in{position:absolute;left:10px;right:10px;bottom:8px;z-index:1;display:flex;align-items:flex-end;gap:8px}
 .hero .gname{font-family:var(--font);font-size:22px;text-transform:uppercase;line-height:1}
 .hero .ips{font-family:var(--font);font-size:20px;color:#f3e7c9}
-.tapbtn{position:relative;width:96px;height:96px;border-radius:50%;flex:none;background:radial-gradient(circle at 50% 35%,#d33a35,#6d1311 70%);border:3px solid #e6524c;box-shadow:0 0 0 4px rgba(0,0,0,.6),0 0 24px var(--redglow);font-family:var(--font);text-transform:uppercase;font-size:15px;line-height:1.05;color:#fff;text-shadow:0 2px 4px #000;user-select:none;touch-action:manipulation}
-.tapbtn:active{transform:scale(.95)}
-.tapbtn small{display:block;font-size:11px;opacity:.85}
 .floaty{position:absolute;pointer-events:none;font-family:var(--font);font-weight:700;color:#f3e7c9;text-shadow:0 2px 3px #000;animation:floatup .9s ease-out forwards;z-index:30;white-space:nowrap}
 @keyframes floatup{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-50px)}}
 .objective{display:flex;gap:10px;align-items:center}
@@ -286,7 +283,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 .objcard .tick{width:24px;height:24px;border-radius:50%;border:2px solid var(--red);display:grid;place-items:center;font-size:12px;flex:none;font-family:var(--font)}
 .objcard.glow .tick{border-color:var(--gold);color:var(--gold)}
 .objcard .small{line-height:1.2}
-.tapbtn.sm{width:74px;height:74px;font-size:13px}
 .bigbtn{width:66px;height:66px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-family:var(--font);text-transform:uppercase;font-size:12px;background:linear-gradient(#2a2321,#141110);border:2px solid var(--line2);box-shadow:0 4px 12px rgba(0,0,0,.6)}
 .bigbtn .i{font-size:26px;line-height:1.1}
 .bigbtn:first-child{background:linear-gradient(#b52a26,#6d1311);border-color:#e6524c}

@@ -1,6 +1,6 @@
 // Game state: one plain JSON object. Persistence goes through a tiny storage adapter so the
 // localStorage backend can later be swapped for an online save API without touching rules.
-import { DISTRICTS, GEAR, TROOPS } from './data.js';
+import { DISTRICTS, GEAR, TROOPS, JOB_TEMPLATES } from './data.js';
 import { emptyHeroes, ensureHeroes } from './heroes.js';
 import { SPECIES_TO_TROOP, armyCap, spaceOf } from './crew.js';
 import { newSeed } from './rng.js';
@@ -29,7 +29,7 @@ export function newGame(now, seed = newSeed()) {
     districts: {},
     daily: { lastClaim: '', streak: 0 },
     jobs: { day: '', list: [] },
-    stats: { taps: 0, collects: 0, wins: 0, trains: 0, builds: 0, upgrades: 0, cleared: 0, battles: 0, raidWins: 0, missionWins: 0 },
+    stats: { collects: 0, wins: 0, trains: 0, builds: 0, upgrades: 0, cleared: 0, battles: 0, raidWins: 0, missionWins: 0 },
     rivals: [], rivalsAt: 0,
     battle: null, lastResult: null, tactics: null,
     heroes: emptyHeroes(),
@@ -183,6 +183,7 @@ export function migrate(s, now = Date.now()) {
   ensureItems(s);
   ensurePvp(s);
   ensureProgress(s, now);
+  dropShakeDown(s);
   return s;
 }
 
@@ -201,4 +202,21 @@ export function makeLocalStorage(ls) {
     save: (s) => ls.setItem(SAVE_KEY, serialize(s)),
     clear: () => { ls.removeItem(SAVE_KEY); ls.removeItem(OLD_SAVE_KEY); },
   };
+}
+
+// v0.14.1: the v0.1 "Shake down" tap button and its daily job ("Shake down the street 100 times") are
+// gone. Old saves may still carry the tap counter or that job in today's list: drop both and refill the
+// slot with another job so the day still has three.
+function dropShakeDown(s) {
+  if (s.stats) delete s.stats.taps;
+  const list = s.jobs && Array.isArray(s.jobs.list) ? s.jobs.list : null;
+  if (!list) return;
+  const known = new Set(JOB_TEMPLATES.map((j) => j.id));
+  const kept = list.filter((j) => j && known.has(j.id));
+  if (kept.length === list.length) return;
+  for (const t of JOB_TEMPLATES) {
+    if (kept.length >= 3) break;
+    if (!kept.some((j) => j.id === t.id)) kept.push({ id: t.id, start: (s.stats && s.stats[t.stat]) || 0, claimed: false });
+  }
+  s.jobs.list = kept;
 }

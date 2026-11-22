@@ -57,15 +57,6 @@ export function doubleOffline(state, summary) {
   return BS.gain(state, 'cash', summary.banked);
 }
 
-export function tapValue(state, now) {
-  return Math.max(1, Math.round(1 + totalIncome(state, now) * 0.25));
-}
-export function tap(state, now) {
-  const v = BS.gain(state, 'cash', tapValue(state, now));
-  state.stats.taps++;
-  return v;
-}
-
 export function watchIncomeAd(state, now) {
   // Rewarded ad mock: x2 cash production for 30 minutes (stacks up to 4h), 6 per day.
   const day = new Date(now).toISOString().slice(0, 10);

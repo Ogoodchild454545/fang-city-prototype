@@ -460,8 +460,8 @@ export const FUTURE_HEROES = {
       { id: 'revive', name: 'Back on Your Feet', ap: 3, kind: 'heal', text: 'Revive a knocked-out ally next to her at 40% HP. Once per fight.', unlock: 5 },
     ],
     passive: { id: 'steady', name: 'Steady Hands', text: 'Heals 1 extra HP on every heal while she has not been hit this turn.' },
-    bio: "A struck-off ward nurse who runs a night clinic above a laundrette on Tanner Street. Every crew in the docks owes her for a bullet pulled or a stitch in the dark, and she keeps a ledger of who. Season 1 ends with her deciding which side of that ledger she is on.",
-    coming: 'Story mode · Season 1 reward',
+    bio: "A struck-off ward nurse who runs a night clinic above a laundrette on Tanner Street. Every crew in the docks owes her for a bullet pulled or a stitch in the dark, and she keeps a ledger of who. Sooner or later she will have to decide which side of that ledger she is on.",
+    coming: 'Story mode · coming in a later season',
   },
 };
 export const FUTURE_ORDER = Object.keys(FUTURE_HEROES);

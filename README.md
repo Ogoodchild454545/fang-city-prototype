@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.14.0)
+# Fang City: Animal Gangs (playable prototype v0.14.1)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -31,6 +31,14 @@ factions you fight in Missions.
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
 
+## v0.14.1 (clean-up)
+
+- Removed the **Shake down** button from the Hideout (a v0.1 idle-clicker leftover worth about $1 a tap) and its daily
+  job "Shake down the street 100 times". Old saves load fine: the tap counter is dropped and, if today's jobs still
+  had the Shake down job, it is swapped for another job.
+- Stitch is no longer tagged as the Season 1 reward (Season 1 ends with Anvil joining; story mode is not built yet,
+  so Anvil still joins at player Lv 10 for now). Stitch shows as COMING SOON.
+
 ## v0.14.0 (readable fights, operators roster, story backgrounds)
 
 - **Tap any piece** (yours or theirs, any turn) for an XCOM-style panel: portrait, HP, armour, AP, move, aim, ammo,
@@ -48,7 +56,7 @@ factions you fight in Missions.
   the camera zooms.
 - **Operators** now lists every operator: owned in colour, the rest greyed out with a lock. Tapping a greyed one shows
   a dossier (how to get them, backstory, stats, weapon, passive, species perk, abilities) with no equipping. Planned
-  operators are listed too: **Stitch**, the hare medic, is the Season 1 story reward. **My Crew** stays separate for
+  operators are listed too: **Stitch**, the hare medic, is a planned story-mode operator (coming soon). **My Crew** stays separate for
   picking the current squad (squad seats and a + / ✓ SQUAD toggle on each operator).
 - **Ops**: a cleared op shows ✓ Complete and a Replay button; replays pay about half (cash ×1 instead of ×2, half Rep,
   half tutorial XP).
