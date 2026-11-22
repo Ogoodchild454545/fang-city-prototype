@@ -30,6 +30,122 @@ function ui(ctx) {
 }
 
 function toWorld(x, y) { return Dock.toWorld(x, y); }
+
+// v0.15 battle speed (1x / 2x), remembered between sessions. Scales waits, hops and piece clips.
+const SPEED_KEY = 'fangcity.battleSpeed';
+let SPEED = (() => { try { return localStorage.getItem(SPEED_KEY) === '2' ? 2 : 1; } catch (e) { return 1; } })();
+Actors.setTimeScale(SPEED);
+export function battleSpeed() { return SPEED; }
+function setSpeed(v) { SPEED = v === 2 ? 2 : 1; Actors.setTimeScale(SPEED); try { localStorage.setItem(SPEED_KEY, String(SPEED)); } catch (e) { /* private mode */ } }
+
+// Cheap fingerprint of everything that changes reach / threat (positions, HP, AP, turn).
+function boardKey(b) {
+  let k = b.turn + '|' + b.acting + '|';
+  for (const un of b.units) k += un.x + ',' + un.y + ',' + un.hp + ',' + un.ap + ';';
+  return k;
+}
+function cachedReach(u, b, sel) {
+  const key = sel.uid + '#' + boardKey(b);
+  if (u._reachKey !== key) { u._reachKey = key; u._reach = T.reachable(b, sel); }
+  return u._reach;
+}
+// v0.15 move preview (XCOM / Invisible Inc): exact path, AP cost, cover at the destination, and every
+// rival who could hit you there (Fire Emblem / Into the Breach threat). Pure: restores everything it touches.
+function movePreview(u, b, sel, x, y) {
+  const key = `${sel.uid}@${x},${y}#${boardKey(b)}`;
+  if (u._pvKey === key) return u._pv;
+  const info = T.pathTo(b, sel, x, y);
+  let pv = null;
+  if (info && info.path.length) {
+    const ox = sel.x, oy = sel.y;
+    const threats = [];
+    sel.x = x; sel.y = y;
+    try {
+      for (const en of b.units) {
+        if (en.side === sel.side || en.hp <= 0) continue;
+        const gun = T.gunOf(en);
+        if (gun) {
+          const sv = en.ammo; if ((en.ammo || 0) <= 0) en.ammo = 1;
+          const pr = T.previewShot(b, en, sel, 'shot');
+          en.ammo = sv;
+          if (pr && pr.ok && pr.chance > 0) threats.push({ uid: en.uid, chance: pr.chance, flank: !pr.cover, melee: 0 });
+        } else {
+          const ap0 = en.ap; en.ap = en.maxAp;
+          const r = T.reachable(b, en).dist;
+          en.ap = ap0;
+          const budget = Math.min(en.maxAp, (en.move || defOf(en.hero).move)) - 1;
+          let near = MANH(en.x, en.y, x, y) === 1;
+          for (const [dx, dy] of DIRS4) { const d = r.get(`${x + dx},${y + dy}`); if (d != null && d <= budget) near = true; }
+          if (near) threats.push({ uid: en.uid, chance: null, flank: 1, melee: 1 });
+        }
+      }
+    } finally { sel.x = ox; sel.y = oy; }
+    let cover = 0;
+    for (const [dx, dy] of DIRS4) { const t = tile(b.map, x + dx, y + dy); if (t && t.cover) cover = Math.max(cover, t.cover); }
+    pv = { x, y, path: info.path, cost: info.cost, threats, cover };
+  }
+  u._pvKey = key; u._pv = pv;
+  return pv;
+}
+function MANH(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+
+// Path ribbon on the board: dark outline + bright core, step dots, arrow head at the end.
+function drawPathRibbon(g, sel, pv, z, now) {
+  const pts = [{ x: sel.x, y: sel.y }, ...pv.path].map((q) => { const w = toWorld(q.x, q.y); return { x: w.x * z, y: w.y * z }; });
+  g.save();
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const trace = () => { g.beginPath(); g.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y); };
+  g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 5 * z; trace(); g.stroke();
+  const danger = pv.threats.length > 0;
+  g.strokeStyle = danger ? 'rgba(255,190,90,.95)' : 'rgba(150,215,255,.95)'; g.lineWidth = 2.2 * z;
+  g.setLineDash([5 * z, 3 * z]); g.lineDashOffset = -now / 40; trace(); g.stroke(); g.setLineDash([]);
+  for (let i = 1; i < pts.length - 1; i++) { g.fillStyle = '#f3e7c9'; g.beginPath(); g.arc(pts[i].x, pts[i].y, 1.5 * z, 0, Math.PI * 2); g.fill(); }
+  const A = pts[pts.length - 2], B = pts[pts.length - 1];
+  const ang = Math.atan2(B.y - A.y, B.x - A.x);
+  g.translate(B.x, B.y); g.rotate(ang);
+  g.fillStyle = danger ? '#ffbe5a' : '#96d7ff';
+  g.beginPath(); g.moveTo(3 * z, 0); g.lineTo(-4 * z, -3.6 * z); g.lineTo(-4 * z, 3.6 * z); g.closePath(); g.fill();
+  g.restore();
+}
+// Threat lines from each rival who could hit the destination, with their % (or MELEE), drawn late.
+function drawThreats(g, b, pv, z, now) {
+  const d = toWorld(pv.x, pv.y);
+  const dx = d.x * z, dy = (d.y - 12) * z;
+  for (const th of pv.threats) {
+    const en = b.units.find((q) => q.uid === th.uid); if (!en) continue;
+    const a = en.anim && en.anim.headX != null ? { x: en.anim.headX, y: en.anim.headY } : (() => { const w = toWorld(en.x, en.y); return { x: w.x * z, y: (w.y - 18) * z }; })();
+    g.save();
+    g.strokeStyle = 'rgba(255,70,50,.85)'; g.lineWidth = 1.4 * z; g.setLineDash([3 * z, 2.4 * z]); g.lineDashOffset = now / 50;
+    g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(dx, dy); g.stroke(); g.setLineDash([]);
+    const txt = th.melee ? 'MELEE' : `${th.chance}%${th.flank ? ' FLANK' : ''}`;
+    g.font = `bold ${Math.round(6.5 * z)}px Oswald, sans-serif`;
+    const tw = g.measureText(txt).width + 6 * z;
+    const mx = a.x + (dx - a.x) * 0.35, my = a.y + (dy - a.y) * 0.35;
+    g.fillStyle = 'rgba(70,8,6,.92)'; g.beginPath(); g.roundRect(mx - tw / 2, my - 5.5 * z, tw, 10 * z, 2.5 * z); g.fill();
+    g.fillStyle = '#ffd0c8'; g.textAlign = 'center'; g.fillText(txt, mx, my + 2 * z); g.textAlign = 'left';
+    g.restore();
+  }
+  // AP cost chip at the destination
+  const txt = `${pv.cost} AP`;
+  g.save();
+  g.font = `bold ${Math.round(7.5 * z)}px Oswald, sans-serif`;
+  const tw = g.measureText(txt).width + 8 * z;
+  g.fillStyle = 'rgba(12,30,52,.94)'; g.strokeStyle = 'rgba(150,215,255,.9)'; g.lineWidth = 0.8 * z;
+  g.beginPath(); g.roundRect(dx - tw / 2, dy - 26 * z, tw, 11 * z, 3 * z); g.fill(); g.stroke();
+  g.fillStyle = '#e8f4ff'; g.textAlign = 'center'; g.fillText(txt, dx, dy - 17.6 * z); g.textAlign = 'left';
+  g.restore();
+}
+// Keep the moving piece inside the safe view (camera follow), without fighting the player's zoom.
+function followCam(u, cv, wx, wy) {
+  if (!u.cam || !cv) return;
+  const S = safeRect(cv);
+  const mx = (S.r - S.l) * 0.16, my = (S.b - S.t) * 0.16;
+  const sx = u.cam.x + wx * u.cam.z, sy = u.cam.y + wy * u.cam.z;
+  let ddx = 0, ddy = 0;
+  if (sx < S.l + mx) ddx = S.l + mx - sx; else if (sx > S.r - mx) ddx = S.r - mx - sx;
+  if (sy < S.t + my) ddy = S.t + my - sy; else if (sy > S.b - my) ddy = S.b - my - sy;
+  if (ddx || ddy) { u.glide = null; u.cam.x += ddx * 0.12; u.cam.y += ddy * 0.12; }
+}
 function fromScreen(u, sx, sy) {
   const cam = u.cam;
   const mx = (sx - cam.x) / cam.z, my = (sy - cam.y) / cam.z;
@@ -708,7 +824,22 @@ function draw(ctx) {
   const sel = (actor && actor.side === 'player' && actor.hp > 0)
     ? actor
     : b.units.find((x) => x.uid === u.sel && x.hp > 0);
-  const reach = (sel && b.side === 'player' && !u.busy) ? T.reachable(b, sel).dist : null;
+  const reach = (sel && b.side === 'player' && !u.busy) ? cachedReach(u, b, sel).dist : null;
+  // v0.15: the destination being previewed (tap on touch, hover with a mouse)
+  let pv = null;
+  if (reach && sel && sel.side === 'player') {
+    if (u.preview) pv = movePreview(u, b, sel, u.preview.x, u.preview.y);
+    else if (u.ptr === 'mouse' && u.hover && !u.hover.uid && reach.has(`${u.hover.x},${u.hover.y}`) && !(sel.x === u.hover.x && sel.y === u.hover.y) && !u.mode?.match?.(/breach/)) pv = movePreview(u, b, sel, u.hover.x, u.hover.y);
+    if (u.preview && !pv) u.preview = null;
+  }
+  // inspected rival: its reach this turn in red (Fire Emblem danger zone)
+  const insp = u.inspect && b.units.find((q) => q.uid === u.inspect && q.hp > 0 && q.side === 'enemy');
+  let danger = null;
+  if (insp) {
+    const dk = insp.uid + '#' + boardKey(b);
+    if (u._dangerKey !== dk) { const ap0 = insp.ap; insp.ap = insp.maxAp; u._danger = T.reachable(b, insp).dist; insp.ap = ap0; u._dangerKey = dk; }
+    danger = u._danger;
+  }
 
   const order = [];
   for (let y = 0; y < b.map.h; y++) for (let x = 0; x < b.map.w; x++) order.push({ x, y, depth: x + y });
@@ -725,7 +856,12 @@ function draw(ctx) {
     if (reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel && sel.x === c.x && sel.y === c.y)) {
       hexPoly(g, sx, sy, z, 'rgba(70,140,255,0.22)', 'rgba(140,190,255,0.55)');
     }
-    if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y) {
+    if (danger && danger.has(`${c.x},${c.y}`) && !t.block) hexPoly(g, sx, sy, z, 'rgba(255,60,40,0.16)', 'rgba(255,110,90,0.45)');
+    if (pv && pv.x === c.x && pv.y === c.y) {
+      hexPoly(g, sx, sy, z, pv.threats.length ? 'rgba(255,170,60,0.28)' : 'rgba(120,200,255,0.30)', pv.threats.length ? '#ffbe5a' : '#9fdcff');
+      drawDestCover(g, b, c.x, c.y, sx, sy, z);
+    }
+    if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y && !(pv && pv.x === c.x && pv.y === c.y)) {
       hexPoly(g, sx, sy, z, 'rgba(255,220,120,0.16)', '#f0d060');
       if (!u.hover.uid && reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel.x === c.x && sel.y === c.y)) {
         drawDestCover(g, b, c.x, c.y, sx, sy, z);
@@ -742,6 +878,7 @@ function draw(ctx) {
     }
   }
 
+  if (pv && sel) drawPathRibbon(g, sel, pv, z, now);
   const sprites = [];
   for (const c of order) {
     const t = tile(b.map, c.x, c.y);
@@ -893,6 +1030,7 @@ function draw(ctx) {
   }
   drawXray(g, occ.xray, z, now);
   for (const f of lateQ) f();
+  if (pv) drawThreats(g, b, pv, z, now);
   drawTags(g, tagQ, barR, z);
   drawBubbles(g, bubQ, z, now, barR.concat(tagQ));
 
@@ -996,6 +1134,7 @@ function loop(ctx) {
       if (a.stepI != null && Actors.isFig() && !a.leap && u.cam) { const lp = toWorld(pts[i].x, pts[i].y); Vfx.spawnDust(Vfx.ensure(u), lp.x * u.cam.z, lp.y * u.cam.z, u.cam.z, 3); }
       a.stepI = i; Audio.play('footstep');
     }
+    if (!a.noFollow && !(u.fx && u.fx.pan)) { const w = toWorld(a.x, a.y); followCam(u, document.getElementById('tacv'), w.x, w.y - 16); }
     if (t >= 1) u.pathAnim = null;
   }
   if (b && !u.busy) syncTimer(u, b);
@@ -1032,7 +1171,16 @@ function bindCanvas(ctx) {
   let pinch = null;
   const pinchDist = () => { const [a, c] = [...pts.values()]; return Math.hypot(a.x - c.x, a.y - c.y) || 1; };
   const pinchMid = () => { const [a, c] = [...pts.values()]; return { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 }; };
+  cv.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const b = ctx.state.tactics; if (!b) return;
+    const rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const p = pickAt(u, b, (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr);
+    const t = T.unitAt(b, p.x, p.y) || koAt(b, p.x, p.y);
+    u.inspect = t ? t.uid : null; ctx.render();
+  });
   cv.addEventListener('pointerdown', (e) => {
+    u.ptr = e.pointerType || 'mouse';
     cv.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 2) { pinch = { d: pinchDist() }; last = null; drag = null; return; }
@@ -1099,7 +1247,7 @@ function defaultMode(sel, foe) {
 function setInspect(ctx, uid) {
   const u = ui(ctx);
   if (u.inspect === uid) return;
-  u.inspect = uid || null;
+  u.inspect = uid || null; u.preview = null;
   ctx.render();
 }
 const EXPLICIT_ATTACK = ['shot', 'aimed', 'melee', 'knife', 'roll', 'venom', 'suppress', 'pounce', 'maul', 'lunge'];
@@ -1116,8 +1264,11 @@ function clickTile(ctx, x, y) {
   // Pure inspection: rival turn, tapping an ally (unless healing) or a knocked-out piece.
   if (!canAct) { const t = occ || down; setInspect(ctx, t ? t.uid : null); return; }
   if ((occ && occ.side === 'player' && !heal) || (!occ && down && !heal)) { setInspect(ctx, (occ || down).uid); return; }
-  // Enemy: first tap inspects (and shows the hit chance) unless an attack was picked; second tap or Confirm fires.
-  if (occ && occ.side === 'enemy' && u.inspect !== occ.uid && !(u.modePicked && EXPLICIT_ATTACK.includes(u.mode))) {
+  // Enemy: on touch the first tap inspects and shows the attack button (hit % and damage); a second tap or the
+  // button fires. A mouse click fires straight away when the shot is possible (hovering already shows the odds);
+  // right-click inspects.
+  const mouseFire = u.ptr === 'mouse' && occ && occ.side === 'enemy' && (() => { const pr = T.previewShot(b, sel, occ, EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(sel, occ)); return pr && pr.ok; })();
+  if (occ && occ.side === 'enemy' && u.inspect !== occ.uid && !mouseFire && !(u.modePicked && EXPLICIT_ATTACK.includes(u.mode))) {
     u.hover = { x, y, uid: occ.uid };
     setInspect(ctx, occ.uid); return;
   }
@@ -1143,9 +1294,46 @@ function clickTile(ctx, x, y) {
     return doAct(ctx, { type: 'shootProp', uid: sel.uid, x, y, mode: 'shot' });
   }
   if (sel && T.walkable(b, x, y, sel.uid)) {
-    return doAct(ctx, { type: 'move', uid: sel.uid, x, y });
+    // v0.15: on touch the first tap previews the path, cost and danger; tap the same tile again (or Move) to go.
+    const reachable = cachedReach(u, b, sel).dist.has(`${x},${y}`);
+    if (u.ptr !== 'mouse' && reachable && !(u.preview && u.preview.x === x && u.preview.y === y)) {
+      u.preview = { x, y }; u.inspect = null; ctx.render(); return;
+    }
+    return doAct(ctx, { type: 'move', uid: sel.uid, x, y }, { undoable: true });
   }
+  u.preview = null;
   ctx.render();
+}
+
+// v0.15 action bar (bottom centre): move preview confirm, undo, and the big attack button with hit % and damage.
+function actionBarHtml(b, u, canAct, actor) {
+  if (!canAct || !actor) return '';
+  const out = [];
+  const pv = u.preview ? movePreview(u, b, actor, u.preview.x, u.preview.y) : null;
+  if (pv) {
+    const flank = pv.threats.filter((t) => t.flank).length;
+    const warn = pv.threats.length
+      ? `<span class="tabwarn">⚠ ${pv.threats.length} rival${pv.threats.length > 1 ? 's' : ''} can hit you here${flank ? ` · ${flank} flanking` : ''}</span>`
+      : `<span class="tabok">${pv.cover >= 2 ? 'Full cover' : pv.cover ? 'Half cover' : 'No cover'} · safe from rival fire</span>`;
+    out.push(`<button class="btn red tabgo" data-act="tmoveGo">Move here · ${pv.cost} AP</button>${warn}<button class="btn dim tabx" data-act="tmoveCancel" aria-label="Cancel">✕</button>`);
+  } else if (u.inspect) {
+    const en = b.units.find((q) => q.uid === u.inspect && q.side === 'enemy' && q.hp > 0);
+    if (en) {
+      const mode = EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(actor, en);
+      const pr = T.previewShot(b, actor, en, mode);
+      const nm = (defOf(actor.hero).abilities.find((a) => a.id === mode) || {}).name || (mode === 'melee' ? 'Strike' : 'Shoot');
+      if (pr && pr.ok) {
+        const band = pr.chance >= 75 ? 'hi' : pr.chance >= 50 ? 'mid' : 'lo';
+        const dmg = pr.dmg ? `${pr.dmg[0]}–${pr.dmg[1]} dmg` : '';
+        out.push(`<button class="btn red tabatk" data-act="tconfirm" data-uid="${en.uid}"><span class="tabico">${abilityIcon(ICONS[mode] ? mode : 'shot')}</span><b>${esc(nm)}</b><span class="tabpct ${band}">${pr.chance}%</span><span class="tabdmg">${dmg}</span></button><span class="tabwarn dim">on ${esc(defOf(en.hero).name)}</span>`);
+      } else {
+        out.push(`<span class="tabwarn">${esc((pr && pr.reason) || 'Out of reach')}: move closer or pick another target</span>`);
+      }
+    }
+  }
+  if (!pv && u.undo && u.undo.uid === actor.uid) out.push(`<button class="btn dim tabundo" data-act="tundo">↶ Undo move</button>`);
+  if (!out.length) return '';
+  return `<div class="tabar">${out.join('')}</div>`;
 }
 
 // The XCOM-style panel for the inspected piece: vitals, every buff and debuff in plain words.
@@ -1162,8 +1350,9 @@ function inspectHtml(b, u) {
     const mode = EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(sel, un);
     const prev = T.previewShot(b, sel, un, mode);
     const nm = (defOf(sel.hero).abilities.find((a) => a.id === mode) || {}).name || (mode === 'melee' ? 'Strike' : 'Shoot');
+    // v0.15: the attack button lives in the action bar (bottom left); the panel lists the odds
     atk = prev && prev.ok
-      ? `<button class="btn red tiact" data-act="tconfirm" data-uid="${un.uid}">${esc(nm)} · ${prev.chance}%</button>`
+      ? `<div class="tiodds">${esc(nm)}: <b>${prev.chance}%</b>${prev.dmg ? ` · ${prev.dmg[0]}–${prev.dmg[1]} dmg` : ''}${(prev.parts || []).length ? `<small>${prev.parts.map((q) => `${esc(q.label)} ${q.val > 0 && q.label !== 'Aim' ? '+' : ''}${q.val}`).join(' · ')}</small>` : ''}</div>`
       : `<div class="tinone">${esc((prev && prev.reason) || 'Out of reach')}</div>`;
   }
   const pct = Math.max(0, Math.round(100 * un.hp / un.maxHp));
@@ -1182,7 +1371,7 @@ async function playEvents(ctx, events) {
   const cv = document.getElementById('tacv');
   const dpr = window.devicePixelRatio || 1;
   const skip = ctx.fast;
-  const wait = (ms) => skip ? Promise.resolve() : new Promise((r) => setTimeout(r, ms));
+  const wait = (ms) => skip ? Promise.resolve() : new Promise((r) => setTimeout(r, ms / SPEED));
   for (const ev of events || []) {
     if (ev.typ === 'move' && ev.path && ev.path.length) {
       const start = ev.from || ev.path[0];
@@ -1195,7 +1384,7 @@ async function playEvents(ctx, events) {
         Actors.faceToward(mover, start.x, start.y, dest.x, dest.y);
         Actors.playClip(mover, 'walk');
       }
-      u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * (Actors.isFig() ? Actors.FIG_STEP_MS : 140)), x: start.x, y: start.y };
+      u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * (Actors.isFig() ? Actors.FIG_STEP_MS : 140)) / SPEED, x: start.x, y: start.y, noFollow: !!ev.noFollow };
       await wait(u.pathAnim.dur);
       u.pathAnim = null;
       if (mover) { if (mover.anim) mover.anim.hop = null; Actors.playClip(mover, 'idle'); }
@@ -1280,7 +1469,7 @@ async function playEvents(ctx, events) {
         const p = toWorld(ev.from.x, ev.from.y);
         const pName = ((defOf(pu.hero).abilities || []).find((a) => a.id === 'pounce') || {}).name || 'Pounce';
         Vfx.spawnCallout(Vfx.ensure(u), p.x * u.cam.z, (p.y - Actors.actorHeight(pu.hero) - 22) * u.cam.z, pName.toUpperCase(), 'crit');
-        u.pathAnim = { uid: ev.uid, path: [ev.to], from: ev.from, t0: performance.now(), dur: 300, x: ev.from.x, y: ev.from.y, leap: 1 };
+        u.pathAnim = { uid: ev.uid, path: [ev.to], from: ev.from, t0: performance.now(), dur: 300 / SPEED, x: ev.from.x, y: ev.from.y, leap: 1 };
         await wait(300);
         u.pathAnim = null;
         u.shake = Math.max(u.shake || 0, 5);
@@ -1429,18 +1618,49 @@ async function playEvents(ctx, events) {
   }
 }
 
-async function doAct(ctx, action) {
+async function doAct(ctx, action, opts = {}) {
   const b = ctx.state.tactics, u = ui(ctx);
-  if (!b || u.busy) return;
+  if (!b || u.busy) return null;
   u.busy = 1;
+  u.preview = null; u.undo = null;
+  const snap = opts.undoable ? JSON.stringify(b, (k, v) => (k === 'anim' ? undefined : v)) : null;
   const r = T.apply(b, action);
-  if (!r.ok) { u.busy = 0; return ctx.toast(r.reason); }
+  if (!r.ok) { u.busy = 0; ctx.toast(r.reason); return r; }
   ctx.save();
   await playEvents(ctx, r.events);
   u.busy = 0;
-  if (b.status !== 'active') return finish(ctx);
-  if (b.side === 'enemy') return enemyTurn(ctx);
+  // v0.15 undo: a plain move that triggered nothing (no overwatch, no pickups) can be taken back
+  if (snap && b.status === 'active' && r.events.every((e) => e.typ === 'move' || e.typ === 'step') && T.actingUnit(b)?.uid === action.uid) {
+    const mv = r.events[0];
+    u.undo = { uid: action.uid, snap, path: mv.path, from: mv.from };
+  }
+  if (b.status !== 'active') { finish(ctx); return r; }
+  if (b.side === 'enemy') { enemyTurn(ctx); return r; }
   ctx.render();
+  return r;
+}
+
+function undoMove(ctx) {
+  const b = ctx.state.tactics, u = ui(ctx);
+  const un = u.undo; if (!b || !un || u.busy) return;
+  const snap = JSON.parse(un.snap);
+  for (const k of Object.keys(snap)) if (k !== 'units') b[k] = snap[k];
+  for (const su of snap.units) {
+    const cur = b.units.find((q) => q.uid === su.uid); if (!cur) continue;
+    for (const k of Object.keys(cur)) if (k !== 'anim' && !(k in su)) delete cur[k];
+    Object.assign(cur, su);
+  }
+  u.undo = null; u.preview = null;
+  const mover = b.units.find((q) => q.uid === un.uid);
+  if (mover && un.path && un.path.length) {
+    const back = [...un.path].reverse().slice(1).concat([un.from]);
+    const from = un.path[un.path.length - 1];
+    Actors.faceToward(mover, from.x, from.y, un.from.x, un.from.y);
+    Actors.playClip(mover, 'walk');
+    u.pathAnim = { uid: mover.uid, path: back, from, t0: performance.now(), dur: Math.max(180, back.length * (Actors.isFig() ? Actors.FIG_STEP_MS : 140)) / SPEED, x: from.x, y: from.y };
+    setTimeout(() => { if (mover.anim) mover.anim.hop = null; Actors.playClip(mover, 'idle'); }, u.pathAnim.dur + 30);
+  }
+  ctx.save(); ctx.render();
 }
 
 async function enemyTurn(ctx) {
@@ -1454,7 +1674,7 @@ async function enemyTurn(ctx) {
     const up = T.actingUnit(b);
     if (up && up.uid !== lastUid) {
       lastUid = up.uid;
-      if (!ctx.fast) { ctx.render(); await new Promise((r) => setTimeout(r, 620)); }
+      if (!ctx.fast) { ctx.render(); await new Promise((r) => setTimeout(r, 620 / SPEED)); }
       if (u.closed || ctx.state.tactics !== b) return;
     }
     const act = chooseAction(b, T.think);
@@ -1606,6 +1826,21 @@ function xpBlock(res) {
     : '';
   if (!hs && !rows && !lost) return '';
   return `<div class="xpbox">${hs}${lost}${ret}${rows}</div>`;
+}
+
+// v0.15 one-time onboarding hints for the battle board (stored per device).
+const HINT_KEY = 'fangcity.hints';
+function hintsSeen() { try { return JSON.parse(localStorage.getItem(HINT_KEY) || '{}'); } catch (e) { return {}; } }
+function markHint(id) { const h = hintsSeen(); if (h[id]) return; h[id] = 1; try { localStorage.setItem(HINT_KEY, JSON.stringify(h)); } catch (e) { /* private mode */ } }
+function battleHint(b, u, actor) {
+  if (b.tutorial || b.status !== 'active' || !actor || actor.side !== 'player' || b.side !== 'player' || u.busy) return '';
+  const h = hintsSeen();
+  if (u.preview) { markHint('move'); return ''; }
+  if (u.inspect) { markHint('target'); return ''; }
+  if (!h.move) return 'Tap a <b>blue tile</b> to see the path, its AP cost and who could shoot you there. Tap <b>Move</b> to go; you can undo a plain move.';
+  if (!h.target) return 'Tap a <b>rival</b> to see their status and your odds, then tap the big attack button.';
+  if (actor.ap <= 0 && !h.end) { markHint('end'); return 'Out of AP. Tap <b>End turn</b> to pass to the next operator.'; }
+  return '';
 }
 
 function coach(b, u) {
@@ -1762,7 +1997,7 @@ export function render(ctx) {
   const abs = sel ? T.abilitiesOf(sel) : [];
   const cls = def ? classOf(def) : null;
   const perk = def ? speciesPerk(def.species) : null;
-  const coachHtml = coach(b, u);
+  const coachHtml = coach(b, u) || battleHint(b, u, actor);
   const actName = actor ? defOf(actor.hero).name : '';
   const turnLbl = actor ? `${actName} is up` : (b.side === 'player' ? 'Your turn' : 'Enemy turn');
   const canAct = b.side === 'player' && actor && actor.side === 'player' && !u.busy;
@@ -1785,7 +2020,7 @@ export function render(ctx) {
       ${apPips(a.ap, a.ap)}
     </button>`;
   });
-  const hoverMode = (u.abilityHover && u.abilityHover.mode) || u.mode;
+  const hoverMode = (u.abilityHover && u.abilityHover.mode) || (u.modePicked ? u.mode : null);
   const tip = trayItems.find((a) => a.id === hoverMode || a.kind === hoverMode) || null;
   const feed = feedHtml(b);
   // Turn hand-off banner (Marvel Snap / XCOM style). Survives re-renders via a negative animation delay.
@@ -1807,12 +2042,14 @@ export function render(ctx) {
       <div class="tturn">${esc(turnLbl)} · ${esc(b.label)} · T${b.turn}${b.highStakes ? ' · <b class="hsflag">HIGH STAKES</b>' : ''}</div>
       <div class="ttimer" id="ttimer"></div>
       <button class="btn dim tiny" data-act="retreatFight">Retreat</button>
-      <button class="btn red" data-act="endTacticsTurn" ${canAct ? '' : 'disabled'}>End turn</button>
+      <button class="btn dim tiny tspeed" data-act="tspeed" title="Battle speed">${SPEED}×</button>
+      <button class="btn red ${canAct && actor.ap <= 0 ? 'pulse' : ''}" data-act="endTacticsTurn" ${canAct ? '' : 'disabled'}>${canAct && actor.ap <= 0 ? 'End turn · 0 AP' : 'End turn'}</button>
     </div>
     ${queueHtml(b)}
     ${banner}
     <div class="tzoom"><button data-act="tzoom" data-z="in" aria-label="Zoom in">+</button><button data-act="tzoom" data-z="out" aria-label="Zoom out">−</button><button data-act="tzoom" data-z="fit" aria-label="Fit board">⤢</button></div>
     ${inspectHtml(b, u)}
+    ${actionBarHtml(b, u, canAct, actor)}
     ${coachHtml ? `<div class="tcoach ${tip ? 'top' : ''}">${coachHtml}</div>` : ''}
     ${sel ? `
     <div class="tdock">
@@ -1881,6 +2118,15 @@ export const actions = {
   },
   endTacticsTurn(ctx) { ui(ctx).inspect = null; doAct(ctx, { type: 'endTurn' }); },
   closeInspect(ctx) { ui(ctx).inspect = null; ctx.render(); },
+  tmoveGo(ctx) {
+    const b = ctx.state.tactics, u = ui(ctx), sel = b && T.actingUnit(b);
+    if (!sel || !u.preview) return;
+    const { x, y } = u.preview;
+    doAct(ctx, { type: 'move', uid: sel.uid, x, y }, { undoable: true });
+  },
+  tmoveCancel(ctx) { ui(ctx).preview = null; ctx.render(); },
+  tundo(ctx) { undoMove(ctx); },
+  tspeed(ctx) { setSpeed(SPEED === 2 ? 1 : 2); ctx.toast(`Battle speed ${SPEED}×`); ctx.render(); },
   tconfirm(ctx, el) {
     const b = ctx.state.tactics, u = ui(ctx);
     const t = b && b.units.find((x) => x.uid === el.dataset.uid);

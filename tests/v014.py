@@ -81,7 +81,7 @@ with sync_playwright() as p:
        const o=b.units.find(x=>x.uid===r); o.rallied=1; window.__game.render();}""", [foes[0]['uid'], rook['uid']])
     pg.wait_for_timeout(500)
     d = pg.evaluate(DEV, foes[0]['uid'])
-    pg.mouse.click(d['x'], d['y'] - 8); pg.wait_for_timeout(500)
+    pg.touchscreen.tap(d['x'], d['y'] - 8); pg.wait_for_timeout(500)
     assert pg.query_selector('#tinsp'), 'inspect panel opens on tap'
     names = pg.evaluate("[...document.querySelectorAll('#tinsp .tist b')].map(b=>b.firstChild.textContent)")
     print('statuses', names); assert 'Bleeding' in names and 'Shaken' in names
@@ -89,7 +89,7 @@ with sync_playwright() as p:
     shot(pg, '05-status-panel-debuffed')
     pg.click('[data-act="closeInspect"]'); pg.wait_for_timeout(200)
     # tap an ally: panel, never an action
-    d = pg.evaluate(DEV, anvil['uid']); pg.mouse.click(d['x'], d['y'] - 8); pg.wait_for_timeout(400)
+    d = pg.evaluate(DEV, anvil['uid']); pg.touchscreen.tap(d['x'], d['y'] - 8); pg.wait_for_timeout(400)
     assert pg.query_selector('#tinsp') and not pg.query_selector('#tinsp .tiact')
     shot(pg, '06-status-panel-ally')
     pg.click('[data-act="closeInspect"]'); pg.wait_for_timeout(200)

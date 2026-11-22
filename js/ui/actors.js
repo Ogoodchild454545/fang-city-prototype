@@ -162,6 +162,10 @@ export function playClip(unit, clip, opts = {}) {
   if (clip === 'ko') a.flash = 1;
 }
 
+// v0.15 battle speed: clips play faster at 2x. Re-bases running clips so they don't jump.
+let TS = 1;
+export function setTimeScale(v) { TS = v > 0 ? v : 1; }
+export function timeScale() { return TS; }
 export function tickAnim(unit, now, paused) {
   if (!hasActor(unit.hero) || paused) return;
   const a = ensureAnim(unit);
@@ -169,7 +173,7 @@ export function tickAnim(unit, now, paused) {
   const dt = Math.min(0.05, Math.max(0, (now - (a.last || now)) / 1000));
   a.last = now;
   if (a.holdPose) return;
-  a.t = (now - a.t0) / 1000;
+  a.t = (now - a.t0) / 1000 * TS;
   if (a.flash > 0) a.flash = Math.max(0, a.flash - dt * 5);
   if (a.muzzle > 0) a.muzzle = Math.max(0, a.muzzle - dt * 8);
 

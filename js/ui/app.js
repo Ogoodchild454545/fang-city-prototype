@@ -281,6 +281,7 @@ document.getElementById('app').addEventListener('click', (e) => {
   dispatchAct(el, e);
 });
 document.getElementById('app').addEventListener('pointerover', (e) => {
+  if (e.pointerType && e.pointerType !== 'mouse') return; // touch has no hover: never leave a tip stuck on
   const el = e.target.closest('[data-apcost]');
   if (!el || ctx.tab !== 'tactics' || !ctx.sub.tactics) return;
   ctx.sub.tactics.abilityHover = { mode: el.dataset.mode || '', ap: +el.dataset.apcost };

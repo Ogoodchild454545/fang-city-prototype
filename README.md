@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.14.1)
+# Fang City: Animal Gangs (playable prototype v0.15.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,25 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.15.0 (battle UX from the best tactics games)
+
+Research notes: `docs/best-of-turn-based.md` (XCOM 2, Into the Breach, Midnight Suns, Mario + Rabbids, Fire Emblem,
+Darkest Dungeon, Demeo, Hard West, Invisible Inc).
+
+- **Move preview (touch):** tap a blue tile to see the exact path, the AP cost, cover at the destination and every
+  rival who could hit you there (red line with their % or MELEE, "FLANK" when you'd be in the open). Tap **Move
+  here** (or the same tile again) to go. With a mouse, hovering is the preview and one click moves.
+- **Undo move:** a plain move that set nothing off (no overwatch shot) can be taken back with **↶ Undo move**.
+- **Attack button with the forecast:** tapping a rival shows a big button "Shoot · 70% · 2–4 dmg" (green / yellow /
+  red by odds); the status panel lists the modifiers. A mouse click on a rival in reach fires straight away;
+  right-click inspects.
+- **Rival danger zone:** an inspected rival shows the tiles it can reach this turn in red.
+- **Speed toggle 1× / 2×** in the top bar (remembered), for animations and rival turns.
+- **Camera follows** the moving piece.
+- **End turn pulses** and reads "End turn · 0 AP" when the acting operator has nothing left.
+- One-time hints for the board (preview, target, end turn). Ability tips no longer stick on touch screens.
+- Reach is cached per board state instead of recomputed every frame.
 
 ## v0.14.1 (clean-up)
 
