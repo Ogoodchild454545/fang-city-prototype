@@ -200,8 +200,11 @@ function drawWeaponArt(kind) {
   return c;
 }
 
-export function preloadRigs() {
-  for (const id of Object.keys(RIGS)) {
+const asked = new Set();
+export function preloadRigs(ids) {
+  for (const id of (ids || Object.keys(RIGS))) {
+    if (!RIGS[id] || asked.has(id)) continue;
+    asked.add(id);
     for (const part of RIGS[id].parts) {
       const src = srcOf(id, part);
       if (images[src]) continue;

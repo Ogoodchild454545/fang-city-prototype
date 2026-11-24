@@ -118,6 +118,6 @@ in `grantsFor` at player level 10; level-unlock heroes are kept out of the shard
 ## Figurine art (v0.13 trial)
 In the default **Figurines** unit style each hero is a painted miniature on a round base. To give a new hero
 bespoke miniature art, generate a full-body 3/4 "painted 32mm resin miniature" on plain white with **no base**,
-cut it out to a transparent PNG about 760 px tall (`assets/actors/<id>-fig.png`), and add an entry to `FIGS` in
+cut it out to a transparent PNG about 760 px tall (`assets/actors/<id>-fig.webp`, WebP quality 88), and add an entry to `FIGS` in
 `js/ui/actors.js` with `origin` (feet point), `gunTip`, `head`, `imageFacing` (-1 if the art faces left) and `h`
 (height multiplier). Without an entry the hero's classic stamp is stood on the base automatically.

@@ -108,18 +108,23 @@ export const ACTOR_IDS = Object.keys(ACTORS);
 const images = {};
 export function hasActor(id) { return !!ACTORS[id]; }
 
-export function preloadActors() {
-  const srcs = ACTOR_IDS.map((id) => ACTORS[id].idle).concat(Object.values(FIGS).map((f) => f.img));
-  for (const src of srcs) {
-    if (images[src]) continue;
-    const im = new Image();
-    im.src = src;
-    images[src] = im;
+// Images load on demand: a battle only fetches the pieces actually on the board
+// (figurine art in board-piece mode, the painted stamp otherwise).
+function getImg(src) {
+  let im = images[src];
+  if (!im) { im = new Image(); im.decoding = 'async'; im.src = src; images[src] = im; }
+  return im;
+}
+export function preloadActors(ids) {
+  const list = ids && ids.length ? ids.filter((id) => ACTORS[id]) : ACTOR_IDS;
+  for (const id of list) {
+    if (STYLE === 'fig' && FIGS[id]) getImg(FIGS[id].img);
+    else getImg(ACTORS[id].idle);
   }
-  Rig.preloadRigs();
+  if (STYLE !== 'fig') Rig.preloadRigs(list);
 }
 
-function imgOf(def) { return images[def.idle]; }
+function imgOf(def) { return getImg(def.idle); }
 
 export function ensureAnim(unit) {
   if (!unit.anim) {
@@ -318,6 +323,7 @@ export function drawActor(g, unit, worldX, worldY, z, now, hl = 0) {
   const def = scaledDef(unit.hero);
   const a = ensureAnim(unit);
   if (STYLE === 'fig') return drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl);
+  if (Rig.hasRig(unit.hero)) Rig.preloadRigs([unit.hero]);
   if (Rig.hasRig(unit.hero) && Rig.rigReady(unit.hero)) {
     const anchors = Rig.drawRig(g, unit, def, a, worldX, worldY, z, now);
     if (anchors) {
@@ -480,8 +486,23 @@ export function setUnitStyle(v) {
 export const FIG_STEP_MS = 300;
 
 export const FIGS = {
-  rook: { img: 'assets/actors/rook-fig.png', origin: [0.45, 0.992], gunTip: [0.03, 0.62], head: [0.40, 0.08], imageFacing: -1, h: 1.04 },
-  anvil: { img: 'assets/actors/anvil-fig.png', origin: [0.46, 0.992], gunTip: [0.98, 0.57], head: [0.62, 0.08], h: 1.0 },
+  rook: { img: 'assets/actors/rook-fig.webp', origin: [0.45, 0.992], gunTip: [0.03, 0.62], head: [0.40, 0.08], imageFacing: -1, h: 1.04 },
+  anvil: { img: 'assets/actors/anvil-fig.webp', origin: [0.46, 0.992], gunTip: [0.98, 0.57], head: [0.62, 0.08], h: 1.0 },
+  pip: { img: 'assets/actors/pip-fig.webp', origin: [0.485, 0.992], gunTip: [0.33, 0.47], head: [0.48, 0.06], h: 1.0 },
+  lumen: { img: 'assets/actors/lumen-fig.webp', origin: [0.490, 0.992], gunTip: [0.72, 0.65], head: [0.53, 0.06], h: 1.0 },
+  brick: { img: 'assets/actors/brick-fig.webp', origin: [0.454, 0.992], gunTip: [0.86, 0.51], head: [0.42, 0.06], h: 1.0 },
+  vesper: { img: 'assets/actors/vesper-fig.webp', origin: [0.561, 0.992], gunTip: [0.01, 0.49], head: [0.49, 0.06], imageFacing: -1, h: 1.0 },
+  ivory: { img: 'assets/actors/ivory-fig.webp', origin: [0.384, 0.992], gunTip: [0.83, 0.46], head: [0.32, 0.06], h: 1.0 },
+  nile: { img: 'assets/actors/nile-fig.webp', origin: [0.593, 0.992], gunTip: [0.01, 0.73], head: [0.47, 0.06], imageFacing: -1, h: 1.0 },
+  marlow: { img: 'assets/actors/marlow-fig.webp', origin: [0.433, 0.992], gunTip: [0.86, 0.47], head: [0.38, 0.06], h: 1.0 },
+  hook: { img: 'assets/actors/hook-fig.webp', origin: [0.488, 0.992], gunTip: [0.85, 0.47], head: [0.38, 0.06], h: 1.0 },
+  knack: { img: 'assets/actors/knack-fig.webp', origin: [0.555, 0.992], gunTip: [0.63, 0.39], head: [0.53, 0.06], h: 1.0 },
+  slab: { img: 'assets/actors/slab-fig.webp', origin: [0.491, 0.992], gunTip: [0.83, 0.47], head: [0.41, 0.06], h: 1.0 },
+  rill: { img: 'assets/actors/rill-fig.webp', origin: [0.548, 0.992], gunTip: [0.01, 0.67], head: [0.49, 0.06], imageFacing: -1, h: 1.0 },
+  pact: { img: 'assets/actors/pact-fig.webp', origin: [0.499, 0.992], gunTip: [0.68, 0.34], head: [0.46, 0.06], h: 1.0 },
+  bruno: { img: 'assets/actors/bruno-fig.webp', origin: [0.425, 0.992], gunTip: [0.84, 0.49], head: [0.52, 0.06], h: 1.0 },
+  ash: { img: 'assets/actors/ash-fig.webp', origin: [0.381, 0.992], gunTip: [0.60, 0.50], head: [0.44, 0.06], h: 1.0 },
+  mica: { img: 'assets/actors/mica-fig.webp', origin: [0.443, 0.992], gunTip: [0.86, 0.60], head: [0.37, 0.06], h: 1.0 },
 };
 // base in world px: radius across, depth (ellipse), thickness
 const BASE = { rx: 9.5, ry: 4.3, th: 2.6 };
@@ -611,7 +632,7 @@ function drawBase(g, z, side, hl, now, flash, theme = 'tarmac') {
 function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
   const fig = FIGS[unit.hero];
   const src = fig ? fig.img : def.idle;
-  const im = images[src];
+  const im = getImg(src);
   const fo = fig ? fig.origin : def.origin;
   const gt = fig ? fig.gunTip : def.gunTip;
   const imgFacing = fig ? (fig.imageFacing || 1) : (def.imageFacing || 1);
@@ -689,7 +710,7 @@ function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
   a.headX = head.x; a.headY = head.y;
   return { headX: head.x, headY: head.y, footX: worldX, footY: worldY, gunX: tip.x, gunY: tip.y, z, w, h };
 }
-if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, playClip, ensureAnim };
+if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, playClip, ensureAnim, FIGS };
 
 // ---------------------------------------------------------------- story bases (v0.14)
 // Each operator's base top is a scrap of the place they come from. Rivals stand on plain tarmac.

@@ -789,8 +789,14 @@ function drawBoat(g, t, sx, sy, z, now) {
 const SPR = new WeakMap();
 let SPRV = 1;
 if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) document.fonts.ready.then(() => { SPRV++; });
-const CS = 2.2;
+// v0.16: the cache scale follows the zoom in steps (2.2 / 4.4 / 7) so close zoom stays crisp, and
+// pieces off screen are skipped entirely.
+const csFor = (z) => (z <= 2.6 ? 2.2 : z <= 5 ? 4.4 : 7);
 function cached(g, obj, key, sx, sy, z, ox, oy, w0, h0, paint) {
+  const tr = g.getTransform(), X = tr.a * (sx - ox * z) + tr.e, Y = tr.d * (sy - oy * z) + tr.f;
+  if (tr.a > 0 && tr.d > 0 && !tr.b && !tr.c && (X > g.canvas.width + 8 || Y > g.canvas.height + 8 || X + w0 * z * tr.a < -8 || Y + h0 * z * tr.d < -8)) return;
+  const CS = csFor(z);
+  key += '|' + CS;
   let c = SPR.get(obj);
   if (!c || c.key !== key || c.v !== SPRV) {
     const cv = document.createElement('canvas');
@@ -1049,15 +1055,20 @@ function paintThemeBackdrop(g, m, z, bd) {
 export function drawWeather(g, w, h, m, now) {
   const env = (m && m.env) || {};
   if (env.time === 'night') { g.fillStyle = 'rgba(4,6,14,0.16)'; g.fillRect(0, 0, w, h); }
-  if (env.weather === 'rain') {
-    const t = (now || 0) / 1000;
-    g.save(); g.strokeStyle = 'rgba(170,190,220,0.18)'; g.lineWidth = Math.max(1, w / 900);
-    g.beginPath();
-    for (let i = 0; i < 140; i++) {
-      const sx = (hash(i, 1) * w + t * 60) % w, sy = (hash(i, 2) * h + t * (700 + hash(i, 3) * 300)) % h;
-      g.moveTo(sx, sy); g.lineTo(sx - 4, sy + 14 + hash(i, 4) * 8);
+  if (env.weather === 'rain' || env.time === 'night' && env.weather !== 'fog') {
+    // v0.16: two depths of rain (far: short and faint, near: longer); a light drizzle on dry nights
+    const t = (now || 0) / 1000, heavy = env.weather === 'rain', k = Math.max(1, w / 900);
+    g.save(); g.lineCap = 'round';
+    for (const [n, al, len, sp, lw] of heavy ? [[150, 0.12, 10, 620, 0.8], [70, 0.2, 22, 980, 1.2]] : [[60, 0.07, 9, 560, 0.8], [18, 0.1, 18, 900, 1]]) {
+      g.strokeStyle = `rgba(175,195,225,${al})`; g.lineWidth = lw * k;
+      g.beginPath();
+      for (let i = 0; i < n; i++) {
+        const sx = (hash(i, len, 1) * w + t * 70) % w, sy = (hash(i, len, 2) * h + t * (sp + hash(i, 3) * 260) * k) % h;
+        g.moveTo(sx, sy); g.lineTo(sx - len * 0.28 * k, sy + len * k);
+      }
+      g.stroke();
     }
-    g.stroke(); g.restore();
+    g.restore();
   } else if (env.weather === 'fog') {
     const t = (now || 0) / 1000;
     g.save();
@@ -1230,16 +1241,30 @@ function groundDetail(g, m, r0, Q0, M) {
   void r0; void Q0; void M;
 }
 
-export function bakeYard(m) {
-  let bk = BAKE.get(m);
+// `region` (v0.16): repaint only a window of the yard at a high scale for crisp close zoom. Same
+// painting as the full bake, composed onto a root transform that maps full-bake px to the window.
+export function bakeYard(m, region) {
+  let bk = region ? null : BAKE.get(m);
   if (bk) return bk;
   const p = prepMap(m);
   const M = MARGIN;
   const minX = toWorld(-M, m.h - 1 + M).x - HX, maxX = toWorld(m.w - 1 + M, -M).x + HX;
   const minY = toWorld(-M, -M).y - HY, maxY = toWorld(m.w - 1 + M, m.h - 1 + M).y + HY;
   const W = Math.ceil((maxX - minX) * S), H = Math.ceil((maxY - minY) * S);
-  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-  const g = cv.getContext('2d');
+  const cv = document.createElement('canvas');
+  if (region) { cv.width = region.W; cv.height = region.H; } else { cv.width = W; cv.height = H; }
+  const g0 = cv.getContext('2d');
+  const RT = region ? [region.Z / S, 0, 0, region.Z / S, (minX - region.x0) * region.Z, (minY - region.y0) * region.Z] : null;
+  // proxy: every setTransform on the bake is composed with the root transform when painting a window
+  const g = RT ? new Proxy(g0, {
+    get(o, k) {
+      if (k === 'setTransform') return (a, b, c, d, e, f) => { o.setTransform(...RT); if (typeof a === 'object') o.transform(a.a, a.b, a.c, a.d, a.e, a.f); else o.transform(a, b, c, d, e, f); };
+      if (k === 'resetTransform') return () => o.setTransform(...RT);
+      const v = o[k]; return typeof v === 'function' ? v.bind(o) : v;
+    },
+    set(o, k, v) { o[k] = v; return true; },
+  }) : g0;
+  if (RT) g.setTransform(1, 0, 0, 1, 0, 0);
   const GT = () => g.setTransform(HX * S, HY * S, -HX * S, HY * S, -minX * S, -minY * S);
   const SC = () => g.setTransform(S, 0, 0, S, -minX * S, -minY * S); // world coords
   const inMap = (x, y) => x >= 0 && y >= 0 && x < m.w && y < m.h;
@@ -1572,15 +1597,41 @@ export function bakeYard(m) {
   { const gr = g.createLinearGradient(W, 0, W - fw, 0); gr.addColorStop(0, 'rgba(14,15,18,1)'); gr.addColorStop(1, 'rgba(14,15,18,0)'); g.fillStyle = gr; g.fillRect(W - fw, 0, fw, H); }
   { const gr = g.createLinearGradient(0, H, 0, H - fh); gr.addColorStop(0, 'rgba(14,15,18,1)'); gr.addColorStop(1, 'rgba(14,15,18,0)'); g.fillStyle = gr; g.fillRect(0, H - fh, W, fh); }
   void fade;
+  if (region) return { cv, minX: region.x0, minY: region.y0, w: region.W / region.Z, h: region.H / region.Z, Z: region.Z };
   bk = { cv, minX, minY, w: W / S, h: H / S };
   BAKE.set(m, bk);
   return bk;
 }
 
 // Ground pass for the tactics view: baked yard, scorch under wrecks, living water, light pools.
+// Close zoom (v0.16): when the camera is zoomed well past the base bake scale, a sharp window of the
+// ground around the view is repainted at the current zoom (debounced, off the pinch) and drawn over it.
+const DETAIL = new WeakMap();
+function detailFor(m, g, z) {
+  const d = DETAIL.get(m) || {};
+  DETAIL.set(m, d);
+  if (z < S * 1.35) return null;
+  const tr = g.getTransform(), cw = g.canvas.width, ch = g.canvas.height;
+  const vx0 = -tr.e / z, vy0 = -tr.f / z, vw = cw / z, vh = ch / z;
+  const ok = d.bk && Math.abs(d.bk.Z / z - 1) < 0.2 && vx0 >= d.bk.minX && vy0 >= d.bk.minY && vx0 + vw <= d.bk.minX + d.bk.w && vy0 + vh <= d.bk.minY + d.bk.h;
+  if (!ok && !d.pending) {
+    d.pending = setTimeout(() => {
+      d.pending = 0;
+      const Z = Math.min(z, 9);
+      const pad = 0.35;
+      const x0 = vx0 - vw * pad, y0 = vy0 - vh * pad, w = vw * (1 + 2 * pad), h = vh * (1 + 2 * pad);
+      const W = Math.ceil(w * Z), H = Math.ceil(h * Z);
+      if (W * H > 9e6) return; // too big for a phone canvas; the base bake stays
+      try { d.bk = bakeYard(m, { Z, x0, y0, W, H }); } catch (e) { d.bk = null; }
+    }, 140);
+  }
+  return d.bk && Math.abs(d.bk.Z / z - 1) < 0.35 ? d.bk : null;
+}
 export function drawYard(g, m, z, now) {
   const bk = bakeYard(m);
   g.drawImage(bk.cv, bk.minX * z, bk.minY * z, bk.w * z, bk.h * z);
+  const dk = detailFor(m, g, z);
+  if (dk) g.drawImage(dk.cv, dk.minX * z, dk.minY * z, dk.w * z, dk.h * z);
   const p = prepMap(m);
   // scorch marks under anything that has blown up
   for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
@@ -1639,6 +1690,70 @@ export function drawYard(g, m, z, now) {
       const gr2 = g.createLinearGradient(w0.x * z, (w0.y - 10) * z, w0.x * z, (w0.y + 30) * z);
       gr2.addColorStop(0, 'rgba(255,170,80,0)'); gr2.addColorStop(0.4, `rgba(255,170,80,${0.12 + 0.05 * Math.sin(t * 3 + L.y)})`); gr2.addColorStop(1, 'rgba(255,170,80,0)');
       g.fillStyle = gr2; g.fillRect((w0.x - 4) * z, (w0.y - 10) * z, 8 * z, 40 * z);
+    }
+  }
+  g.restore();
+  drawWet(g, m, z, now, p);
+}
+
+// ---------- v0.16 night-city atmosphere: wet ground ----------
+// On night and rain maps the tarmac reads wet: each light throws a long, broken reflection down the
+// ground, scattered puddle glints twinkle, and in the rain, splash rings pop up. All cheap world-space
+// strokes, drawn under the pieces so nothing on the board gets harder to read.
+export function isWet(m) { const e = (m && m.env) || {}; return e.weather === 'rain' || (e.time === 'night' && e.weather !== 'fog'); }
+const WET = new WeakMap();
+function wetPrep(m, p) {
+  let w = WET.get(m); if (w) return w;
+  w = { glints: [], drops: [] };
+  const HARD = new Set(['yard', 'edge', 'asphalt', 'pavement', 'factory', 'door', 'shed']);
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+    const t = m.tiles[y][x];
+    if (!HARD.has(t.t) || (t.decor && t.decor !== 'lamp')) continue;
+    if (hash(x, y, 41) < 0.42) w.glints.push({ x: x + hash(x, y, 42) - 0.5, y: y + hash(x, y, 43) - 0.5, ph: hash(x, y, 44) * 6.28, sp: 0.6 + hash(x, y, 45) * 1.4, len: 2 + hash(x, y, 46) * 5 });
+    if (hash(x, y, 47) < 0.5) w.drops.push({ x, y });
+  }
+  WET.set(m, w);
+  return w;
+}
+function drawWet(g, m, z, now, p) {
+  if (!isWet(m)) return;
+  const w = wetPrep(m, p), t = now / 1000, rain = m.env && m.env.weather === 'rain';
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  // light reflections: a soft vertical smear under each light, rippling slightly
+  for (const L of p.lights) {
+    if (L.kind === 'wall') continue;
+    const col = L.kind === 'lamp' ? '255,175,90' : L.kind === 'fire' ? '255,120,50' : L.kind === 'neon' ? (L.col || '255,80,150') : L.kind === 'tube' ? '170,205,255' : '255,190,120';
+    const c = toWorld(L.x + (L.kind === 'lamp' ? 0.3 : 0), L.y + (L.kind === 'lamp' ? 0.05 : 0));
+    const X = c.x * z, Y = c.y * z, len = (L.kind === 'lamp' ? 30 : 20) * z;
+    const a = (L.kind === 'fire' ? 0.13 + 0.03 * Math.sin(t * 9 + L.x) : 0.11) * (rain ? 1.2 : 1);
+    for (let i = 0; i < 5; i++) {
+      const yy = Y + (i / 5) * len, wob = Math.sin(t * 2.2 + i * 1.7 + L.x) * 1.6 * z;
+      const ww = (4.5 - i * 0.6) * z;
+      g.fillStyle = `rgba(${col},${a * (1 - i / 6)})`;
+      g.beginPath(); g.ellipse(X + wob, yy, ww, 1.2 * z, 0, 0, Math.PI * 2); g.fill();
+    }
+  }
+  // puddle glints
+  g.lineCap = 'round';
+  g.lineWidth = 0.7 * z;
+  for (const q of w.glints) {
+    const k = Math.pow(0.5 + 0.5 * Math.sin(t * q.sp + q.ph), 6);
+    if (k < 0.08) continue;
+    const c = toWorld(q.x, q.y);
+    g.strokeStyle = `rgba(190,210,240,${0.22 * k})`;
+    g.beginPath(); g.moveTo((c.x - q.len / 2) * z, c.y * z); g.lineTo((c.x + q.len / 2) * z, c.y * z); g.stroke();
+  }
+  g.globalCompositeOperation = 'source-over';
+  // splash rings in the rain
+  if (rain && w.drops.length) {
+    g.lineWidth = 0.5 * z;
+    for (let i = 0; i < 26; i++) {
+      const cyc = t * 1.7 + i * 0.37, n = Math.floor(cyc), f = cyc - n;
+      const d = w.drops[Math.floor(hash(i, n, 51) * w.drops.length)];
+      const c = toWorld(d.x + hash(i, n, 52) - 0.5, d.y + hash(i, n, 53) - 0.5);
+      g.strokeStyle = `rgba(200,215,235,${0.35 * (1 - f)})`;
+      g.beginPath(); g.ellipse(c.x * z, c.y * z, (0.6 + f * 3.2) * z, (0.3 + f * 1.5) * z, 0, 0, Math.PI * 2); g.stroke();
     }
   }
   g.restore();

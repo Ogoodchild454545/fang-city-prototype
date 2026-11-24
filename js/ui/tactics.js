@@ -2076,7 +2076,7 @@ export function mount(ctx, el) {
   const b = ctx.state.tactics;
   const u = ui(ctx);
   if (b) {
-    Actors.preloadActors();
+    Actors.preloadActors(b.units.map((un) => un.hero));
     b.units.forEach((un) => { preload(defOf(un.hero).portrait); Actors.ensureAnim(un); });
     const act = T.actingUnit(b);
     if (act && act.side === 'player') u.sel = act.uid;

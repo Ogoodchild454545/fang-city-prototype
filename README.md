@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.15.0)
+# Fang City: Animal Gangs (playable prototype v0.16.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,22 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.16.0 (every piece is a painted figurine)
+
+- **Figurines for the whole cast:** Pip, Lumen, Brick, Vesper, Ivory, Nile and Marlow, plus every rival (Hook,
+  Knack, Slab, Rill, Pact, Bruno, Ash, Mica) now stand on the board as hand-painted miniatures like Rook and Anvil.
+- **Lighter battles:** figurine art is WebP (about 65 KB each, was ~400 KB PNG) and a battle only downloads the
+  pieces actually on the board (4 files instead of ~170 for a 2v2).
+- **Brick's portrait:** the clipboard by the stage door is now a plain guest list with ticks, no garbled lettering.
+- **Clinic building:** the placeholder cube on the base is now a painted back-street clinic (brick corner block,
+  rooftop tank and AC, lit door, gurney and crates, a green cross on whitewash).
+- **Crisp close zoom:** board props are re-cached at a sharper scale as you zoom (2.2 / 4.4 / 7) and the ground
+  under the view is repainted at the current zoom once you stop pinching, so 4× zoom stays sharp. Props off
+  screen are skipped.
+- **Night-city atmosphere:** night maps get a light drizzle (rain maps a heavier two-layer rain with splash
+  rings), wet tarmac with twinkling puddle glints, and long rippling reflections under street lamps, burn barrels
+  and neon. All of it sits under the pieces, so the board reads the same.
 
 ## v0.15.0 (battle UX from the best tactics games)
 
@@ -88,7 +104,7 @@ Darkest Dungeon, Demeo, Hard West, Invisible Inc).
 ## v0.13.0 (figurine unit style, trial)
 - **Demeo-style board pieces in battle (default for the trial).** Every fighter stands on a round tabletop
   base (dark base, team-coloured rim: blue crew, red rivals). Rook and Anvil have new painted-miniature art
-  (`assets/actors/rook-fig.png`, `anvil-fig.png`); everyone else stands their classic painted stamp on the same base.
+  (`assets/actors/<id>-fig.webp`) for every operator and rival.
 - **Board-piece animation** (`js/ui/actors.js`, `drawFigurine`): a hop per tile with an arc, landing squash and a
   short settle (190 ms per tile); lean-in on attacks by tilting on the front edge of the base; rocking recoil when
   hit; tips over and lies flat (bounce, desaturated) on KO, and stands back up on revive; gentle idle sway; a
