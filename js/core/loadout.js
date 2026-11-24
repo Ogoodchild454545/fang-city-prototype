@@ -138,8 +138,10 @@ export function returnUnused(s, units) {
   const back = { ammo: 0, medkits: 0 };
   for (const u of units || []) {
     if (u.side !== 'player') continue;
-    if ((u.ammo || 0) > 0) back.ammo += gain(s, 'ammo', u.ammo);
-    if ((u.medkits || 0) > 0) back.medkits += gain(s, 'medkits', u.medkits);
+    // v0.19: rounds handed out by Reed's Resupply and her own stash medkit are never banked
+    const am = Math.max(0, (u.ammo || 0) - (u.bonusAmmo || 0)), md = Math.max(0, (u.medkits || 0) - (u.bonusMed || 0));
+    if (am > 0) back.ammo += gain(s, 'ammo', am);
+    if (md > 0) back.medkits += gain(s, 'medkits', md);
   }
   return back;
 }

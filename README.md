@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.18.0)
+# Fang City: Animal Gangs (playable prototype v0.19.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,29 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.19.0 (New Operators Day: five new operators)
+
+Five new in-depth operators, each with a painted noir portrait, a figurine on a story base, full stats, a
+passive, a species perk, 3–4 specials that unlock by level, gear preferences, a bio and voice lines. Full lore
+handoff in `docs/new-operators-day.md`.
+
+| Operator | Species · role | How to get | Signature kit |
+|---|---|---|---|
+| **Sledge** *(working name)* | Buffalo · Breaker (The Thaw) | Joins free at player Lv 12 | Cover Breaker (sledgehammer: knockback + Exposed), Shoulder Up (takes half the hits on a crewmate), Sweeping Cleave, Rebel Yell; Rebel Grit below half HP |
+| **Vigil** | Owl · Spotter | 30 shards (crates, pin) | Mark Target (+15 aim, ignores Dodge), Pinning Shot, Flare (marks an area); Night Eyes +1 range |
+| **Jinx** | Raccoon · Saboteur | First clear of op “Hot metal” | Flashbang (**Blinded**: −40 aim, no overwatch), Jammer (no abilities), Tripwire (4 dmg + Slowed) |
+| **Sable** | Cat · Infiltrator | 30 shards (crates, pin) | Shadow Step (Hidden), Backstab (sure crit from hiding or a flank), Hamstring, Rooftop Run; Alley Ghost dodge |
+| **Reed** | Otter · Fixer | Market: 150 Ice (Den Lv 2) | Stim Shot (+1 AP), Resupply (+3 rounds that never bank), Call It In, Pay Off (a foe skips attacking) |
+
+- New statuses: Blinded, Marked, Exposed, Jammed, Paid off, Slowed, Hidden, Stimmed, On the radio, Guarded.
+- Each signature special has its own effect on the target: hammer arc + shockwave, silver cross-slash, white
+  flashbang burst with dazed stars, red reticle, falling flare glare, static over jammed foes, shield pulse,
+  frost-blue stim ring, an envelope tossed to a paid-off rival.
+- Two new synergies: Eyes and Knives (Vigil + Sable), Breach and Blind (Sledge + Jinx).
+- All five appear in the Operators grid from day one (greyed with a full dossier until recruited). Old saves
+  load unchanged; crews already past Lv 12 get Sledge and crews who cleared “Hot metal” get Jinx on load.
+- Classic unit style draws the new five from their figurine art (no 404s).
 
 ## v0.18.0 (faster, lighter, smoother)
 

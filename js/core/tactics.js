@@ -2,7 +2,7 @@
 // overwatch, and a simple enemy AI. Outcomes depend on positioning and decisions.
 import { addPlayerXp, ensureProgress, isUnlocked, admit } from './progression.js';
 import { rngNext, rngInt, newSeed } from './rng.js';
-import { defOf, HEROES, matchup, synergiesFor } from './heroes.js';
+import { defOf, HEROES, matchup, synergiesFor, opGrants } from './heroes.js';
 import { starBonus, tutorialShardGift } from './shards.js';
 import { levelBonus, perkMods, addXp, xpFromBattle, resetAfterKo, perkChoices, xpToNext } from './progress.js';
 import { kitMods, returnUnused, commitLoadout, defaultLoadout, carryOf } from './loadout.js';
@@ -106,11 +106,33 @@ export function abilitiesOf(u) {
 export function abilityOf(u, id) { return (defOf(u.hero).abilities || []).find((a) => a.id === id) || null; }
 export const cooldownLeft = (u, id) => ((u.cd || {})[id] || 0);
 
+// v0.19 foe-targeted utilities (no damage roll): Mark Target and Pay Off.
+export const UTIL_FOE = ['mark', 'bribe'];
+export const BASIC_KINDS = ['shot', 'melee'];
+const gritOn = (u) => defOf(u.hero).passive?.id === 'rebelgrit' && u.hp > 0 && u.hp <= u.maxHp / 2;
+export function previewUtil(b, att, def, mode) {
+  if (!att || !def || att.hp <= 0 || def.hp <= 0) return null;
+  const abl = abilityOf(att, mode);
+  const dist = MANH(att.x, att.y, def.x, def.y);
+  const base = { ok: false, chance: 0, dist, cover: 0, util: true, parts: [], mode, ap: abl ? abl.ap : 1 };
+  if (!abl) return { ...base, reason: 'Unknown ability' };
+  if (att.jammed) return { ...base, reason: 'Jammed: no abilities this turn' };
+  if (def.hidden && dist > 2) return { ...base, reason: 'Hidden in the dark' };
+  if (dist > (abl.range || 5)) return { ...base, reason: 'Out of range' };
+  if (mode === 'mark' && !hasLOS(b, att.x, att.y, def.x, def.y)) return { ...base, reason: 'No line of sight' };
+  return { ...base, ok: true, chance: 100, reason: '' };
+}
+
 export function previewShot(b, att, def, mode = 'shot') {
   if (!att || !def || att.hp <= 0 || def.hp <= 0) return null;
+  if (UTIL_FOE.includes(mode)) return previewUtil(b, att, def, mode);
   const defn = defOf(att.hero);
   const tdef = defOf(def.hero);
   const abl = defn.abilities.find((a) => a.id === mode) || null;
+  // v0.19 statuses that stop an attack outright
+  if (att.paid) return { ok: false, reason: 'Paid off: weapon lowered this turn', chance: 0, dist: 0, cover: 0 };
+  if (att.jammed && abl && !BASIC_KINDS.includes(abl.kind) && mode !== 'overwatch') return { ok: false, reason: 'Jammed: no abilities this turn', chance: 0, dist: 0, cover: 0 };
+  if (def.hidden && (mode === 'overwatch' || MANH(att.x, att.y, def.x, def.y) > 2)) return { ok: false, reason: 'Hidden in the dark', chance: 0, dist: MANH(att.x, att.y, def.x, def.y), cover: 0 };
   const gun = gunOf(att);
   if (abl && abl.gun && !gun) return { ok: false, reason: 'No gun equipped', chance: 0, dist: 0, cover: 0 };
   const melee = mode === 'melee' || mode === 'lunge' || mode === 'roll' || !!(abl && abl.melee) || !gun;
@@ -126,6 +148,7 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (!melee && !hasLOS(b, att.x, att.y, def.x, def.y)) return { ok: false, reason: 'No line of sight', chance: 0, dist, cover: 0 };
   let cover = coverFrom(b, att.x, att.y, def.x, def.y);
   if (melee && (defn.passive?.id === 'jaw') && cover === 1) cover = 0;
+  if (def.exposed && cover > 0) cover -= 1; // v0.19 Cover Breaker: knocked out of their spot
   const flanked = cover === 0 && dist > 0;
   const parts = [];
   const push = (label, val) => { if (val) parts.push({ label, val }); };
@@ -135,12 +158,18 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (mode === 'overwatch' && !(att.perks || []).includes('trigger')) { chance -= 15; push('Overwatch', -15); }
   if (mode === 'suppress') { chance += 10; push('Suppress', +10); }
   if (mode === 'knife' && flanked) { chance += 20; push('Knife flank', +20); }
+  const sure = mode === 'backstab' && (!!att.hidden || flanked);
+  if (sure) { chance += 25; push('Ambush', +25); }
+  if (att.blinded) { chance -= 40; push('Blinded', -40); }
+  if (def.marked) { chance += 15; push('Marked', +15); }
+  if (def.blur) { chance -= 20; push('Alley Ghost', -20); }
+  if (mode === 'overwatch' && tdef.species === 'Cat') { chance -= 20; push('Cat reflexes', -20); }
   if (abl && abl.aim) { chance += abl.aim; push(abl.name, abl.aim); }
   if (att.rallied) { chance += 10; push('Rallied', +10); }
   if (att.shaken) { chance -= 15; push('Shaken', -15); }
   // v0.12 Taunt: a taunted foe struggles to aim at anyone but the rhino who called them out
   if (att.taunt && att.taunt !== def.uid && b.units.some((x) => x.uid === att.taunt && x.hp > 0)) { chance -= 25; push('Taunted', -25); }
-  if (def.dodge) { chance -= def.dodge; push('Dodge', -def.dodge); }
+  if (def.dodge && !def.marked && defn.species !== 'Owl') { chance -= def.dodge; push('Dodge', -def.dodge); }
   if (cover === 1) { chance -= 20; push('Half cover', -20); }
   if (cover === 2) { chance -= 40; push('Full cover', -40); }
   if (flanked) { chance += 10; push('Flank', +10); }
@@ -159,6 +188,7 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (dSp === 'Rat' && def.moved) { chance -= 15; push('Moved rat', -15); }
   const syn = synergiesFor(squadIds(b, att.side));
   if (syn.some((g) => g.name === 'Pack Bond')) { chance += 8; push('Pack Bond', +8); }
+  if (att.hero === 'sledge' && def.blinded && syn.some((g) => g.name === 'Breach and Blind')) { chance += 15; push('Breach and Blind', +15); }
   if (syn.some((g) => g.name === 'Spotter') && att.hero === 'lumen') {
     const pip = b.units.find((u) => u.hero === 'pip' && u.side === att.side && u.hp > 0);
     if (pip && hasLOS(b, pip.x, pip.y, def.x, def.y)) { chance += 12; push('Spotter', +12); }
@@ -185,16 +215,18 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (melee && att.mdmg) { d0 += att.mdmg; d1 += att.mdmg; }
   if (!melee && att.rdmg) { d0 += att.rdmg; d1 += att.rdmg; }
   if (flanked && (att.perks || []).includes('bully')) { d0 += 1; d1 += 1; }
+  if (att.hero === 'sable' && def.marked && syn.some((g) => g.name === 'Eyes and Knives')) { d0 += 1; d1 += 1; }
   const ap = mode === 'aimed' ? 3 : mode === 'roll' ? 3 : mode === 'overwatch' ? 0 : (defn.abilities.find((a) => a.id === mode)?.ap || 2);
   return {
     ok: true, chance, cover, flanked, dist, melee, dmg: [Math.max(1, d0), Math.max(1, d1)],
-    ap, mode, note: mu.note, los: true, parts, weapon: w.name, bleed: abl?.bleed || 0,
+    ap, mode, note: mu.note, los: true, parts, weapon: w.name, bleed: abl?.bleed || 0, sure,
   };
 }
 
-export function critChance(att, mode) {
+export function critChance(att, mode, def) {
   const defn = defOf(att.hero);
   let c = 8 + (att.crit || 0);
+  if (def && def.marked && def.markEye) c += 10; // v0.19 Spotter's Eye
   if (defn.passive?.id === 'cold' && !att.moved) c += 15;
   if (mode === 'aimed') c += 8;
   return c;
@@ -269,6 +301,9 @@ function freshUnit(hero, side, x, y, uid, opts = {}) {
     overwatch: false, moved: 0, acted: 0, fired: 0, lastFired: 0,
     suppressed: 0, fortify: 0, venom: 0, dashUsed: 0, rollUsed: 0, sprint: 0,
     ko: 0, facing: side === 'player' ? 0 : 2,
+    // v0.19 statuses (Blinded, Marked, Exposed, Hidden, Slowed, Jammed, Paid off, Stimmed, guard links)
+    blinded: 0, marked: 0, markEye: 0, exposed: 0, hidden: 0, slowed: 0, jammed: 0, paid: 0, stim: 0, coord: 0,
+    blur: 0, guarding: null, guardedBy: null, bonusAmmo: 0, bonusMed: 0,
   };
 }
 
@@ -303,6 +338,9 @@ export function startBattle({ map, player, enemy, seed, label, tutorial, reward,
     const spt = eSpots[i] || { x: map.w - 2, y: 1 + i };
     b.units.push(freshUnit(id, 'enemy', spt.x, spt.y, 'e' + i, { ...((enemyRecs && enemyRecs[i]) || {}), ammo: 8 }));
   });
+  // v0.19 Runner's Stash: Reed brings one medkit of her own (not from the stockpile, never banked)
+  for (const un of b.units) if (defOf(un.hero).passive?.id === 'stash') { un.medkits = (un.medkits || 0) + 1; un.bonusMed = 1; }
+  b.traps = [];
   beginRound(b, true);
   return b;
 }
@@ -391,8 +429,20 @@ function stepMove(b, u, path) {
     const from = { x: u.x, y: u.y };
     u.x = step.x; u.y = step.y; u.facing = step.x > from.x ? 0 : step.x < from.x ? 2 : step.y > from.y ? 1 : 3;
     events.push({ typ: 'step', uid: u.uid, from, to: { x: u.x, y: u.y } });
-    // overwatch reactions from enemies who can see this tile
-    const ows = b.units.filter((o) => o.hp > 0 && o.side !== u.side && o.overwatch);
+    // v0.19 Tripwire: the first foe onto a rigged tile takes 4, stops dead and is Slowed next turn
+    const ti = (b.traps || []).findIndex((t) => t.x === u.x && t.y === u.y && t.side !== u.side);
+    if (ti >= 0) {
+      const tr = b.traps.splice(ti, 1)[0];
+      const dmg = Math.min(u.hp, 4);
+      u.hp -= dmg; u.slowed = 2; // tripped on their own turn: limps through the next one too
+      log(b, `${nameOf(u)} hits a tripwire (-${dmg}).`);
+      const ev = { typ: 'trap', uid: u.uid, x: u.x, y: u.y, dmg, by: tr.uid, halted: 1 };
+      if (u.hp <= 0) { u.ko = 1; u.overwatch = false; ev.ko = 1; log(b, `${nameOf(u)} is down.`); checkEnd(b); }
+      events.push(ev);
+      return events;
+    }
+    // overwatch reactions from enemies who can see this tile (Hidden pieces slip past; Blinded can't watch)
+    const ows = u.hidden ? [] : b.units.filter((o) => o.hp > 0 && o.side !== u.side && o.overwatch && !o.blinded);
     for (const o of ows) {
       const prev = previewShot(b, o, u, 'overwatch');
       if (prev && prev.ok) {
@@ -411,13 +461,14 @@ function resolveHit(b, att, def, mode, prev) {
   const hit = roll < prev.chance;
   const ev = { typ: 'shot', uid: att.uid, target: def.uid, mode, chance: prev.chance, roll, hit, cover: prev.cover, flanked: prev.flanked, dmg: 0, crit: 0 };
   att.fired = 1; att.lastFired = b.turn; att.acted = 1; att.overwatch = false;
+  if (att.hidden) { att.hidden = 0; ev.unhide = 1; } // v0.19 attacking gives a Hidden piece away
   if (!prev.melee && (att.ammo || 0) > 0) att.ammo -= 1;
   ev.ammo = att.ammo;
   if (!hit) { log(b, `${nameOf(att)} missed ${nameOf(def)} (${prev.chance}%).`); return ev; }
   const span = prev.dmg[1] - prev.dmg[0] + 1;
   let dmg = prev.dmg[0] + Math.floor(rngNext(b) * span);
-  const cc = critChance(att, mode);
-  if (Math.floor(rngNext(b) * 100) < cc) { ev.crit = 1; dmg += 2; }
+  const cc = critChance(att, mode, def);
+  if (prev.sure || Math.floor(rngNext(b) * 100) < cc) { ev.crit = 1; dmg += 2; } // Backstab from hiding always crits
   const raw = dmg; // v0.17: remember the blow before armour so the UI can call out what was soaked
   const tdef = defOf(def.hero);
   if (tdef.passive?.id === 'hide' || tdef.species === 'Croc') dmg = Math.max(1, dmg - 1);
@@ -430,8 +481,21 @@ function resolveHit(b, att, def, mode, prev) {
     const brick = b.units.find((u) => u.hero === 'brick' && u.side === def.side && u.hp > 0 && MANH(u.x, u.y, def.x, def.y) === 1);
     if (brick) dmg = Math.max(1, dmg - 1);
   }
+  // v0.19 Herd Wall (buffalo next to a crewmate) and Rebel Grit (Sledge below half health)
+  if (tdef.species === 'Buffalo' && allyNear(b, def, def.x, def.y)) dmg = Math.max(1, dmg - 1);
+  if (gritOn(def)) dmg = Math.max(1, dmg - 1);
   dmg = Math.max(1, dmg);
   if (raw > dmg) ev.blocked = raw - dmg;
+  // v0.19 Shoulder Up: the guard standing next to this piece takes half of the blow (rounded up)
+  const gd = def.guardedBy && b.units.find((o) => o.uid === def.guardedBy && o.hp > 0 && o.guarding === def.uid);
+  if (gd && MANH(gd.x, gd.y, def.x, def.y) === 1) {
+    const share = Math.ceil(dmg / 2);
+    dmg -= share;
+    gd.hp = Math.max(0, gd.hp - share);
+    ev.guard = { uid: gd.uid, dmg: share };
+    log(b, `${nameOf(gd)} takes ${share} for ${nameOf(def)}.`);
+    if (gd.hp <= 0) { gd.ko = 1; gd.overwatch = false; gd.guarding = null; def.guardedBy = null; ev.guard.ko = 1; log(b, `${nameOf(gd)} is down.`); }
+  }
   if (tdef.species === 'Badger' && !def.stubbornUsed && def.hp - dmg <= 0) {
     ev.stubborn = 1;
     dmg = Math.max(0, def.hp - 1);
@@ -442,14 +506,26 @@ function resolveHit(b, att, def, mode, prev) {
     def.hp = Math.max(0, def.hp - dmg);
   }
   ev.dmg = dmg;
-  if (mode === 'suppress' && tdef.species !== 'Bear' && tdef.species !== 'Rhino') def.suppressed = 1;
+  if (mode === 'suppress' && tdef.species !== 'Bear' && tdef.species !== 'Rhino' && !gritOn(def)) def.suppressed = 1;
+  // v0.19 Cover Breaker: knock the target a tile straight back (if it is free) and leave them Exposed
+  if (mode === 'smash' && def.hp > 0) {
+    def.exposed = 1; ev.exposed = 1;
+    const dx = Math.sign(def.x - att.x), dy = Math.sign(def.y - att.y);
+    const nx = def.x + (Math.abs(dx) >= Math.abs(dy) ? dx : 0), ny = def.y + (Math.abs(dx) >= Math.abs(dy) ? 0 : dy);
+    if ((nx !== def.x || ny !== def.y) && walkable(b, nx, ny, def.uid)) {
+      ev.knock = { from: { x: def.x, y: def.y }, to: { x: nx, y: ny } };
+      def.x = nx; def.y = ny;
+      if (def.guardedBy) def.guardedBy = null;
+    }
+  }
+  if (mode === 'hamstring' && def.hp > 0) { def.slowed = 1; ev.slowed = 1; }
   if (mode === 'venom' || defOf(att.hero).species === 'Snake') def.venom = Math.max(def.venom || 0, 2);
   if (prev.bleed && def.hp > 0) { def.bleed = Math.max(def.bleed || 0, prev.bleed); ev.bleed = prev.bleed; }
   // Bruiser Grit: melee hits patch the bruiser up.
   if (prev.melee && defOf(att.hero).passive?.id === 'grit' && att.hp > 0 && att.hp < att.maxHp) { att.hp += 1; ev.leech = 1; }
   log(b, `${nameOf(att)} hit ${nameOf(def)} for ${dmg}${ev.crit ? ' (crit)' : ''}.`);
   if (def.hp <= 0) {
-    def.ko = 1; def.overwatch = false; ev.ko = 1;
+    def.ko = 1; def.overwatch = false; ev.ko = 1; def.hidden = 0;
     log(b, `${nameOf(def)} is down.`);
     att.kills = (att.kills || 0) + 1;
     if (defOf(att.hero).passive?.id === 'hot') att.ap = Math.min(att.maxAp, att.ap + 2);
@@ -459,6 +535,40 @@ function resolveHit(b, att, def, mode, prev) {
 }
 
 function nameOf(u) { return defOf(u.hero).name; }
+
+// v0.19 Tinkerer (raccoon): every cooldown runs one turn shorter.
+export function cdFor(u, abl) {
+  const n = abl.cd || 0;
+  return defOf(u.hero).species === 'Raccoon' ? Math.max(1, n - 1) : n;
+}
+function markFoe(u, t) {
+  const eye = defOf(u.hero).passive?.id === 'spotter';
+  t.marked = Math.max(t.marked || 0, eye ? 3 : 2);
+  if (eye) t.markEye = 1;
+}
+// v0.19 tile-targeted kit (Flare, Flashbang, Tripwire): range, line and who it would catch.
+export const TILE_KINDS = ['flare', 'flash', 'trap'];
+export function previewTile(b, u, kind, x, y) {
+  const abl = (defOf(u.hero).abilities || []).find((a) => a.kind === kind);
+  const out = { ok: false, reason: '', targets: [], ap: abl ? abl.ap : 1, radius: abl ? (abl.radius || 0) : 0 };
+  if (!abl) return { ...out, reason: 'Unknown ability' };
+  if (abl.unlock && (u.alv || u.lv || 1) < abl.unlock) return { ...out, reason: `${abl.name} unlocks at level ${abl.unlock}` };
+  if (abl.cd && cooldownLeft(u, abl.id) > 0) return { ...out, reason: `${abl.name} is recharging` };
+  if (u.jammed) return { ...out, reason: 'Jammed: no abilities this turn' };
+  if (x == null || y == null || !inB(b.map, x, y)) return { ...out, reason: 'Pick a tile' };
+  const d = MANH(u.x, u.y, x, y);
+  if (d > (abl.range || 4)) return { ...out, reason: 'Out of range' };
+  if (kind === 'trap') {
+    if (d < 1 || !walkable(b, x, y)) return { ...out, reason: 'Needs an empty tile' };
+    if ((b.traps || []).some((t) => t.x === x && t.y === y)) return { ...out, reason: 'Already rigged' };
+    return { ...out, ok: true };
+  }
+  const t0 = tile(b.map, x, y);
+  if (!t0 || (t0.block && t0.los)) return { ...out, reason: 'Pick an open tile' };
+  const r = abl.radius || 1;
+  out.targets = b.units.filter((o) => o.hp > 0 && o.side !== u.side && MANH(o.x, o.y, x, y) <= r);
+  return { ...out, ok: true };
+}
 
 export function apply(b, action) {
   if (b.status !== 'active') return { ok: false, reason: 'Fight is over' };
@@ -476,8 +586,14 @@ export function apply(b, action) {
     if (!info) return { ok: false, reason: 'Cannot walk there' };
     if (!spend(u, info.cost)) return { ok: false, reason: 'Not enough AP' };
     u.moved = 1;
-    events.push({ typ: 'move', uid: u.uid, path: info.path, cost: info.cost, from: { x: u.x, y: u.y } });
-    events.push(...stepMove(b, u, info.path));
+    const mv = { typ: 'move', uid: u.uid, path: info.path, cost: info.cost, from: { x: u.x, y: u.y } };
+    events.push(mv);
+    const steps = stepMove(b, u, info.path);
+    events.push(...steps);
+    // a tripwire stops the walk where it is: the move animation ends on that tile
+    if (steps.some((e) => e.typ === 'trap')) { const k = info.path.findIndex((p) => p.x === u.x && p.y === u.y); if (k >= 0) mv.path = info.path.slice(0, k + 1); }
+    // v0.19 Alley Ghost: a long run leaves her hard to hit until her next turn
+    if (u.hp > 0 && info.cost >= 4 && defOf(u.hero).passive?.id === 'alleyghost') u.blur = 1;
     checkEnd(b);
     return { ok: true, events, status: b.status };
   }
@@ -487,7 +603,143 @@ export function apply(b, action) {
   const abl = ablId ? abilityOf(u, ablId) : null;
   if (abl && abl.unlock && (u.alv || u.lv || 1) < abl.unlock) return { ok: false, reason: `${abl.name} unlocks at level ${abl.unlock}` };
   if (abl && abl.cd && cooldownLeft(u, abl.id) > 0) return { ok: false, reason: `${abl.name} is recharging (${cooldownLeft(u, abl.id)} turns)` };
-  const startCd = () => { if (abl && abl.cd) { u.cd ||= {}; u.cd[abl.id] = abl.cd; } };
+  const startCd = () => { if (abl && abl.cd) { u.cd ||= {}; u.cd[abl.id] = cdFor(u, abl); } };
+  // v0.19 Jammed: only move, shoot, strike, hunker and overwatch until the turn ends
+  if (u.jammed && abl && !BASIC_KINDS.includes(abl.kind)) return { ok: false, reason: 'Jammed: no abilities this turn' };
+  const near = (t, r) => t && MANH(u.x, u.y, t.x, t.y) <= r;
+  const foeT = () => { const t = b.units.find((x) => x.uid === action.target); return t && t.side !== u.side && t.hp > 0 ? t : null; };
+  const allyT = () => { const t = b.units.find((x) => x.uid === action.target); return t && t.side === u.side && t.hp > 0 ? t : null; };
+  const needAbl = () => (!abl ? { ok: false, reason: 'Unknown ability' } : null);
+
+  // ---------------------------------------------------------------- v0.19 new operator kits
+  if (action.type === 'guard') { // Sledge · Shoulder Up
+    const e = needAbl(); if (e) return e;
+    const t = allyT();
+    if (!t || t.uid === u.uid) return { ok: false, reason: 'Pick a crewmate next to him' };
+    if (!near(t, abl.range || 1)) return { ok: false, reason: 'Must be next to them' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const old = u.guarding && b.units.find((o) => o.uid === u.guarding); if (old) old.guardedBy = null;
+    u.guarding = t.uid; t.guardedBy = u.uid; u.acted = 1; startCd();
+    log(b, `${nameOf(u)} shoulders up beside ${nameOf(t)}.`);
+    return { ok: true, events: [{ typ: 'guard', uid: u.uid, target: t.uid, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'cleave') { // Sledge · Sweeping Cleave
+    const e = needAbl(); if (e) return e;
+    const foes = b.units.filter((o) => o.hp > 0 && o.side !== u.side && MANH(o.x, o.y, u.x, u.y) === 1);
+    if (!foes.length) return { ok: false, reason: 'No foe next to him' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    startCd();
+    const evs = [{ typ: 'cleave', uid: u.uid, targets: foes.map((f) => f.uid), ability: abl.id }];
+    log(b, `${nameOf(u)} swings wide.`);
+    for (const f of foes) {
+      if (b.status !== 'active' || f.hp <= 0) continue;
+      const prev = previewShot(b, u, f, 'cleave');
+      if (prev && prev.ok) evs.push(resolveHit(b, u, f, 'cleave', prev));
+    }
+    return { ok: true, events: evs, status: b.status };
+  }
+  if (action.type === 'yell') { // Sledge · Rebel Yell
+    const e = needAbl(); if (e) return e;
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const r = abl.radius || 3, hit = [];
+    for (const o of b.units) {
+      if (o.hp <= 0 || o.side !== u.side || MANH(o.x, o.y, u.x, u.y) > r) continue;
+      o.shaken = 0; o.suppressed = 0; o.blinded = 0; o.bleed = 0; o.rallied = 1; hit.push(o.uid);
+    }
+    startCd();
+    log(b, `${nameOf(u)} roars for the Thaw. ${hit.length} rallied.`);
+    return { ok: true, events: [{ typ: 'yell', uid: u.uid, radius: r, rallied: hit, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'mark') { // Vigil · Mark Target
+    const e = needAbl(); if (e) return e;
+    const t = foeT(); if (!t) return { ok: false, reason: 'No foe there' };
+    const pv = previewUtil(b, u, t, 'mark'); if (!pv.ok) return { ok: false, reason: pv.reason };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    markFoe(u, t); u.acted = 1; startCd();
+    log(b, `${nameOf(u)} marks ${nameOf(t)}.`);
+    return { ok: true, events: [{ typ: 'mark', uid: u.uid, target: t.uid, targets: [t.uid], ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'flare' || action.type === 'flash' || action.type === 'trap') {
+    const e = needAbl(); if (e) return e;
+    const pv = previewTile(b, u, action.type, action.x, action.y);
+    if (!pv.ok) return { ok: false, reason: pv.reason };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    u.acted = 1; startCd();
+    const { x, y } = action;
+    if (action.type === 'trap') { // Jinx · Tripwire
+      b.traps = (b.traps || []).filter((t) => t.uid !== u.uid); // one wire at a time
+      b.traps.push({ x, y, side: u.side, uid: u.uid });
+      log(b, `${nameOf(u)} rigs a tripwire.`);
+      return { ok: true, events: [{ typ: 'trapset', uid: u.uid, x, y, ability: abl.id }], status: b.status };
+    }
+    const hits = pv.targets.map((t) => t.uid);
+    if (action.type === 'flare') { // Vigil · Flare
+      for (const t of pv.targets) { markFoe(u, t); t.hidden = 0; }
+      log(b, `${nameOf(u)} pops a flare. ${hits.length} marked.`);
+      return { ok: true, events: [{ typ: 'flare', uid: u.uid, x, y, radius: abl.radius || 2, targets: hits, ability: abl.id }], status: b.status };
+    }
+    // Jinx · Flashbang: Blinded until their turn ends (Rebel Grit shrugs it off)
+    const blinded = [];
+    for (const t of pv.targets) { if (gritOn(t)) continue; t.blinded = 1; t.overwatch = false; blinded.push(t.uid); }
+    log(b, `${nameOf(u)} throws a flashbang. ${blinded.length} blinded.`);
+    return { ok: true, events: [{ typ: 'flashbang', uid: u.uid, x, y, radius: abl.radius || 1, targets: blinded, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'jam') { // Jinx · Jammer
+    const e = needAbl(); if (e) return e;
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const r = abl.radius || 5, hit = [];
+    for (const o of b.units) if (o.hp > 0 && o.side !== u.side && MANH(o.x, o.y, u.x, u.y) <= r) { o.jammed = 1; o.overwatch = false; hit.push(o.uid); }
+    u.acted = 1; startCd();
+    log(b, `${nameOf(u)} jams their comms. ${hit.length} jammed.`);
+    return { ok: true, events: [{ typ: 'jam', uid: u.uid, radius: r, targets: hit, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'hide') { // Sable · Shadow Step
+    const e = needAbl(); if (e) return e;
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    u.hidden = 2; startCd();
+    log(b, `${nameOf(u)} melts into the dark.`);
+    return { ok: true, events: [{ typ: 'hide', uid: u.uid, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'stim') { // Reed · Stim Shot
+    const e = needAbl(); if (e) return e;
+    const t = allyT();
+    if (!t || t.uid === u.uid) return { ok: false, reason: 'Pick a crewmate' };
+    if (!near(t, abl.range || 3)) return { ok: false, reason: 'Out of range' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const heal = Math.min(2, t.maxHp - t.hp);
+    t.hp += heal; t.stim = 1; u.acted = 1; startCd();
+    log(b, `${nameOf(u)} stims ${nameOf(t)}.`);
+    return { ok: true, events: [{ typ: 'stim', uid: u.uid, target: t.uid, heal, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'resupply') { // Reed · Resupply
+    const e = needAbl(); if (e) return e;
+    const t = allyT();
+    if (!t) return { ok: false, reason: 'Pick a crewmate' };
+    if (t.uid !== u.uid && !near(t, abl.range || 1)) return { ok: false, reason: 'Must be next to them' };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    t.ammo = (t.ammo || 0) + 3; t.bonusAmmo = (t.bonusAmmo || 0) + 3;
+    t.shaken = 0; t.suppressed = 0; t.blinded = 0; u.acted = 1; startCd();
+    log(b, `${nameOf(u)} resupplies ${nameOf(t)} (+3 rounds).`);
+    return { ok: true, events: [{ typ: 'resupply', uid: u.uid, target: t.uid, ammo: 3, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'comms') { // Reed · Call It In
+    const e = needAbl(); if (e) return e;
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    const r = abl.radius || 6, hit = [];
+    for (const o of b.units) if (o.hp > 0 && o.side === u.side && o.uid !== u.uid && MANH(o.x, o.y, u.x, u.y) <= r) { o.coord = 1; o.rallied = 1; hit.push(o.uid); }
+    startCd();
+    log(b, `${nameOf(u)} calls it in. ${hit.length} on the radio.`);
+    return { ok: true, events: [{ typ: 'comms', uid: u.uid, radius: r, rallied: hit, ability: abl.id }], status: b.status };
+  }
+  if (action.type === 'bribe') { // Reed · Pay Off
+    const e = needAbl(); if (e) return e;
+    const t = foeT(); if (!t) return { ok: false, reason: 'No foe there' };
+    const pv = previewUtil(b, u, t, 'bribe'); if (!pv.ok) return { ok: false, reason: pv.reason };
+    if (!spend(u, abl.ap)) return { ok: false, reason: 'Not enough AP' };
+    t.paid = 1; t.overwatch = false; u.acted = 1; startCd();
+    log(b, `${nameOf(u)} pays off ${nameOf(t)}.`);
+    return { ok: true, events: [{ typ: 'bribe', uid: u.uid, target: t.uid, ability: abl.id }], status: b.status };
+  }
 
   if (action.type === 'secondwind') {
     if (!abl) return { ok: false, reason: 'Unknown ability' };
@@ -505,7 +757,7 @@ export function apply(b, action) {
     const shaken = [], rallied = [];
     for (const o of b.units) {
       if (o.hp <= 0 || MANH(o.x, o.y, u.x, u.y) > r) continue;
-      if (o.side === u.side) { o.rallied = 1; rallied.push(o.uid); } else if (defOf(o.hero).species !== 'Rhino') { o.shaken = 1; shaken.push(o.uid); }
+      if (o.side === u.side) { o.rallied = 1; rallied.push(o.uid); } else if (defOf(o.hero).species !== 'Rhino' && !gritOn(o)) { o.shaken = 1; shaken.push(o.uid); }
     }
     startCd();
     log(b, `${nameOf(u)} howls. ${shaken.length} shaken.`);
@@ -568,6 +820,7 @@ export function apply(b, action) {
   }
 
   if (action.type === 'overwatch') {
+    if (u.blinded) return { ok: false, reason: 'Blinded: cannot set Overwatch' };
     if (!spend(u, 2)) return { ok: false, reason: 'Not enough AP' };
     u.overwatch = true; u.acted = 1;
     log(b, `${nameOf(u)} watches the street.`);
@@ -685,7 +938,7 @@ export function apply(b, action) {
   if (mode === 'roll' && u.rollUsed) return { ok: false, reason: 'Already used this turn' };
   if (!spend(u, ap)) return { ok: false, reason: 'Not enough AP' };
   if (mode === 'roll') u.rollUsed = 1;
-  if (mab && mab.cd) { u.cd ||= {}; u.cd[mab.id] = mab.cd; }
+  if (mab && mab.cd) { u.cd ||= {}; u.cd[mab.id] = cdFor(u, mab); }
   events.push(resolveHit(b, u, t, mode, prev));
   return { ok: true, events, status: b.status };
 }
@@ -732,6 +985,12 @@ function startUnitTurn(b, u) {
   u.move = (u.baseMove || d.move);
   u.overwatch = false;
   u.fortify = 0; u.brace = 0;
+  // v0.19: the guard steps off, stims and radio calls land, a hamstrung or tripped piece limps
+  if (u.guarding) { const g = b.units.find((o) => o.uid === u.guarding); if (g && g.guardedBy === u.uid) g.guardedBy = null; u.guarding = null; }
+  u.blur = 0;
+  if (u.stim) { u.ap = u.maxAp + 1; u.stim = 0; }
+  if (u.coord) { u.move += 1; u.coord = 0; }
+  if (u.slowed) u.move = Math.max(1, u.move - 2);
   b.acting = u.uid;
   b.side = u.side;
   if (u.cd) for (const k of Object.keys(u.cd)) { if (u.cd[k] > 0) u.cd[k] -= 1; }
@@ -749,6 +1008,7 @@ function startUnitTurn(b, u) {
     events.push({ typ: 'venom', uid: u.uid, hp: u.hp });
     if (u.hp <= 0) { u.ko = 1; checkEnd(b); if (b.status !== 'active') return { ok: true, events, status: b.status }; return advanceQueue(b, events); }
   }
+  if (d.species === 'Otter') { u.bleed = 0; u.venom = 0; } // v0.19 Slick: one tick and it washes off
   if (d.passive?.id === 'kit' && u.lastFired !== b.turn && u.hp > 0) {
     u.hp = Math.min(u.maxHp, u.hp + 1);
   }
@@ -788,7 +1048,14 @@ function endUnitTurn(b, timedOut) {
   } else if (timedOut && u) {
     log(b, `${nameOf(u)} runs out of time.`);
   }
-  if (u) { u.suppressed = 0; u.shaken = 0; u.rallied = 0; u.taunt = 0; }
+  if (u) {
+    u.suppressed = 0; u.shaken = 0; u.rallied = 0; u.taunt = 0;
+    // v0.19 statuses that last until the end of the affected piece's own turn
+    u.blinded = 0; u.exposed = 0; u.jammed = 0; u.paid = 0;
+    if (u.slowed > 0) u.slowed -= 1;
+    if (u.marked > 0) { u.marked -= 1; if (!u.marked) u.markEye = 0; }
+    if (u.hidden > 0) u.hidden -= 1;
+  }
   checkEnd(b);
   if (b.status !== 'active') return { ok: true, events, status: b.status };
   return advanceQueue(b, events);
@@ -984,9 +1251,10 @@ export function think(b) {
 
   for (const u of mine) {
     const defn = defOf(u.hero);
-    const modes = ['aimed', 'shot', 'venom', 'suppress', 'melee', 'roll', 'knife', 'maul', 'pounce'];
+    const modes = ['aimed', 'shot', 'venom', 'suppress', 'melee', 'roll', 'knife', 'maul', 'pounce', 'smash', 'backstab', 'hamstring'];
     const abls = abilitiesOf(u);
-    const ready = (id) => { const a = abls.find((x) => x.id === id || x.kind === id); return a && !(a.cd && cooldownLeft(u, a.id) > 0) ? a : null; };
+    const ready = (id) => { if (u.jammed) return null; const a = abls.find((x) => x.id === id || x.kind === id); return a && !(a.cd && cooldownLeft(u, a.id) > 0) && u.ap >= a.ap ? a : null; };
+    thinkV019(b, u, foes, ready, consider);
     // Second Wind when hurt; Howl first while foes are close and AP remains to follow up.
     const sw = ready('secondwind');
     if (sw && u.ap >= sw.ap && u.hp <= u.maxHp * 0.5) consider({ type: 'secondwind', uid: u.uid }, 70 + (u.maxHp - u.hp) * 6);
@@ -1017,6 +1285,9 @@ export function think(b) {
         if (u.taunt && f.uid !== u.taunt && b.units.some((x) => x.uid === u.taunt && x.hp > 0)) score -= 45;
         if (prev.bleed && f.hp > prev.dmg[1]) score += 12;
         if (mode === 'pounce') score += prev.dist > 1 ? 14 : -20;
+        if (mode === 'smash') score += 10 + prev.cover * 10;
+        if (mode === 'backstab') score += prev.sure ? 18 : 4;
+        if (mode === 'hamstring') score += 6;
         consider({ type: mode, uid: u.uid, target: f.uid, mode }, score);
       }
       if (defn.abilities.some((a) => a.kind === 'lunge') && u.ap >= 2) {
@@ -1047,7 +1318,7 @@ export function think(b) {
       const sc = approachScore(b, u, x, y, foes) - cost * 2;
       consider({ type: 'move', uid: u.uid, x, y }, sc);
     }
-    if (u.ap >= 2 && u.acted === 0) consider({ type: 'overwatch', uid: u.uid }, 12);
+    if (u.ap >= 2 && u.acted === 0 && !u.blinded) consider({ type: 'overwatch', uid: u.uid }, 12);
   }
   // An operator with no rounds left can only win up close. If nothing better came up (e.g. a fence
   // makes the straight-line approach look bad), walk the real path toward the nearest foe.
@@ -1062,13 +1333,87 @@ export function think(b) {
   // Don't wander for a tiny score; if the best is a weak shuffle, overwatch or end.
   if (best.type === 'move' && bestScore < 8) {
     const u = mine.find((x) => x.uid === best.uid);
-    if (u && u.ap >= 2) return { type: 'overwatch', uid: u.uid };
+    if (u && u.ap >= 2 && !u.blinded) return { type: 'overwatch', uid: u.uid };
     return { type: 'endTurn' };
   }
   return best;
 }
 
 export function thinkAsPlayer(b) { return think(b); }
+
+// v0.19 AI for the new kits (rival copies and practice crews use these operators too).
+function thinkV019(b, u, foes, ready, consider) {
+  const allies = living(b, u.side).filter((o) => o.uid !== u.uid);
+  const D = (a, c) => MANH(a.x, a.y, c.x, c.y);
+  const debuffed = (o) => o.shaken || o.suppressed || o.blinded || o.bleed > 0;
+  let a;
+  if ((a = ready('cleave'))) {
+    const n = foes.filter((f) => D(u, f) === 1).length;
+    if (n >= 2) consider({ type: 'cleave', uid: u.uid }, 95 + n * 25);
+  }
+  if ((a = ready('guard')) && !u.guarding) {
+    const w = allies.filter((o) => D(u, o) === 1 && o.hp < o.maxHp * 0.7 && foes.some((f) => D(o, f) <= 8)).sort((p, q) => p.hp - q.hp)[0];
+    if (w) consider({ type: 'guard', uid: u.uid, target: w.uid }, 58 + (w.maxHp - w.hp) * 3);
+  }
+  if ((a = ready('yell'))) {
+    const n = [u, ...allies].filter((o) => D(u, o) <= (a.radius || 3) && debuffed(o)).length;
+    if (n) consider({ type: 'yell', uid: u.uid }, 70 + n * 18);
+  }
+  if ((a = ready('mark'))) {
+    const t = foes.filter((f) => !f.marked && previewUtil(b, u, f, 'mark').ok).sort((p, q) => p.hp - q.hp)[0];
+    if (t && u.ap >= a.ap + 2) consider({ type: 'mark', uid: u.uid, target: t.uid }, 88);
+  }
+  if ((a = ready('bribe'))) {
+    const t = foes.filter((f) => !f.paid && previewUtil(b, u, f, 'bribe').ok).sort((p, q) => (q.maxHp + (q.aimMod || 0)) - (p.maxHp + (p.aimMod || 0)))[0];
+    if (t) consider({ type: 'bribe', uid: u.uid, target: t.uid }, 92);
+  }
+  if ((a = ready('jam'))) {
+    const inR = foes.filter((f) => D(u, f) <= (a.radius || 5));
+    const ow = inR.filter((f) => f.overwatch).length;
+    if (inR.length >= 2 || ow) consider({ type: 'jam', uid: u.uid }, 50 + inR.length * 14 + ow * 25);
+  }
+  if ((a = ready('hide')) && !u.hidden && !u.acted && foes.some((f) => D(u, f) <= 7) && !foes.some((f) => D(u, f) === 1)) {
+    consider({ type: 'hide', uid: u.uid }, 60 + (u.hp < u.maxHp * 0.6 ? 20 : 0));
+  }
+  if ((a = ready('stim'))) {
+    const t = allies.filter((o) => !o.stim && D(u, o) <= (a.range || 3)).sort((p, q) => (q.maxAp - p.maxAp) || (p.hp - q.hp))[0];
+    if (t) consider({ type: 'stim', uid: u.uid, target: t.uid }, 52 + (t.hp < t.maxHp ? 8 : 0));
+  }
+  if ((a = ready('resupply'))) {
+    const t = [u, ...allies].filter((o) => (o === u || D(u, o) <= 1) && ((gunOf(o) && (o.ammo || 0) <= 1) || o.shaken || o.suppressed || o.blinded))[0];
+    if (t) consider({ type: 'resupply', uid: u.uid, target: t.uid }, 66);
+  }
+  if ((a = ready('comms'))) {
+    const n = allies.filter((o) => D(u, o) <= (a.radius || 6)).length;
+    if (n >= 2) consider({ type: 'comms', uid: u.uid }, 44 + n * 9);
+  }
+  for (const kind of ['flash', 'flare']) {
+    if (!(a = ready(kind))) continue;
+    let best = null, bs = 0;
+    for (const f of foes) for (const [dx, dy] of [[0, 0], ...DIRS4]) {
+      const x = f.x + dx, y = f.y + dy;
+      const pv = previewTile(b, u, kind, x, y);
+      if (!pv.ok || !pv.targets.length) continue;
+      const fresh = pv.targets.filter((t) => (kind === 'flash' ? !t.blinded : !t.marked));
+      const sc = fresh.length * 30 + pv.targets.filter((t) => t.overwatch || t.hidden).length * 20;
+      if (sc > bs) { bs = sc; best = { x, y }; }
+    }
+    if (best && bs >= 30) consider({ type: kind, uid: u.uid, x: best.x, y: best.y }, (kind === 'flash' ? 62 : 58) + bs);
+  }
+  if ((a = ready('trap')) && !(b.traps || []).some((t) => t.uid === u.uid)) {
+    const f = foes.slice().sort((p, q) => D(u, p) - D(u, q))[0];
+    if (f && D(u, f) <= 9) {
+      let best = null, bd = 99;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        const x = u.x + dx, y = u.y + dy;
+        if (!previewTile(b, u, 'trap', x, y).ok) continue;
+        const d = MANH(x, y, f.x, f.y);
+        if (d < bd) { bd = d; best = { x, y }; }
+      }
+      if (best) consider({ type: 'trap', uid: u.uid, x: best.x, y: best.y }, 34);
+    }
+  }
+}
 
 export function autoplay(b, max = 200) {
   let n = 0;
@@ -1154,6 +1499,8 @@ export function resolveTactics(s, b) {
   if (opId && OPS_XP[opId] != null) {
     const first = !(s.ops.cleared[opId]);
     if (win) { s.ops.cleared[opId] = (s.ops.cleared[opId] || 0) + 1; res.firstClear = first; }
+    // v0.19: some operators join on the first clear of a particular op (Jinx after "Hot metal")
+    if (win && first) { const j = opGrants(s); if (j.length) res.joined = j.map((id) => ({ id, name: defOf(id).name })); }
     res.opId = opId;
     if (win && b.units.filter((u) => u.side === 'player').length >= 2) s.stats.duoWins = (s.stats.duoWins || 0) + 1;
     const tut = OPS_XP[opId];
@@ -1198,6 +1545,19 @@ export function statusesOf(b, u) {
   if (u.sprint) add('sprint', 'Sprinting', 'buff', `+${u.sprint} move this turn.`, 1);
   if (u.hp > 0 && b.units.some((o) => o !== u && o.side === u.side && o.hp > 0 && defOf(o.hero).passive?.id === 'bulwark' && MANH(o.x, o.y, u.x, u.y) === 1)) add('bulwark', 'Bulwark', 'buff', 'Standing next to Anvil: takes 1 less damage from every hit.', null);
   if (u.hp > 0 && d.species === 'Badger' && !u.stubbornUsed) add('stubborn', 'Stubborn', 'buff', 'The first hit that would knock them out leaves them on 1 HP instead.', null);
+  if (u.blinded) add('blinded', 'Blinded', 'debuff', 'Flashbanged: -40 aim, cannot keep or set Overwatch until the end of their next turn.', 1);
+  if (u.marked > 0) add('marked', 'Marked', 'debuff', `Painted for the crew: +15 aim against them and their Dodge is ignored${u.markEye ? ', and +10% crit' : ''}.`, u.marked);
+  if (u.exposed) add('exposed', 'Exposed', 'debuff', 'Knocked out of their spot: their cover counts one step worse until the end of their next turn.', 1);
+  if (u.jammed) add('jammed', 'Jammed', 'debuff', 'Comms down: no abilities (only move, shoot, strike) until the end of their next turn.', 1);
+  if (u.paid) add('paid', 'Paid off', 'debuff', 'Took the envelope: cannot attack on their next turn (can still move).', 1);
+  if (u.slowed) add('slowed', 'Slowed', 'debuff', '-2 Move on their next turn.', 1);
+  if (u.hidden > 0) add('hidden', 'Hidden', 'buff', 'Only foes within 2 tiles can target them, and Overwatch never fires at them. Ends when they attack.', u.hidden);
+  if (u.stim) add('stim', 'Stimmed', 'buff', '+1 AP at the start of their next turn.', 1);
+  if (u.coord) add('coord', 'On the radio', 'buff', '+1 Move at the start of their next turn.', 1);
+  if (u.blur) add('blur', 'Alley Ghost', 'buff', '+20 Dodge until their next turn.', 1);
+  if (u.guarding) add('guarding', 'Shoulder Up', 'buff', `Taking half of every hit on ${nm(u.guarding)}.`, 1);
+  if (u.guardedBy && b.units.some((x) => x.uid === u.guardedBy && x.hp > 0)) add('guarded', 'Guarded', 'buff', `${nm(u.guardedBy)} takes half of every hit on them.`, 1);
+  if (u.hp > 0 && d.passive?.id === 'rebelgrit' && u.hp <= u.maxHp / 2) add('grit', 'Rebel Grit', 'buff', '-1 damage from every hit; cannot be Shaken, Suppressed or Blinded.', null);
   if (u.hp > 0 && u.ammo != null && u.ammo <= 0 && gunOf(u)) add('noammo', 'Out of ammo', 'debuff', 'Cannot shoot until resupplied; melee only.', null);
   return out;
 }

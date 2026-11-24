@@ -210,7 +210,7 @@ export function render(ctx) {
   return `<div class="charscr">
     <div class="charhead">
       <button class="btn sm" data-act="charBack">‹ Back</button>
-      <div class="cname"><b class="h">${esc(d.name)}</b> <span class="tiny dim">${esc(d.species)} · ${esc((classOf(d) || {}).name || d.role)} · Lv ${lv} ${esc(rankName(lv))}</span>
+      <div class="cname"><b class="h">${esc(d.name)}</b> <span class="tiny dim">${esc(d.species)} · ${esc(d.roleTag || (classOf(d) || {}).name || d.role)} · Lv ${lv} ${esc(rankName(lv))}</span>
         <div class="xpbar" title="XP"><i style="width:${pct}%"></i></div><span class="tiny dim">${need ? `${rec.xp || 0}/${need} XP` : 'Max level'} · ${openSlotCount(s, c.hero)}/${SLOTS.length} slots open</span></div>
       ${owned.length > 1 ? `<select class="csel" data-act="charHero">${owned.map((id) => `<option value="${id}" ${id === c.hero ? 'selected' : ''}>${esc(HEROES[id].name)}</option>`).join('')}</select>` : ''}
       <div class="ctabs"><button class="chip ${c.tab === 'gear' ? 'on' : ''}" data-act="charTab" data-t="gear">Inventory</button><button class="chip ${c.tab === 'skills' ? 'on' : ''}" data-act="charTab" data-t="skills">Abilities</button></div>

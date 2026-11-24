@@ -1,7 +1,7 @@
 // v0.10 Player (account) level, unlock pacing, energy, Rookie Track, Hideout stockpile,
 // operator jobs and the clinic. Account level is separate from each operator's own level.
 // Everything is timestamp-based so it keeps working while the game is closed.
-import { HEROES, defOf, grantHero } from './heroes.js';
+import { HEROES, defOf, grantHero, opGrants } from './heroes.js';
 import { gain } from './base.js';
 import { LEVEL_ITEMS, addItem, ITEMS, hasBlueprint } from './items.js';
 
@@ -31,6 +31,7 @@ export const UNLOCKS = [
   { lv: 10, id: 'squad4', name: '4 v 4 ops', ico: '👥', text: 'Full squads of four.' },
   { lv: 10, id: 'allslots', name: 'All 13 gear slots', ico: '🎒', text: 'Every gear slot open on every operator.' },
   { lv: 10, id: 'bestgear', name: 'Best gear button', ico: '✨', text: 'Auto-equip the strongest kit in one tap.' },
+  { lv: 12, id: 'breaker', name: 'Sledge joins', ico: '🐃', text: 'Sledge, a Thaw buffalo Breaker, joins your crew for free.' },
   { lv: 15, id: 'highstakes', name: 'High Stakes', ico: '🎲', text: 'Bet XP and gear for double rewards.' },
   { lv: 15, id: 'pvpcopy', name: 'PvP vs copies', ico: '⚔️', text: 'Fight AI-run copies of other crews’ squads for trophies.' },
   { lv: 20, id: 'livepvp', name: 'Live PvP', ico: '📡', text: 'Real head-to-head fights. Coming soon.' },
@@ -64,6 +65,21 @@ export function grantsFor(s, lv) {
     grantHero(s, 'anvil');
     s.player.gotTank = 1;
   }
+  // v0.19: the Thaw buffalo Breaker joins at Lv 12 (crews already past it get him on load).
+  if (lv >= 12 && !s.heroes.owned.sledge && !s.player.gotBreaker) {
+    grantHero(s, 'sledge');
+    s.player.gotBreaker = 1;
+  }
+}
+
+// v0.19 catch-up on every load: new operators owed to an existing save (Lv 12 Sledge, op unlocks).
+// Idempotent; changes nothing for saves that are not owed anyone, so the save version stays 10.
+export function catchUpOperators(s) {
+  if (!s || !s.player || !s.heroes) return [];
+  const before = new Set(Object.keys(s.heroes.owned || {}));
+  if ((s.player.lv || 1) >= 12) grantsFor(s, 12);
+  opGrants(s);
+  return Object.keys(s.heroes.owned).filter((id) => !before.has(id));
 }
 
 export function addPlayerXp(s, amount) {

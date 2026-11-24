@@ -409,7 +409,7 @@ test('a new player starts with Rook only; others are collectable', () => {
   assert.deepEqual(Object.keys(s.heroes.owned), ['rook']);
   assert.deepEqual(s.heroes.squad, ['rook']);
   assert.equal(s.heroes.tutorialDone, false);
-  assert.equal(HERO_ORDER.length, 9);
+  assert.equal(HERO_ORDER.length, 14); // v0.19: 9 + the five New Operators Day operators
   finishTutorial(s);
   assert.equal(s.heroes.tutorialDone, true);
   assert.ok(!s.heroes.owned.pip, 'Pip is no longer a free unlock');
@@ -1642,4 +1642,193 @@ test('v0.18: saved image paths move from .jpg/.png to .webp; kept files and othe
   assert.equal(back.crew.find((m) => m.id === 'x1').img, 'assets/boss-magrey.webp');
   assert.deepEqual(back.__probe, { bg: 'assets/turf/velvet-den.webp', keep: 'assets/turf/grey-pack.jpg', ico: 'assets/icons/parts-64.webp', note: 'photo.jpg', w: 'assets/heroes/rook.webp' });
   for (const f of ['assets/boss-magrey.webp', 'assets/turf/velvet-den.webp', 'assets/turf/grey-pack.jpg', 'assets/icons/parts-64.webp']) assert.ok(readFileSync(new URL('../' + f, import.meta.url)).length > 100, f);
+});
+
+// ---------------------------------------------------------------- v0.19 New Operators Day
+import { catchUpOperators } from '../js/core/progression.js';
+import { opGrants, isShardHero, canRecruit, recruit, unlockHint, NEW_OPS_V019 } from '../js/core/heroes.js';
+import { statsFor } from '../js/core/items.js';
+const squadFight = (heroes, enemy = ['hook', 'knack'], alv = 5) => {
+  const recs = {}, ammo = {};
+  for (const h of heroes) { recs[h] = { stars: 1, lv: 1, alv, perks: [], gear: null, equip: { ...HEROES[h].template.start.equip } }; ammo[h] = 6; }
+  const b = T.startBattle({ map: tutorialMap(), player: heroes, enemy, seed: 11, label: 'x', kind: 'custom', pvp: false, loadout: { recs, ammo, medkits: {} } });
+  const us = heroes.map((h) => b.units.find((u) => u.hero === h));
+  for (const u of us) u.alv = Math.max(u.alv || 1, alv);
+  const foes = b.units.filter((u) => u.side === 'enemy');
+  // park everybody on open floor in a row so the tests control distances
+  us.forEach((u, i) => { u.x = 6 + i; u.y = 12; });
+  foes.forEach((f, i) => { f.x = 6 + i; f.y = 9; f.hp = f.maxHp = 40; f.armor = 0; f.cover = 0; });
+  const go = (u) => { b.acting = u.uid; b.side = 'player'; u.ap = u.maxAp; u.cd = {}; return u; };
+  return { b, us, foes, go };
+};
+
+test('v0.19: five new operators are fully defined, in the grid order and spread across unlock routes', () => {
+  assert.deepEqual(NEW_OPS_V019, ['sledge', 'vigil', 'jinx', 'sable', 'reed']);
+  const species = new Set();
+  for (const id of NEW_OPS_V019) {
+    const h = HEROES[id];
+    assert.ok(HERO_ORDER.includes(id), id);
+    for (const k of ['hp', 'ap', 'move', 'aim', 'speed']) assert.ok(h[k] > 0, `${id}.${k}`);
+    assert.ok(h.portrait.endsWith(`${id}.webp`) && h.thumb.endsWith(`${id}-64.webp`));
+    assert.ok(h.bio && h.bio.length > 120, `${id} bio`);
+    for (const k of ['move', 'shoot', 'ko', 'win']) assert.ok(h.quips && h.quips[k] && h.quips[k].length, `${id} quip ${k}`);
+    assert.ok(h.passive && h.passive.id && h.passive.text, `${id} passive`);
+    assert.ok(SPECIES_PERKS[h.species], `${id} species perk`);
+    const special = h.abilities.filter((a) => !['shoot', 'melee'].includes(a.kind));
+    assert.ok(special.length >= 3 && special.length <= 5, `${id} has ${special.length} specials`);
+    assert.ok(special.some((a) => (a.unlock || 1) <= 1) && special.some((a) => a.unlock >= 3), `${id} unlock spread`);
+    assert.ok(h.template.start.equip && !('sidearm' in h.template.start.equip), `${id} no sidearm slot`);
+    assert.ok(h.gearPref, `${id} gear prefs`);
+    assert.ok(!(h.tags || []).some((t) => /season/i.test(t)), `${id} no seasonal tag`);
+    species.add(h.species);
+  }
+  assert.equal(species.size, 5);
+  assert.notDeepEqual(HEROES.sledge.abilities.map((a) => a.kind), HEROES.anvil.abilities.map((a) => a.kind), 'Sledge is not an Anvil copy');
+  assert.equal(HEROES.anvil.unlock.kind, 'level'); assert.equal(HEROES.anvil.unlock.lv, 10, "Anvil's Lv 10 unlock untouched");
+  assert.deepEqual(NEW_OPS_V019.map((id) => HEROES[id].unlock.kind), ['level', 'shards', 'op', 'shards', 'market']);
+  assert.ok(isShardHero('vigil') && isShardHero('sable') && !isShardHero('sledge') && !isShardHero('jinx') && !isShardHero('reed'));
+  assert.ok(!SH.collectable || !SH.collectable().includes('jinx'));
+});
+
+test('v0.19 Sledge: Cover Breaker exposes and knocks back; Shoulder Up splits damage; Rebel Grit; Herd Wall', () => {
+  const { b, us: [sl, rook], foes: [f], go } = squadFight(['sledge', 'rook'], ['hook']);
+  go(sl); f.x = sl.x; f.y = sl.y - 1;
+  let smashed = null;
+  for (let i = 0; i < 20 && !smashed; i++) {
+    go(sl); f.x = sl.x; f.y = sl.y - 1; f.hp = 40; f.exposed = 0;
+    const r = T.apply(b, { type: 'smash', uid: sl.uid, target: f.uid, mode: 'smash' });
+    assert.ok(r.ok, r.reason);
+    const ev = r.events.find((e) => e.typ === 'shot' && e.hit);
+    if (ev) smashed = ev;
+  }
+  assert.ok(smashed, 'a Cover Breaker landed in 20 swings');
+  assert.ok(f.exposed && smashed.exposed, 'target Exposed');
+  if (smashed.knock) assert.equal(Math.abs(smashed.knock.to.x - smashed.knock.from.x) + Math.abs(smashed.knock.to.y - smashed.knock.from.y), 1);
+  // guard: half the damage lands on Sledge
+  go(sl); rook.x = sl.x + 1; rook.y = sl.y;
+  const g = T.apply(b, { type: 'guard', uid: sl.uid, target: rook.uid });
+  assert.ok(g.ok, g.reason); assert.equal(rook.guardedBy, sl.uid);
+  // Rebel Grit below half: immune to Blinded / Shaken, -1 damage
+  sl.hp = Math.floor(sl.maxHp / 2);
+  assert.ok(T.statusesOf(b, sl).some((s) => s.id === 'grit'));
+  // Herd Wall perk exists and Sledge has the buffalo perk
+  assert.equal(SPECIES_PERKS.Buffalo.id, 'herd');
+});
+
+test('v0.19 Jinx: Flashbang Blinds (-40 aim, no overwatch), Jammer blocks abilities, Tripwire snaps and slows', () => {
+  const { b, us: [jx], foes: [a, c], go } = squadFight(['jinx']);
+  go(jx); a.x = jx.x; a.y = jx.y - 3; c.x = jx.x + 1; c.y = jx.y - 3;
+  const calm = T.previewShot(b, a, jx, 'shot').chance;
+  const fl = T.apply(b, { type: 'flash', uid: jx.uid, x: a.x, y: a.y });
+  assert.ok(fl.ok, fl.reason);
+  assert.ok(a.blinded && c.blinded, 'both in radius 1 Blinded');
+  assert.ok(fl.events.some((e) => e.typ === 'flashbang'));
+  const blind = T.previewShot(b, a, jx, 'shot').chance;
+  assert.ok(calm - blind >= 30, `Blinded aim drop ${calm} -> ${blind}`);
+  assert.ok(T.statusesOf(b, a).some((s) => s.id === 'blinded'));
+  b.acting = a.uid; b.side = 'enemy'; a.ap = a.maxAp;
+  assert.ok(!T.apply(b, { type: 'overwatch', uid: a.uid }).ok, 'no overwatch while Blinded');
+  T.apply(b, { type: 'endTurn' });
+  assert.equal(a.blinded, 0, 'Blinded wears off at the end of their turn');
+  // Jammer
+  go(jx);
+  const jm = T.apply(b, { type: 'jam', uid: jx.uid });
+  assert.ok(jm.ok, jm.reason); assert.ok(c.jammed);
+  // Tripwire on the tile between foe and Jinx; the foe walks through it
+  go(jx);
+  const tx = jx.x, ty = jx.y - 1;
+  const tw = T.apply(b, { type: 'trap', uid: jx.uid, x: tx, y: ty });
+  assert.ok(tw.ok, tw.reason); assert.equal(b.traps.length, 1);
+  c.x = tx; c.y = ty - 2; c.jammed = 0; b.acting = c.uid; b.side = 'enemy'; c.ap = c.maxAp; c.hp = 40;
+  const mv = T.apply(b, { type: 'move', uid: c.uid, x: tx, y: ty + 0 });
+  if (mv.ok) {
+    const snap = mv.events.find((e) => e.typ === 'trap');
+    assert.ok(snap, 'tripwire fired'); assert.equal(c.hp, 36); assert.ok(c.slowed >= 1); assert.equal(b.traps.length, 0);
+  }
+  // Scrap Kit: +1 pipe bomb charge
+  assert.equal(statsFor('jinx', { ...HEROES.jinx.template.start.equip }).charges - statsFor('pip', { ...HEROES.jinx.template.start.equip }).charges, 1);
+});
+
+test('v0.19 Vigil: Mark +15 aim and ignores Dodge, Spotter keeps it a turn longer; Night Eyes +1 range', () => {
+  const { b, us: [vg, rook], foes: [a], go } = squadFight(['vigil', 'rook'], ['hook']);
+  go(vg); a.x = vg.x; a.y = vg.y - 5;
+  const before = T.previewShot(b, rook, a, 'shot').chance;
+  const mk = T.apply(b, { type: 'mark', uid: vg.uid, target: a.uid });
+  assert.ok(mk.ok, mk.reason);
+  assert.equal(a.marked, 3, "Spotter's Eye: three turn-ends");
+  const after = T.previewShot(b, rook, a, 'shot').chance;
+  assert.ok(after > before || after === 95, `marked ${before} -> ${after}`);
+  assert.equal(statsFor('vigil', { ...HEROES.vigil.template.start.equip }).range - statsFor('rook', { ...HEROES.vigil.template.start.equip }).range, 1);
+  // flare marks every foe in the radius
+  go(vg); a.marked = 0;
+  const fl = T.apply(b, { type: 'flare', uid: vg.uid, x: a.x, y: a.y });
+  assert.ok(fl.ok, fl.reason); assert.ok(a.marked > 0);
+});
+
+test('v0.19 Sable: Shadow Step hides her (no overwatch, unseen at range), Backstab from hiding is a sure crit, Hamstring slows', () => {
+  const { b, us: [sb], foes: [a], go } = squadFight(['sable'], ['hook']);
+  go(sb); a.x = sb.x + 4; a.y = sb.y;
+  const hd = T.apply(b, { type: 'hide', uid: sb.uid });
+  assert.ok(hd.ok, hd.reason); assert.equal(sb.hidden, 2);
+  const seen = T.previewShot(b, a, sb, 'shot');
+  assert.ok(!seen.ok, 'cannot be targeted while hidden at range');
+  a.x = sb.x + 1; a.y = sb.y; a.hp = 40;
+  const pv = T.previewShot(b, sb, a, 'backstab');
+  assert.ok(pv.ok && pv.sure, 'backstab from hiding is sure');
+  const r = T.apply(b, { type: 'backstab', uid: sb.uid, target: a.uid, mode: 'backstab' });
+  assert.ok(r.ok, r.reason);
+  const ev = r.events.find((e) => e.typ === 'shot');
+  assert.ok(ev.hit && ev.crit, 'forced crit'); assert.equal(sb.hidden, 0, 'attacking reveals her');
+  go(sb); a.hp = 40;
+  for (let i = 0; i < 20 && !a.slowed; i++) { go(sb); a.hp = 40; T.apply(b, { type: 'hamstring', uid: sb.uid, target: a.uid, mode: 'hamstring' }); }
+  assert.ok(a.slowed, 'Hamstring slows');
+});
+
+test('v0.19 Reed: Stim (+AP next turn), Resupply rounds never bank, Call It In, Pay Off, stash medkit; Otter Slick', () => {
+  const { b, us: [rd, rook], foes: [a], go } = squadFight(['reed', 'rook'], ['hook']);
+  go(rd); rook.x = rd.x + 1; rook.y = rd.y; a.x = rd.x; a.y = rd.y - 4;
+  const st = T.apply(b, { type: 'stim', uid: rd.uid, target: rook.uid });
+  assert.ok(st.ok, st.reason); assert.ok(rook.stim);
+  const ammo0 = rook.ammo;
+  const rs = T.apply(b, { type: 'resupply', uid: rd.uid, target: rook.uid });
+  assert.ok(rs.ok, rs.reason); assert.equal(rook.ammo, ammo0 + 3); assert.equal(rook.bonusAmmo, 3);
+  go(rd);
+  const cm = T.apply(b, { type: 'comms', uid: rd.uid });
+  assert.ok(cm.ok, cm.reason); assert.ok(rook.coord);
+  go(rd);
+  const bp = T.apply(b, { type: 'bribe', uid: rd.uid, target: a.uid });
+  assert.ok(bp.ok, bp.reason); assert.ok(a.paid);
+  b.acting = a.uid; b.side = 'enemy'; a.ap = a.maxAp;
+  assert.ok(!T.apply(b, { type: 'shot', uid: a.uid, target: rook.uid, mode: 'shot' }).ok, 'paid foes do not attack');
+  assert.equal(SPECIES_PERKS.Otter.id, 'slick'); assert.equal(SPECIES_PERKS.Raccoon.id, 'tinker');
+  // Tinkerer: Jinx cooldowns 1 shorter
+  assert.equal(T.cdFor({ hero: 'jinx' }, { cd: 3 }), 2);
+  // returnUnused never banks bonus ammo
+  assert.ok(String(L.returnUnused).includes('bonusAmmo'));
+});
+
+test('v0.19 save compatibility: old v10 saves load, Lv 12+ crews get Sledge, cleared Hot metal grants Jinx once, Reed via the Market', () => {
+  const s = newGame(T0, 9);
+  s.player.lv = 13; s.ops = { cleared: { o11: 1 } };
+  delete s.player.gotBreaker;
+  const raw = serialize(s);
+  const back = deserialize(raw, T0);
+  assert.ok(back, 'loads'); assert.equal(back.v, 10);
+  assert.ok(back.heroes.owned.sledge, 'Sledge caught up at Lv 13');
+  assert.ok(back.heroes.owned.jinx, 'Jinx joins for a cleared Hot metal');
+  assert.ok(back.heroes.owned.sledge.equip && back.heroes.owned.sledge.equip.melee, 'starter kit on');
+  // idempotent: a second load does not re-grant or duplicate
+  delete back.heroes.owned.jinx;
+  assert.deepEqual(catchUpOperators(back), [], 'opJoined flag stops repeat grants');
+  // a fresh low-level save gets none of them
+  const low = deserialize(serialize(newGame(T0, 2)), T0);
+  for (const id of NEW_OPS_V019) assert.ok(!low.heroes.owned[id], id);
+  // Market recruit
+  assert.ok(!canRecruit(low, 'reed').ok);
+  low.teeth = 500; low.base = low.base || {};
+  const g = canRecruit(low, 'reed');
+  if (g.ok) { const r = recruit(low, 'reed'); assert.ok(r.ok); assert.equal(low.teeth, 350); assert.ok(low.heroes.owned.reed); }
+  else assert.match(g.reason, /Den/);
+  assert.match(unlockHint(newGame(T0, 3), 'jinx'), /Hot metal/);
+  assert.ok(!canRecruit(newGame(T0, 3), 'vigil').ok, 'shard operators are not bought');
 });

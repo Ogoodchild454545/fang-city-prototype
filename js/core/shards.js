@@ -2,7 +2,7 @@
 // and Ice crates (mock shop). Pin a target, a weekly feature, and a 10-crate pity.
 import { rollCrateLoot } from './items.js';
 import { rngNext, rngInt, rngWeighted } from './rng.js';
-import { HERO_ORDER, HEROES, ensureHeroes, grantHero } from './heroes.js';
+import { HERO_ORDER, HEROES, ensureHeroes, grantHero, isShardHero } from './heroes.js';
 
 export const SHARDS_TO_UNLOCK = 30;
 export const MAX_STARS = 5;
@@ -37,7 +37,7 @@ export const CRATES = {
 };
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
-const FEATURE_POOL = HERO_ORDER.filter((id) => id !== 'rook' && HEROES[id].unlock?.kind !== 'level');
+const FEATURE_POOL = HERO_ORDER.filter(isShardHero);
 
 export function weekIndex(now) {
   return Math.floor((now || Date.now()) / WEEK_MS);
@@ -53,7 +53,7 @@ export function featuredUntil(now) {
 }
 
 export function collectable(s) {
-  return HERO_ORDER.filter((id) => id !== 'rook' && HEROES[id].unlock?.kind !== 'level');
+  return HERO_ORDER.filter(isShardHero);
 }
 
 function weightFor(s, id, now) {

@@ -24,12 +24,20 @@ export const SPECIES_PERKS = {
   Bear:   { id: 'stout',    name: 'Immovable',   text: '+3 max HP, and you cannot be suppressed.' },
   Rhino:  { id: 'unshakeable', name: 'Unshakeable', text: 'Cannot be Shaken or suppressed.' },
   Hare:   { id: 'lightfoot', name: 'Light Foot', text: '+1 Move, and free to step away from a foe next to her.' },
+  // v0.19 new species (one operator each)
+  Buffalo: { id: 'herd',    name: 'Herd Wall',   text: 'Takes 1 less damage from every hit while a crewmate stands next to him.' },
+  Owl:     { id: 'nighteye', name: 'Night Eyes', text: '+1 range on every gun, and her shots ignore Dodge.' },
+  Raccoon: { id: 'tinker',  name: 'Tinkerer',    text: 'Every ability with a cooldown recharges 1 turn faster.' },
+  Cat:     { id: 'reflex',  name: 'Cat Reflexes', text: 'Overwatch shots at her are at -20 aim.' },
+  Otter:   { id: 'slick',   name: 'Slick',       text: 'Bleeding and venom wash off her after a single tick.' },
 };
 
 export const classOf = (h) => (h && CLASSES[h.classId]) || CLASSES[(h && h.classId)] || null;
 export const speciesPerk = (species) => SPECIES_PERKS[species] || null;
 
-export const HERO_ORDER = ['rook', 'anvil', 'pip', 'lumen', 'brick', 'vesper', 'ivory', 'nile', 'marlow'];
+export const HERO_ORDER = ['rook', 'anvil', 'pip', 'lumen', 'brick', 'vesper', 'ivory', 'nile', 'marlow', 'sledge', 'vigil', 'jinx', 'sable', 'reed'];
+// v0.19: the five operators added on New Operators Day (see docs/new-operators-day.md).
+export const NEW_OPS_V019 = ['sledge', 'vigil', 'jinx', 'sable', 'reed'];
 
 export const HEROES = {
   rook: {
@@ -290,6 +298,219 @@ export const HEROES = {
     tags: ['heavy', 'bear'],
     unlock: { kind: 'buy', teeth: 40, den: 4 },
   },
+  // ------------------------------------------------------------------ v0.19 New Operators Day
+  // WORKING PLACEHOLDER: "Sledge" and his backstory are working names awaiting the Fang City Story
+  // bot (the buffalo rebel from the world bible). Kit, stats and art are final; name/bio may change.
+  sledge: {
+    id: 'sledge', name: 'Sledge', species: 'Buffalo', role: 'Breaker', roleTag: 'Breaker',
+    faction: 'The Thaw',
+    blurb: 'A Thaw buffalo with a sledgehammer. Knocks crews out of cover and stands over his own.',
+    portrait: 'assets/heroes/sledge.webp', thumb: 'assets/heroes/sledge-64.webp',
+    mood: 'heroic',
+    // Slowest piece on the board and the biggest health pool; he wins fights by breaking cover, not by shooting.
+    hp: 28, ap: 4, move: 3, aim: 58, armor: 0, speed: 4,
+    weapon: { name: 'Fists', dmg: [3, 4], range: 1, typ: 'melee' },
+    abilities: [
+      { id: 'melee', name: 'Strike', ap: 2, kind: 'melee', range: 1, melee: true, text: 'Hit with the equipped melee weapon.' },
+      { id: 'shot', name: 'Shoot', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'smash', name: 'Cover Breaker', ap: 2, kind: 'smash', range: 1, cd: 3, dmgAdd: 2, melee: true, unlock: 1, sfx: 'maul',
+        text: 'Bring the hammer down on a foe next to him: +2 damage, knocks them 1 tile back out of their spot if there is room, and leaves them Exposed (their cover counts one step worse) until their turn ends.' },
+      { id: 'guard', name: 'Shoulder Up', ap: 1, kind: 'guard', range: 1, cd: 3, unlock: 1, sfx: 'secondwind',
+        text: 'Plant himself beside a crewmate: until his next turn, half of every hit on that crewmate (rounded up) lands on Sledge instead.' },
+      { id: 'cleave', name: 'Sweeping Cleave', ap: 3, kind: 'cleave', range: 1, cd: 3, dmgAdd: 1, melee: true, unlock: 3, sfx: 'maul',
+        text: 'One wide swing that hits every foe standing next to him (+1 damage, rolled separately for each).' },
+      { id: 'yell', name: 'Rebel Yell', ap: 1, kind: 'yell', cd: 5, radius: 3, unlock: 5, sfx: 'howl',
+        text: 'Crew within 3 tiles shake off Shaken, Suppressed, Blinded and bleeding, and are Rallied (+10 aim) until their next turn.' },
+    ],
+    passive: { id: 'rebelgrit', name: 'Rebel Grit', text: 'Below half health he takes 1 less damage from every hit and cannot be Shaken, Suppressed or Blinded.' },
+    classId: 'tank',
+    gearPref: { melee: 1.5, body: 1.3, shotgun: 1.15 },
+    template: {
+      class: 'tank',
+      base: { crit: 0, dodge: 0, armor: 1 },
+      slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      start: {
+        equip: { melee: 'sledge', primary: 'sawnoff', jacket: 'leather', boots: 'workboots' },
+        stash: ['bandolier', 'gilet'],
+      },
+    },
+    bio: "A dock-gang buffalo who carried Helix crates for nine years until the company cut his mother's Ice ration to make a quota. He walked into the depot the next morning with the sledgehammer from the loading bay and walked out a Thaw man. Bracken Hale calls him the door: when the Thaw needs a wall gone, a barricade held, or a crew dragged out of a raid, Sledge goes first and comes back last. He doesn't talk about the cure. He talks about Ice for everyone, and he swings like he means it.",
+    quips: {
+      move: ["Make a hole.", "I'm coming through.", "Stay behind the horns."],
+      shoot: ["Nothing to hide behind now.", "Wall's gone.", "Down."],
+      ko: ["Still… breathing…", "Get them out first."],
+      revive: ["Up. The Thaw doesn't kneel.", "On your feet, comrade."],
+      win: ["Ice for everyone.", "Tell Helix we were here."],
+    },
+    tags: ['tank', 'buffalo', 'melee'],
+    unlock: { kind: 'level', lv: 12 },
+  },
+  vigil: {
+    id: 'vigil', name: 'Vigil', species: 'Owl', role: 'Spotter', roleTag: 'Spotter',
+    faction: 'Helix contractor',
+    blurb: 'A barn owl marksman who paints targets for the whole crew and lights up the dark.',
+    portrait: 'assets/heroes/vigil.webp', thumb: 'assets/heroes/vigil-64.webp',
+    mood: 'heroic',
+    hp: 11, ap: 4, move: 4, aim: 76, armor: 0, speed: 6,
+    weapon: { name: 'Scoped carbine', dmg: [3, 5], range: 9, typ: 'rifle' },
+    abilities: [
+      { id: 'shot', name: 'Shoot', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'mark', name: 'Mark Target', ap: 1, kind: 'mark', range: 12, cd: 2, unlock: 1, sfx: 'overwatch',
+        text: 'Paint a foe she can see up to 12 tiles away: for 2 turns the whole crew gets +15 aim against them and their Dodge is ignored.' },
+      { id: 'suppress', name: 'Pinning Shot', ap: 2, kind: 'suppress', cd: 2, gun: true, unlock: 3,
+        text: 'A shot at +10 aim for half damage that pins the target down: Suppressed (-20 aim) until their turn ends.' },
+      { id: 'flare', name: 'Flare', ap: 1, kind: 'flare', range: 8, radius: 2, cd: 4, unlock: 5, sfx: 'overwatch',
+        text: 'Pop a flare over a tile up to 8 away: every foe within 2 tiles of it is Marked and pulled out of hiding.' },
+    ],
+    passive: { id: 'spotter', name: "Spotter's Eye", text: 'Her Marks last a turn longer, and the crew crit 10% more often against a foe she has Marked.' },
+    classId: 'sniper',
+    gearPref: { rifle: 1.4, head: 1.2, pistol: 0.7 },
+    template: {
+      class: 'sniper',
+      base: { crit: 5, dodge: 0 },
+      slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      start: {
+        equip: { primary: 'carbine', head: 'flatcap', jacket: 'raincoat', boots: 'trainers' },
+        stash: ['fingerless'],
+      },
+    },
+    bio: "Vigil sat in a bell tower for the whole of the Second War calling targets for a gun crew that never once saw her face. Now Helix pays her by the night to watch rooftops, and she takes their money and anyone else's. She keeps a notebook of every face she has painted for a rifle, and lately too many of them have been animals who were only slipping. She hasn't decided what to do about that yet. She just keeps writing.",
+    quips: {
+      move: ["Finding a perch.", "Higher.", "I see the whole board."],
+      shoot: ["Marked and gone.", "Mind the wind.", "One breath."],
+      ko: ["Lost… the angle…", "Someone take the watch."],
+      revive: ["Eyes open. Back up.", "I've got you covered."],
+      win: ["Street's clear. I'd know.", "Write it down."],
+    },
+    tags: ['marksman', 'owl'],
+    unlock: { kind: 'shards' },
+  },
+  jinx: {
+    id: 'jinx', name: 'Jinx', species: 'Raccoon', role: 'Saboteur', roleTag: 'Saboteur',
+    faction: 'Helix defector',
+    blurb: 'An ex-Helix raccoon technician: flashbangs, comms jammers and tripwires.',
+    portrait: 'assets/heroes/jinx.webp', thumb: 'assets/heroes/jinx-64.webp',
+    mood: 'heroic',
+    hp: 12, ap: 4, move: 5, aim: 64, armor: 0, speed: 8,
+    weapon: { name: '9mm pistol', dmg: [2, 4], range: 7, typ: 'pistol' },
+    abilities: [
+      { id: 'shot', name: 'Shoot', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'melee', name: 'Strike', ap: 2, kind: 'melee', range: 1, melee: true, text: 'Hit with the equipped melee weapon.' },
+      { id: 'flash', name: 'Flashbang', ap: 2, kind: 'flash', range: 5, radius: 1, cd: 3, unlock: 1, sfx: 'explosion',
+        text: 'Throw a flashbang up to 5 tiles: every foe within 1 tile of it is Blinded until their turn ends (-40 aim, Overwatch dropped and cannot be set).' },
+      { id: 'jam', name: 'Jammer', ap: 1, kind: 'jam', radius: 5, cd: 4, unlock: 3, sfx: 'overwatch',
+        text: 'Kill their comms: foes within 5 tiles drop Overwatch and are Jammed (no abilities, only move, shoot and strike) until their turn ends.' },
+      { id: 'trap', name: 'Tripwire', ap: 1, kind: 'trap', range: 3, cd: 3, unlock: 5, sfx: 'move',
+        text: 'Rig an empty tile up to 3 away. The first foe to step on it takes 4 damage, stops dead and is Slowed (-2 Move) next turn.' },
+    ],
+    passive: { id: 'scrapkit', name: 'Scrap Kit', text: 'Builds a Pipe Bomb out of junk before every fight (+1 charge).' },
+    classId: 'demo',
+    gearPref: { utility: 1.6, pistol: 1.2, gloves: 1.2 },
+    template: {
+      class: 'demo',
+      base: { crit: 3, dodge: 2 },
+      slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      start: {
+        equip: { primary: 'pistol9', melee: 'crowbar', jacket: 'hoodie', boots: 'trainers' },
+        stash: ['fingerless'],
+      },
+    },
+    bio: "Jinx kept the alarms, locks and cold-store sensors running in a Helix Ice plant for six years, right up until she worked out how many vials went into the incinerator every week to hold the price up. She left through a fire door she had wired herself, with a bag of company tools and a security pass that still opens more doors than it should. Now she sells sabotage to whoever pays, and does the Helix jobs cheap.",
+    quips: {
+      move: ["Mind the wires.", "Shortcut.", "Nobody touch anything."],
+      shoot: ["Lights out.", "Oops. On purpose.", "Pop."],
+      ko: ["Should've… read the manual…", "Ow. Bad wiring."],
+      revive: ["Rebooted. Go.", "Patched you up with tape. Don't ask."],
+      win: ["Helix sends its regards. Not.", "Everything's broken. Perfect."],
+    },
+    tags: ['saboteur', 'raccoon'],
+    unlock: { kind: 'op', op: 'o11', opName: 'Hot metal', lv: 8 },
+  },
+  sable: {
+    id: 'sable', name: 'Sable', species: 'Cat', role: 'Infiltrator', roleTag: 'Infiltrator',
+    faction: 'Independent',
+    blurb: 'A black alley cat who vanishes, walks round the back and puts a knife in the problem.',
+    portrait: 'assets/heroes/sable.webp', thumb: 'assets/heroes/sable-64.webp',
+    mood: 'heroic',
+    hp: 10, ap: 4, move: 6, aim: 68, armor: 0, speed: 11,
+    weapon: { name: 'Fists', dmg: [2, 3], range: 1, typ: 'melee' },
+    abilities: [
+      { id: 'melee', name: 'Strike', ap: 2, kind: 'melee', range: 1, melee: true, text: 'Hit with the equipped melee weapon.' },
+      { id: 'shot', name: 'Shoot', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'hide', name: 'Shadow Step', ap: 1, kind: 'hide', cd: 4, unlock: 1, sfx: 'move',
+        text: 'Melt into the dark: until she attacks or her next turn ends she is Hidden. Rivals more than 2 tiles away cannot target her and Overwatch never fires at her.' },
+      { id: 'backstab', name: 'Backstab', ap: 2, kind: 'backstab', range: 1, cd: 2, dmgAdd: 2, melee: true, unlock: 1, sfx: 'maul',
+        text: 'A knife in the back: +2 damage. Out of hiding or on a flanked foe it gets +25 aim and always crits.' },
+      { id: 'hamstring', name: 'Hamstring', ap: 2, kind: 'hamstring', range: 1, cd: 3, bleed: 1, melee: true, unlock: 3, sfx: 'maul',
+        text: 'Cut low: the target bleeds 1 HP and is Slowed (-2 Move) on their next turn.' },
+      { id: 'dash', name: 'Rooftop Run', ap: 1, kind: 'dash', unlock: 5,
+        text: 'Over the bins and along the wall: +2 Move this turn. Once per turn.' },
+    ],
+    passive: { id: 'alleyghost', name: 'Alley Ghost', text: 'After she moves 4 or more tiles in one go she has +20 Dodge until her next turn.' },
+    classId: 'scout',
+    gearPref: { melee: 1.5, boots: 1.3, head: 1.1 },
+    template: {
+      class: 'scout',
+      base: { crit: 8, dodge: 4 },
+      slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      start: {
+        equip: { melee: 'karambit', primary: 'snub', head: 'balaclava', boots: 'trainers' },
+        stash: ['hoodie'],
+      },
+    },
+    bio: "Nobody in the Neon Strip agrees on where Sable came from, and she likes it that way. She grew up on the rooftops above the clubs, lifting wallets and then ledgers and then whole safes, and now she takes contracts from fixers who need a door opened from the inside. She has no side and no crew, only a price, and an old debt to a hare nurse on Tanner Street that she pays back in favours.",
+    quips: {
+      move: ["You didn't see me.", "Round the back.", "Quiet now."],
+      shoot: ["Surprise.", "Behind you.", "Shh."],
+      ko: ["One of nine…", "Hm. Careless."],
+      revive: ["Up. Before they notice.", "On your feet, quietly."],
+      win: ["Easy money.", "Nobody saw a thing."],
+    },
+    tags: ['scout', 'melee', 'cat'],
+    unlock: { kind: 'shards' },
+  },
+  reed: {
+    id: 'reed', name: 'Reed', species: 'Otter', role: 'Fixer', roleTag: 'Fixer',
+    faction: 'Independent (Ice-runner)',
+    blurb: 'A canal otter who runs Ice: stims, ammo, a radio and an envelope for every problem.',
+    portrait: 'assets/heroes/reed.webp', thumb: 'assets/heroes/reed-64.webp',
+    mood: 'heroic',
+    hp: 12, ap: 4, move: 5, aim: 62, armor: 0, speed: 9,
+    weapon: { name: '9mm pistol', dmg: [2, 4], range: 7, typ: 'pistol' },
+    abilities: [
+      { id: 'shot', name: 'Shoot', ap: 2, kind: 'shot', gun: true, text: 'Fire the equipped gun (uses ammo).' },
+      { id: 'stim', name: 'Stim Shot', ap: 1, kind: 'stim', range: 3, cd: 3, unlock: 1, sfx: 'secondwind',
+        text: 'Jab an Ice-cut stimulant into a crewmate within 3: +2 HP now and +1 AP on their next turn.' },
+      { id: 'resupply', name: 'Resupply', ap: 1, kind: 'resupply', range: 1, cd: 2, unlock: 1, sfx: 'collect',
+        text: 'Hand a crewmate next to her 3 rounds from her stash and clear Shaken, Suppressed and Blinded.' },
+      { id: 'comms', name: 'Call It In', ap: 1, kind: 'comms', radius: 6, cd: 4, unlock: 3, sfx: 'overwatch',
+        text: 'Get on the radio: crew within 6 tiles get +1 Move on their next turn and are Rallied (+10 aim).' },
+      { id: 'bribe', name: 'Pay Off', ap: 2, kind: 'bribe', range: 5, cd: 5, unlock: 5, sfx: 'collect',
+        text: 'Wave an envelope of Ice at a rival within 5: they lower their weapon and cannot attack on their next turn (they can still move).' },
+    ],
+    passive: { id: 'stash', name: "Runner's Stash", text: 'Carries one extra medkit into every fight.' },
+    classId: 'medic',
+    gearPref: { consumable: 1.6, acc: 1.2, pistol: 1.1 },
+    template: {
+      class: 'medic',
+      base: { crit: 3, dodge: 3 },
+      slots: ['primary', 'melee', 'head', 'jacket', 'body', 'gloves', 'boots', 'acc1', 'acc2', 'utility', 'consumable', 'trinket'],
+      start: {
+        equip: { primary: 'pistol9', jacket: 'raincoat', consumable: 'dressings', boots: 'trainers' },
+        stash: ['burner'],
+      },
+    },
+    bio: "Reed's family has worked the canals since before the Pact, and Reed worked out young that the barges Helix never searches are the ones that carry their own Ice. She runs vials up the locks to whoever is paying, knows every fixer between the docks and the rail yard, and keeps a radio on her collar and an envelope in every pocket. Lately some of her crates go to the Thaw for nothing. She tells everyone it's good business.",
+    quips: {
+      move: ["Shortcut by the locks.", "Keep moving.", "I know a way."],
+      shoot: ["Nothing personal.", "Business.", "Missed a payment."],
+      ko: ["Tell my brother… the barge is his…", "Bad deal."],
+      revive: ["Breathe. On the house.", "That one's free. Next one isn't."],
+      win: ["Everyone gets paid.", "Pleasure doing business."],
+    },
+    tags: ['support', 'otter'],
+    unlock: { kind: 'market', teeth: 150, den: 2 },
+  },
 };
 
 // Rival operators used as computer opponents (same rules, darker stock portraits).
@@ -401,6 +622,21 @@ export const RIVALS = {
 };
 
 export const defOf = (id) => HEROES[id] || RIVALS[id];
+// Operators that come from crates/shards. Level, op and Market operators join another way (v0.19).
+export const isShardHero = (id) => !!HEROES[id] && id !== 'rook' && !['level', 'op', 'market'].includes(HEROES[id].unlock?.kind);
+// v0.19: op-unlock operators join on the first clear of their op (also catches up older saves).
+export function opGrants(s) {
+  const out = [];
+  const cleared = (s.ops && s.ops.cleared) || {};
+  for (const id of HERO_ORDER) {
+    const u = HEROES[id].unlock;
+    if (!u || u.kind !== 'op' || !cleared[u.op] || s.heroes.owned[id]) continue;
+    s.player ||= {}; s.player.opJoined ||= {};
+    if (s.player.opJoined[id]) continue;
+    grantHero(s, id); s.player.opJoined[id] = 1; out.push(id);
+  }
+  return out;
+}
 
 export function emptyHeroes() {
   return {
@@ -471,6 +707,8 @@ export function unlockHint(s, id) {
   if (id === 'rook') return 'Given in the street lesson';
   if (h.unlock && h.unlock.kind === 'level' && !s.heroes?.owned?.[id]) return `Joins free at player level ${h.unlock.lv}`;
   if (s.heroes?.owned?.[id]) return 'In the crew';
+  if (h.unlock && h.unlock.kind === 'op') return `Joins after your first clear of the op “${h.unlock.opName}” (Lv ${h.unlock.lv})`;
+  if (h.unlock && h.unlock.kind === 'market') return `Recruit for ${h.unlock.teeth} Ice${h.unlock.den ? ` (Den Lv ${h.unlock.den})` : ''}`;
   const have = s.heroes?.shards?.[id] || 0;
   return `${have}/30 shards to unlock`;
 }
@@ -483,6 +721,8 @@ export function canRecruit(s, id) {
   if (u.kind === 'start') return { ok: true };
   if (u.kind === 'tutorial') return { ok: false, reason: 'Finishes the street lesson first' };
   if (u.kind === 'level') return { ok: false, reason: `Joins free at player level ${u.lv}` };
+  if (u.kind === 'op') return { ok: false, reason: `Joins after the op “${u.opName}”` };
+  if (u.kind === 'shards') return { ok: false, reason: 'Collect 30 shards from crates' };
   if (u.den && denLv(s) < u.den) return { ok: false, reason: `The Den must be level ${u.den}` };
   if (u.cash && s.cash < u.cash) return { ok: false, reason: `Need $${u.cash.toLocaleString('en-GB')}` };
   if (u.influence && s.influence < u.influence) return { ok: false, reason: `Need ${u.influence} Rep` };
@@ -497,7 +737,7 @@ export function recruit(s, id) {
   if (u.cash) s.cash -= u.cash;
   if (u.influence) s.influence -= u.influence;
   if (u.teeth) s.teeth -= u.teeth;
-  s.heroes.owned[id] = { xp: 0 };
+  s.heroes.owned[id] = { xp: 0, lv: 1, stars: 1, shards: 0, perks: [], gear: null };
   if (s.heroes.squad.length < 4) s.heroes.squad.push(id);
   return { ok: true, name: HEROES[id].name };
 }
@@ -535,6 +775,8 @@ export const SQUAD_SYNERGY = [
   { need: ['lumen', 'pip'], name: 'Spotter', text: 'If Pip has line of sight to Lumen\'s target, she gains +12 aim.' },
   { need: ['brick', 'vesper'], name: 'Field Guard', text: 'If Brick is next to Vesper, she takes 1 less damage.' },
   { need: ['nile', 'marlow'], name: 'Breach Pair', text: 'Marlow\'s Breach Charge refunds 1 AP if Nile is in the fight.' },
+  { need: ['vigil', 'sable'], name: 'Eyes and Knives', text: 'Sable deals +1 damage to a foe Vigil has Marked.' },
+  { need: ['sledge', 'jinx'], name: 'Breach and Blind', text: 'Sledge gets +15 aim against Blinded foes.' },
 ];
 
 export function synergiesFor(ids) {

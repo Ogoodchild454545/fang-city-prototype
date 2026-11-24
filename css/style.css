@@ -1209,3 +1209,8 @@ em.up{color:#7bd36a}em.dn{color:#ff6b5e}
 .tabwarns{display:flex;flex-direction:column;gap:3px;min-width:0}
 .tabwarns .tabwarn,.tabwarns .tabok{max-width:300px}
 .tabx{min-width:44px}
+
+/* v0.19 New Operators Day: "X joins your crew!" row on the battle result screen */
+.joinrow { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; padding: 6px 8px; border: 1px solid rgba(201,162,74,0.55); border-radius: 8px; background: linear-gradient(90deg, rgba(201,162,74,0.18), rgba(0,0,0,0.25)); }
+.joinrow img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; border: 1px solid rgba(201,162,74,0.6); }
+.joinrow > span { display: flex; flex-direction: column; min-width: 0; }

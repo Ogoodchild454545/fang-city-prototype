@@ -1,6 +1,9 @@
 // Operators roster: unique collectable heroes, shard progress, pin-a-target, squad of up to 4.
 import { squadCap, isUnlocked, unlockLv, isAvailable } from '../core/progression.js';
-import { HERO_ORDER, HEROES, FUTURE_HEROES, FUTURE_ORDER, unlockHint, setSquad, synergiesFor, classOf, speciesPerk, CLASSES } from '../core/heroes.js';
+import { HERO_ORDER, HEROES, FUTURE_HEROES, FUTURE_ORDER, unlockHint, setSquad, synergiesFor, classOf, speciesPerk, CLASSES, isShardHero, canRecruit, recruit } from '../core/heroes.js';
+import { ensureItems } from '../core/items.js';
+// v0.19: the card's role line prefers the operator's own role tag (Breaker, Spotter...) over the class name
+const roleOf = (h, cls) => h.roleTag || (cls && cls.name) || h.role;
 import { abilityIcon } from './tactics.js';
 import { startTutorial } from '../core/tactics.js';
 import { money, fmt, ico, esc } from './fmt.js';
@@ -60,11 +63,13 @@ function opTile(s, id, rec, inSquad, feat, future = false) {
   const sub = rec ? `Lv ${rec.lv || 1} · ${esc(rankName(rec.lv || 1))}`
     : future ? esc(h.coming || 'Coming soon')
     : h.unlock && h.unlock.kind === 'level' ? `Joins at player Lv ${h.unlock.lv}`
+    : h.unlock && h.unlock.kind === 'op' ? `Joins after op Lv ${h.unlock.lv}`
+    : h.unlock && h.unlock.kind === 'market' ? `Recruit · ${h.unlock.teeth} Ice`
     : prog && prog.need ? `${prog.have}/${prog.need} shards` : esc(unlockHint(s, id));
   return `<button class="optile ${rec ? 'own' : 'grey'} ${future ? 'future' : ''} ${inSquad ? 'in' : ''}" data-act="${rec ? 'openHero' : 'heroInfo'}" data-id="${id}" title="${esc(h.name)}${rec ? ' · open gear and abilities' : ' · story, abilities and stats'}">
     <span class="otp" style="background-image:url(${h.portrait})"></span>
     ${inSquad ? '<span class="squadtag">SQUAD</span>' : ''}${!rec && !future ? '<span class="otlock">🔒</span>' : ''}${future ? '<span class="feattag">COMING SOON</span>' : feat === id ? '<span class="feattag">FEATURED</span>' : ''}${pinned ? '<span class="pintag">PINNED</span>' : ''}
-    <span class="otm"><b class="h">${esc(h.name)}</b><span class="tiny">${esc(h.species)} · ${esc(cls.name || h.role)}</span><span class="tiny ${rec ? 'gold' : 'dim'}">${sub}</span></span>
+    <span class="otm"><b class="h">${esc(h.name)}</b><span class="tiny">${esc(h.species)} · ${esc(roleOf(h, cls))}</span><span class="tiny ${rec ? 'gold' : 'dim'}">${sub}</span></span>
   </button>`;
 }
 
@@ -82,7 +87,7 @@ export function opInfoHtml(s, id) {
     <div class="oiport ${future ? 'future' : ''}" style="background-image:url(${h.portrait})"><span class="oitag">${future ? 'COMING SOON' : 'NOT IN YOUR CREW'}</span></div>
     <div class="oibody">
       <div class="h" style="font-size:24px">${esc(h.name)}</div>
-      <div class="tiny gold">${esc(h.species)} · ${esc(cls.name || h.role)}${cls.blurb ? ` — ${esc(cls.blurb)}` : ''}</div>
+      <div class="tiny gold">${esc(h.species)} · ${esc(roleOf(h, cls))}${cls.blurb ? ` — ${esc(cls.blurb)}` : ''}</div>
       <div class="tiny oihow">How to get: <b>${esc(how)}</b></div>
       <div class="sect">Backstory</div>
       <p class="small oibio">${esc(h.bio || h.blurb || '')}</p>
@@ -93,7 +98,8 @@ export function opInfoHtml(s, id) {
       ${pk ? `<div class="tiny"><b class="gold">${esc(pk.name)}</b> (${esc(h.species)}) — ${esc(pk.text)}</div>` : ''}
       <div class="sect">Abilities</div>
       <div class="oiabs">${abil}</div>
-      ${prog && prog.need && !(h.unlock && h.unlock.kind === 'level') ? `<div class="sect">Shards</div>${bar(prog.have, prog.need)}<div class="opbtns" style="margin-top:6px"><button class="btn sm ${s.heroes.pin === id ? 'gold' : ''}" data-act="pinHero" data-id="${id}">${s.heroes.pin === id ? 'Unpin' : 'Pin for more shards'}</button>${s.heroes.universal ? `<button class="btn sm" data-act="useUniversal" data-id="${id}">Use universal</button>` : ''}</div>` : ''}
+      ${!future && h.unlock && h.unlock.kind === 'market' ? (() => { const g = canRecruit(s, id); return `<div class="opbtns" style="margin-top:8px"><button class="btn sm gold ${g.ok ? '' : 'off'}" data-act="recruitHero" data-id="${id}">Recruit · ${h.unlock.teeth} Ice</button>${g.ok ? '' : `<span class="tiny dim">${esc(g.reason)}</span>`}</div>`; })() : ''}
+      ${prog && prog.need && isShardHero(id) ? `<div class="sect">Shards</div>${bar(prog.have, prog.need)}<div class="opbtns" style="margin-top:6px"><button class="btn sm ${s.heroes.pin === id ? 'gold' : ''}" data-act="pinHero" data-id="${id}">${s.heroes.pin === id ? 'Unpin' : 'Pin for more shards'}</button>${s.heroes.universal ? `<button class="btn sm" data-act="useUniversal" data-id="${id}">Use universal</button>` : ''}</div>` : ''}
     </div>
   </div>`;
 }
@@ -105,7 +111,7 @@ function lockCard(s, id, feat) {
     <div class="opport" style="background-image:url(${h.portrait})">${feat === id ? '<span class="feattag">FEATURED</span>' : ''}${pinned ? '<span class="pintag">PINNED</span>' : ''}</div>
     <div class="opmeta">
       <div class="opname"><b class="h">${esc(h.name)}</b></div>
-      <div class="tiny gold">${esc(h.species)} · ${esc((classOf(h) || {}).name || h.role)}</div>
+      <div class="tiny gold">${esc(h.species)} · ${esc(roleOf(h, classOf(h)))}</div>
       ${pk ? `<div class="opperk tiny"><b>${esc(pk.name)}</b> ${esc(pk.text)}</div>` : ''}
       <div class="opstats"><span>HP <b>${h.hp}</b></span><span>AP <b>${h.ap}</b></span><span>Aim <b>${h.aim}</b></span></div>
       ${bar(prog.have, prog.need)}
@@ -132,7 +138,7 @@ function opCard(s, id, rec, inSquad, feat) {
     </div>
     <div class="opmeta">
       <div class="opname"><b class="h">${esc(h.name)}</b>${starsRow(prog.stars)}</div>
-      <div class="tiny gold">${esc(h.species)} · ${esc((classOf(h) || {}).name || h.role)} · ${esc(rankName(lv))}</div>
+      <div class="tiny gold">${esc(h.species)} · ${esc(roleOf(h, classOf(h)))} · ${esc(rankName(lv))}</div>
       <div class="xpbar"><i style="width:${pct}%"></i></div>
       <div class="tiny dim">${need ? `${rec.xp || 0}/${need} XP` : 'Max rank'}</div>
       ${pk ? `<div class="opperk tiny"><b>${esc(pk.name)}</b> ${esc(pk.short || pk.text)}</div>` : ''}
@@ -171,7 +177,7 @@ function card(s, id, rec, inSquad, feat, now) {
     ${featured ? '<span class="feattag">FEATURED</span>' : ''}
     ${pinned ? '<span class="pintag">PINNED</span>' : ''}
     <div class="hmeta">
-      <div class="hn">${esc(h.name)} ${have ? starsRow(prog.stars) : ''} <span class="tiny dim">${esc(h.species)} · ${esc((classOf(h) || {}).name || h.role)}</span></div>
+      <div class="hn">${esc(h.name)} ${have ? starsRow(prog.stars) : ''} <span class="tiny dim">${esc(h.species)} · ${esc(roleOf(h, classOf(h)))}</span></div>
       <div class="tiny gold">${(() => { const pk = speciesPerk(h.species); return pk ? `${esc(pk.name)} — ${esc(pk.text)}` : ''; })()}</div>
       <div class="hbio tiny dim">${esc(h.bio || h.blurb)}</div>
       ${st ? `<div class="tiny">HP ${st.hp} · AP ${st.ap} · Aim ${st.aim}${st.mel ? ` · ${esc(st.mel.name)} ${st.mel.dmg[0] + st.mdmg}–${st.mel.dmg[1] + st.mdmg}` : ''}${st.gun ? ` · ${esc(st.gun.name)} ${st.gun.dmg[0] + st.rdmg}–${st.gun.dmg[1] + st.rdmg}` : ''} · ${equippedIds(rec).length} gear</div>`
@@ -224,7 +230,7 @@ export const actions = {
   recruitList(ctx) {
     const s = ctx.state;
     const feat = featuredHero(ctx.now());
-    const rows = HERO_ORDER.filter((id) => !s.heroes.owned[id]).map((id) => lockCard(s, id, feat)).join('');
+    const rows = HERO_ORDER.filter((id) => !s.heroes.owned[id] && isShardHero(id)).map((id) => lockCard(s, id, feat)).join('');
     ctx.modal(`<div class="h" style="font-size:20px">Recruit operators</div><div class="tiny dim" style="margin-bottom:6px">Locked until you collect 30 shards. Pin one to boost their drops. Swipe for more.</div><div class="opsrow recrow">${rows}</div>`, { cls: 'wide' });
   },
   toggleSquad(ctx, el) {
@@ -242,6 +248,17 @@ export const actions = {
     }
     const r = setSquad(ctx.state, squad);
     if (!r.ok) return ctx.toast(r.reason);
+    ctx.render();
+  },
+  // v0.19 Market recruit (Reed): pay Ice, she joins with her starter kit and drops into the squad if there's room
+  recruitHero(ctx, el) {
+    const id = el.dataset.id;
+    const r = recruit(ctx.state, id);
+    if (!r.ok) return ctx.toast(r.reason);
+    ensureItems(ctx.state);
+    Audio.play('collect');
+    ctx.toast(`${r.name} joins your crew!`);
+    ctx.closeModal(true);
     ctx.render();
   },
   heroInfo(ctx, el) {

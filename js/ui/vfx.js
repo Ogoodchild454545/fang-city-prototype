@@ -1,5 +1,6 @@
 // Battle-feel particles: tracers, casings, impact sparks, explosions, HIT/MISS
 // callouts and a camera nudge toward the action. Pure canvas, no assets.
+const V019_BITS = new Set(['hammerarc', 'sweep', 'slash', 'shieldp', 'static', 'reticle', 'flarebeam', 'flareglow', 'lob', 'fbang', 'dazed', 'stimfx', 'envelope']);
 export function create() {
   return { bits: [], nudge: null };
 }
@@ -198,7 +199,7 @@ export function tick(fx, dt) {
   if (!fx) return;
   const now = performance.now();
   const left = [];
-  const order = { ring: 0, crack: 0, dust: 0, smoke: 0, debris: 1, flash: 2, ember: 3, spark: 4, casing: 5, tracer: 6, bolt: 6, mflash: 6, claw: 7, callout: 8 };
+  const order = { flareglow: 0, sweep: 1, fbang: 2, hammerarc: 7, slash: 7, reticle: 8, ring: 0, crack: 0, dust: 0, smoke: 0, debris: 1, flash: 2, ember: 3, spark: 4, casing: 5, tracer: 6, bolt: 6, mflash: 6, claw: 7, callout: 8 };
   const bits = fx.bits.slice().sort((a, c) => (order[a.typ] ?? 5) - (order[c.typ] ?? 5));
   for (const b of bits) {
     const age = now - b.t0;
@@ -442,6 +443,8 @@ function drawBit(g, b, z, now) {
         g.strokeStyle = `rgba(255,190,180,${0.9 * fade})`; g.lineWidth = 0.8 * z * b.scale; path(); g.stroke();
       }
       g.restore();
+    } else if (V019_BITS.has(b.typ)) {
+      drawV019(g, b, z, now);
     } else if (b.typ === 'callout') {
       const enter = Math.min(1, age / 110);
       const pop = enter < 1 ? 0.6 + 0.7 * (1 - Math.pow(1 - enter, 3)) : 1 - 0.08 * u;
@@ -561,4 +564,227 @@ export function spawnHitPop(fx, x, y, z, crit = 0) {
   const now = performance.now();
   fx.bits.push({ typ: 'star', x, y, r: crit ? 15 : 10, rot: Math.random() * 0.6, t0: now, life: crit ? 150 : 110 });
   fx.bits.push({ typ: 'ring', x, y, r0: 2, r1: crit ? 16 : 11, t0: now, life: 260, col: crit ? '255,220,120' : '255,240,220' });
+}
+
+// ---------------------------------------------------------------- v0.19 new operator VFX
+// Every signature effect lands ON the target (body height or feet), never floating above the head.
+const stamp = (fx, n0, z) => { for (let i = n0; i < fx.bits.length; i++) fx.bits[i].zs = z; };
+
+// Sledge · Cover Breaker / Cleave: an overhead hammer arc that slams into the target, a ground
+// shockwave and cracks under them (reuses spawnImpact), plus splintered wood and grit.
+export function spawnHammer(fx, footX, footY, bodyX, bodyY, z, facing = 1, scale = 1) {
+  const n0 = fx.bits.length, now = performance.now();
+  fx.bits.push({ typ: 'hammerarc', x: bodyX, y: bodyY, facing, t0: now, life: 300, scale });
+  stamp(fx, n0, z);
+  spawnImpact(fx, footX, footY, z, 1.2 * scale);
+  const n1 = fx.bits.length;
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 2 + Math.random() * 3;
+    fx.bits.push({ typ: 'debris', x: bodyX, y: bodyY + 6 * z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5, rot: Math.random() * 3, rv: (Math.random() - 0.5) * 0.6, t0: now + 60, life: 600, w: 3 + Math.random() * 3, h: 0.9, tone: 0.3 + Math.random() * 0.4 });
+  }
+  stamp(fx, n1, z);
+}
+// Sledge · Sweeping Cleave: a wide horizontal swing ring round him.
+export function spawnSweep(fx, x, y, z) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'sweep', x, y, t0: performance.now(), life: 360 });
+  stamp(fx, n0, z);
+}
+// Sable · Backstab / Hamstring: a cold silver cross-slash on the target's body.
+export function spawnSlash(fx, x, y, z, facing = 1, scale = 1) {
+  const n0 = fx.bits.length, now = performance.now();
+  fx.bits.push({ typ: 'slash', x, y, ang: facing >= 0 ? -0.55 : Math.PI + 0.55, t0: now, cut: 90, life: 700, scale });
+  fx.bits.push({ typ: 'slash', x, y, ang: facing >= 0 ? 0.5 : Math.PI - 0.5, t0: now + 80, cut: 90, life: 640, scale: scale * 0.85 });
+  for (let k = 0; k < 6; k++) { const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 2; fx.bits.push({ typ: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t0: now + 70, life: 200, len: 3 }); }
+  stamp(fx, n0, z);
+}
+// Sledge · Shoulder Up: a blue shield pulse on the guarded crewmate.
+export function spawnShieldPulse(fx, x, y, z) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'shieldp', x, y, t0: performance.now(), life: 650 });
+  stamp(fx, n0, z);
+}
+// Jinx · Jammer: crackling static over each jammed foe.
+export function spawnStatic(fx, x, y, z) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'static', x, y, t0: performance.now(), life: 700, seed: Math.random() * 100 });
+  stamp(fx, n0, z);
+}
+// Sable · Shadow Step: a low curl of dark smoke at her feet.
+export function spawnSmokePuff(fx, x, y, z) {
+  const n0 = fx.bits.length, now = performance.now();
+  for (let i = 0; i < 7; i++) {
+    const a = Math.random() * Math.PI * 2;
+    fx.bits.push({ typ: 'dust', x: x + Math.cos(a) * 5 * z, y: y + Math.sin(a) * 2 * z, vx: Math.cos(a) * 0.5, vy: -0.25 - Math.random() * 0.3, r: 3, grow: 9, t0: now + i * 25, life: 700, col: '20,18,28', a: 0.55 });
+  }
+  stamp(fx, n0, z);
+}
+// Vigil · Mark Target: a red reticle that snaps closed on the target's chest and holds.
+export function spawnReticle(fx, x, y, z) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'reticle', x, y, t0: performance.now(), life: 900 });
+  stamp(fx, n0, z);
+}
+// Vigil · Flare: a streak up from her, then a red glare that falls over the target area.
+export function spawnFlare(fx, x0, y0, x1, y1, z, radius = 2) {
+  const n0 = fx.bits.length, now = performance.now();
+  fx.bits.push({ typ: 'flarebeam', x0, y0, x1, y1, t0: now, life: 380 });
+  fx.bits.push({ typ: 'flareglow', x: x1, y: y1, r: radius, t0: now + 300, life: 1100 });
+  for (let i = 0; i < 10; i++) fx.bits.push({ typ: 'ember', x: x1, y: y1 - 26 * z, vx: (Math.random() - 0.5) * 1.2, vy: 0.2 + Math.random() * 0.6, t0: now + 320 + i * 30, life: 700 });
+  stamp(fx, n0, z);
+}
+// Jinx · Flashbang: the canister lobbed in an arc...
+export function spawnLob(fx, x0, y0, x1, y1, z) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'lob', x0, y0, x1, y1, t0: performance.now(), life: 300 });
+  stamp(fx, n0, z);
+}
+// ...then a white bang on the tile: hard white core, radial streaks and a wide ring across the blast.
+export function spawnFlashbang(fx, x, y, z, radius = 1) {
+  const n0 = fx.bits.length, now = performance.now();
+  fx.bits.push({ typ: 'fbang', x, y, r: radius, t0: now, life: 700, rays: Array.from({ length: 12 }, (_, i) => i * Math.PI / 6 + Math.random() * 0.3) });
+  fx.bits.push({ typ: 'ring', x, y: y + 6 * z, r0: 4, r1: 26 * (radius + 0.6), t0: now, life: 420, col: '235,240,255' });
+  for (let i = 0; i < 12; i++) { const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 3; fx.bits.push({ typ: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, t0: now, life: 260, len: 4 }); }
+  for (let i = 0; i < 5; i++) fx.bits.push({ typ: 'dust', x: x + (Math.random() - 0.5) * 16 * z, y: y + 4 * z, vx: (Math.random() - 0.5) * 0.6, vy: -0.3, r: 4, grow: 12, t0: now + 120 + i * 30, life: 900, col: '205,205,215', a: 0.4 });
+  stamp(fx, n0, z);
+}
+// Blinded foes: little dazed stars circling at eye level.
+export function spawnDazed(fx, x, y, z) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'dazed', x, y, t0: performance.now(), life: 1100 });
+  stamp(fx, n0, z);
+}
+// Jinx · Tripwire snapping round a foe's legs.
+export function spawnSnap(fx, x, y, z) {
+  const n0 = fx.bits.length, now = performance.now();
+  fx.bits.push({ typ: 'ring', x, y, r0: 2, r1: 14, t0: now, life: 260, col: '230,235,240' });
+  for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, sp = 1.4 + Math.random() * 2.5; fx.bits.push({ typ: 'spark', x, y: y - 3 * z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t0: now, life: 240, len: 3 }); }
+  stamp(fx, n0, z);
+}
+// Reed · Stim Shot: an icy-blue jab ring and rising frost motes on the crewmate.
+export function spawnStim(fx, x, y, z) {
+  const n0 = fx.bits.length, now = performance.now();
+  fx.bits.push({ typ: 'stimfx', x, y, t0: now, life: 800 });
+  stamp(fx, n0, z);
+}
+// Reed · Pay Off: an envelope tossed from her to the rival.
+export function spawnEnvelope(fx, x0, y0, x1, y1, z) {
+  const n0 = fx.bits.length;
+  fx.bits.push({ typ: 'envelope', x0, y0, x1, y1, t0: performance.now(), life: 420 });
+  stamp(fx, n0, z);
+}
+
+// draw branches for the bits above (called from drawBit's fallthrough)
+export function drawV019(g, b, z, now) {
+  const age = now - b.t0, u = Math.max(0, Math.min(1, age / b.life));
+  if (b.typ === 'hammerarc') {
+    // the hammer head sweeps down a short arc and lands on the body, with a motion smear
+    // pivot sits on the attacker's side of the target, so the head comes over and lands ON the target
+    const k = Math.min(1, age / 140), s = b.scale || 1, F = b.facing >= 0 ? 1 : -1;
+    const a0 = -2.1, a1 = -0.12, a = a0 + (a1 - a0) * (1 - Math.pow(1 - k, 3));
+    const R = 30 * z * s, cx = b.x - F * R * 0.9, cy = b.y + 2 * z;
+    g.save();
+    g.globalAlpha = u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45;
+    g.strokeStyle = 'rgba(255,235,200,0.5)'; g.lineWidth = 9 * z * s; g.lineCap = 'round';
+    g.beginPath();
+    for (let i = 0; i <= 8; i++) { const aa = a0 + (a - a0) * i / 8; const px = cx + F * Math.cos(aa) * R, py = cy + Math.sin(aa) * R; i ? g.lineTo(px, py) : g.moveTo(px, py); }
+    g.stroke();
+    const hx = cx + F * Math.cos(a) * R, hy = cy + Math.sin(a) * R;
+    g.strokeStyle = '#5a3a22'; g.lineWidth = 2.4 * z * s;
+    g.beginPath(); g.moveTo(cx + F * Math.cos(a) * R * 0.25, cy + Math.sin(a) * R * 0.25); g.lineTo(hx, hy); g.stroke();
+    g.translate(hx, hy); g.rotate(F * a);
+    g.fillStyle = '#3c3f44'; g.fillRect(-6 * z * s, -4 * z * s, 12 * z * s, 8 * z * s);
+    g.fillStyle = '#8a9098'; g.fillRect(-6 * z * s, -4 * z * s, 12 * z * s, 1.8 * z * s);
+    g.restore();
+    if (k >= 1 && age < 260) { // contact flash on the body
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const r = (12 + 16 * (age - 140) / 80) * z * s;
+      const grd = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
+      grd.addColorStop(0, 'rgba(255,240,210,0.9)'); grd.addColorStop(1, 'rgba(255,140,60,0)');
+      g.fillStyle = grd; g.beginPath(); g.arc(b.x, b.y, r, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+  } else if (b.typ === 'sweep') {
+    const e = 1 - Math.pow(1 - u, 2), r = (8 + 18 * e) * z;
+    g.save(); g.strokeStyle = `rgba(255,225,180,${0.75 * (1 - u)})`; g.lineWidth = (4 * (1 - u) + 1) * z; g.lineCap = 'round';
+    g.beginPath(); g.ellipse(b.x, b.y, r, r * 0.5, 0, Math.PI * 0.95, Math.PI * 0.95 + Math.PI * 2 * Math.min(1, u * 1.6)); g.stroke(); g.restore();
+  } else if (b.typ === 'slash') {
+    const d = Math.min(1, age / b.cut), fade = age < b.cut ? 1 : 1 - (age - b.cut) / (b.life - b.cut);
+    const L = 38 * z * b.scale;
+    g.save(); g.translate(b.x, b.y); g.rotate(b.ang); g.lineCap = 'round';
+    const x0 = -L / 2, x1 = x0 + L * d;
+    g.globalCompositeOperation = 'lighter';
+    g.strokeStyle = `rgba(170,210,255,${0.5 * fade})`; g.lineWidth = 7 * z * b.scale; g.beginPath(); g.moveTo(x0, 0); g.lineTo(x1, 0); g.stroke();
+    g.globalCompositeOperation = 'source-over';
+    g.strokeStyle = `rgba(245,250,255,${0.95 * fade})`; g.lineWidth = 1.8 * z * b.scale; g.beginPath(); g.moveTo(x0, 0); g.lineTo(x1, 0); g.stroke();
+    g.restore();
+  } else if (b.typ === 'shieldp') {
+    const e = 1 - Math.pow(1 - u, 2);
+    g.save(); g.translate(b.x, b.y); const s = (0.7 + 0.5 * e) * z;
+    g.strokeStyle = `rgba(140,205,255,${0.9 * (1 - u)})`; g.fillStyle = `rgba(90,160,255,${0.18 * (1 - u)})`; g.lineWidth = 1.4 * z;
+    g.beginPath(); g.moveTo(0, -12 * s); g.lineTo(9 * s, -8 * s); g.lineTo(9 * s, 1 * s); g.quadraticCurveTo(8 * s, 9 * s, 0, 13 * s); g.quadraticCurveTo(-8 * s, 9 * s, -9 * s, 1 * s); g.lineTo(-9 * s, -8 * s); g.closePath(); g.fill(); g.stroke();
+    g.restore();
+  } else if (b.typ === 'static') {
+    g.save(); g.globalCompositeOperation = 'lighter'; g.strokeStyle = `rgba(120,180,255,${0.85 * (1 - u)})`; g.lineWidth = 0.8 * z;
+    const t = Math.floor(age / 50);
+    for (let i = 0; i < 4; i++) {
+      let px = b.x - 8 * z, py = b.y + (i - 1.5) * 4 * z; g.beginPath(); g.moveTo(px, py);
+      for (let k = 1; k <= 6; k++) { const r = Math.sin((b.seed + t * 7 + i * 13 + k * 3.1)) * 2.6 * z; px = b.x - 8 * z + k * 16 / 6 * z; g.lineTo(px, py + r); }
+      g.stroke();
+    }
+    g.restore();
+  } else if (b.typ === 'reticle') {
+    const k = Math.min(1, age / 220), hold = u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25;
+    const r = (30 - 16 * (1 - Math.pow(1 - k, 3))) * z;
+    g.save(); g.globalAlpha = hold; g.translate(b.x, b.y); g.rotate((1 - k) * 0.8);
+    g.strokeStyle = '#ff4a3a'; g.lineWidth = 1.8 * z;
+    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke();
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; g.beginPath(); g.moveTo(Math.cos(a) * r * 0.55, Math.sin(a) * r * 0.55); g.lineTo(Math.cos(a) * r * 1.35, Math.sin(a) * r * 1.35); g.stroke(); }
+    g.fillStyle = '#ff4a3a'; g.beginPath(); g.arc(0, 0, 1.1 * z, 0, Math.PI * 2); g.fill();
+    g.restore();
+  } else if (b.typ === 'flarebeam') {
+    const k = Math.min(1, age / 260), x = b.x0 + (b.x1 - b.x0) * k, y = b.y0 + (b.y1 - 26 * z - b.y0) * k - Math.sin(k * Math.PI) * 30 * z;
+    g.save(); g.globalCompositeOperation = 'lighter';
+    g.fillStyle = `rgba(255,120,80,${1 - u * 0.6})`; g.beginPath(); g.arc(x, y, 2.2 * z, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = `rgba(255,170,120,${0.5 * (1 - u)})`; g.lineWidth = 1.2 * z; g.beginPath(); g.moveTo(b.x0, b.y0); g.quadraticCurveTo((b.x0 + x) / 2, Math.min(b.y0, y) - 18 * z, x, y); g.stroke();
+    g.restore();
+  } else if (b.typ === 'flareglow') {
+    const fade = u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85, R = (b.r + 0.5) * 22 * z;
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const grd = g.createRadialGradient(b.x, b.y - 26 * z, 0, b.x, b.y, R);
+    grd.addColorStop(0, `rgba(255,150,110,${0.55 * fade})`); grd.addColorStop(0.5, `rgba(255,60,40,${0.22 * fade})`); grd.addColorStop(1, 'rgba(255,40,20,0)');
+    g.fillStyle = grd; g.beginPath(); g.ellipse(b.x, b.y, R, R * 0.6, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = `rgba(255,220,200,${0.9 * fade})`; g.beginPath(); g.arc(b.x, b.y - 26 * z, 2.4 * z, 0, Math.PI * 2); g.fill();
+    g.restore();
+  } else if (b.typ === 'lob') {
+    const k = u, x = b.x0 + (b.x1 - b.x0) * k, y = b.y0 + (b.y1 - b.y0) * k - Math.sin(k * Math.PI) * 26 * z;
+    g.save(); g.translate(x, y); g.rotate(k * 8); g.fillStyle = '#3a3e44'; g.fillRect(-1.6 * z, -2.6 * z, 3.2 * z, 5.2 * z); g.fillStyle = '#c9a24a'; g.fillRect(-1.6 * z, -2.6 * z, 3.2 * z, 1 * z); g.restore();
+  } else if (b.typ === 'fbang') {
+    const k = 1 - u * u, R = (22 + 40 * (b.r || 1) * Math.min(1, age / 120)) * z;
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const grd = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
+    grd.addColorStop(0, `rgba(255,255,255,${k})`); grd.addColorStop(0.35, `rgba(235,240,255,${0.8 * k})`); grd.addColorStop(1, 'rgba(200,210,255,0)');
+    g.fillStyle = grd; g.beginPath(); g.arc(b.x, b.y, R, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = `rgba(255,255,255,${0.8 * k})`; g.lineWidth = 1.2 * z; g.lineCap = 'round';
+    for (const a of b.rays) { g.beginPath(); g.moveTo(b.x + Math.cos(a) * R * 0.25, b.y + Math.sin(a) * R * 0.18); g.lineTo(b.x + Math.cos(a) * R * 1.1, b.y + Math.sin(a) * R * 0.75); g.stroke(); }
+    g.restore();
+  } else if (b.typ === 'dazed') {
+    g.save(); g.fillStyle = `rgba(255,250,210,${u < 0.8 ? 1 : (1 - u) / 0.2})`;
+    for (let i = 0; i < 3; i++) {
+      const a = age / 220 + i * Math.PI * 2 / 3, px = b.x + Math.cos(a) * 7 * z, py = b.y + Math.sin(a) * 2.2 * z;
+      g.beginPath(); for (let k = 0; k < 8; k++) { const rr = (k % 2 ? 0.7 : 1.8) * z, aa = k * Math.PI / 4; g.lineTo(px + Math.cos(aa) * rr, py + Math.sin(aa) * rr); } g.closePath(); g.fill();
+    }
+    g.restore();
+  } else if (b.typ === 'stimfx') {
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const e = Math.min(1, age / 160), r = (4 + 14 * e) * z;
+    g.strokeStyle = `rgba(120,220,255,${0.9 * (1 - u)})`; g.lineWidth = 1.4 * z; g.beginPath(); g.ellipse(b.x, b.y, r, r * 0.6, 0, 0, Math.PI * 2); g.stroke();
+    for (let i = 0; i < 7; i++) { const px = b.x + Math.sin(i * 2.3) * 8 * z, py = b.y + 6 * z - (age / b.life) * (16 + i * 2) * z; g.fillStyle = `rgba(180,240,255,${0.85 * (1 - u)})`; g.fillRect(px - 0.7 * z, py - 0.7 * z, 1.4 * z, 1.4 * z); }
+    g.restore();
+  } else if (b.typ === 'envelope') {
+    const k = Math.min(1, u * 1.15), x = b.x0 + (b.x1 - b.x0) * k, y = b.y0 + (b.y1 - b.y0) * k - Math.sin(k * Math.PI) * 18 * z;
+    g.save(); g.translate(x, y); g.rotate(Math.sin(age / 60) * 0.3);
+    g.scale(1.5, 1.5); g.fillStyle = '#e8dcc0'; g.fillRect(-4 * z, -2.6 * z, 8 * z, 5.2 * z);
+    g.strokeStyle = '#8a7a5a'; g.lineWidth = 0.5 * z; g.beginPath(); g.moveTo(-4 * z, -2.6 * z); g.lineTo(0, 0.4 * z); g.lineTo(4 * z, -2.6 * z); g.stroke();
+    g.restore();
+  }
 }

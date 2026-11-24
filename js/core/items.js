@@ -204,8 +204,9 @@ export function statsFor(heroId, { stars = 1, lv = 1, perks = [], gear = null, e
     speed: (d.speed || 8) + (fox ? 2 : 0) + im.speed,
     move: d.move + (pm.move || 0) + (fox ? 1 : 0) + (km.move || 0) + im.move,
     ap: d.ap + extraAp,
-    range: (km.range || 0) + im.range,
-    carry: im.carry, medCarry: im.medCarry, charges: im.charges,
+    // v0.19: Night Eyes (owl) +1 gun range; Scrap Kit (Jinx) builds one Pipe Bomb before every fight
+    range: (km.range || 0) + im.range + (d.species === 'Owl' ? 1 : 0),
+    carry: im.carry, medCarry: im.medCarry, charges: im.charges + (d.passive?.id === 'scrapkit' ? 1 : 0),
     gun, mel,
   };
 }
@@ -375,7 +376,10 @@ export function itemScore(heroId, itemId) {
   v += (it.hp || 0) * 1 + (it.armor || 0) * 3 + (it.mdmg || 0) * (melee ? 2.5 : 1) + (it.rdmg || 0) * (melee ? 1 : 2.5)
     + (it.aim || 0) * 0.25 + (it.crit || 0) * 0.15 + (it.dodge || 0) * 0.25 + (it.speed || 0) * 0.6 + (it.move || 0) * 1.5
     + (it.carry || 0) * 0.3 + (it.medCarry || 0) * 1 + (it.charges || 0) * 1.5 + (it.range || 0) * 0.8;
-  return v + QUALITY[it.q].rank * 0.05;
+  // v0.19 gear preferences: an operator's template can weight slots or gun types it suits
+  const pref = d.gearPref || {};
+  const mult = (pref[it.slot] || 1) * (it.wpn && pref[it.wpn.typ] ? pref[it.wpn.typ] : 1);
+  return v * mult + QUALITY[it.q].rank * 0.05;
 }
 export function bestGear(s, heroId) {
   const rec = s.heroes.owned[heroId];

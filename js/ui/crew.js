@@ -40,7 +40,7 @@ function opSlot(ctx, id, on) {
   return `<div class="opslotw ${inSq ? 'in' : ''}"><button class="bslot own opslot ${on ? 'sel' : ''}" data-act="${on ? 'openHero' : 'crewPick'}" data-id="${id}" title="${on ? `Open ${esc(d.name)}'s gear and abilities` : `Show ${esc(d.name)}`}">
     <div class="bpor" style="background-image:url(${d.thumb || d.portrait})"><span class="blv">${rec.lv || 1}</span></div>
     <div class="bmeta"><b class="h small">${esc(d.name)}</b>
-      <span class="tiny gold">${esc(d.species)} · ${esc((classOf(d) || {}).name || d.role)} · ${esc(rankName(rec.lv || 1))}</span>
+      <span class="tiny gold">${esc(d.species)} · ${esc(d.roleTag || (classOf(d) || {}).name || d.role)} · ${esc(rankName(rec.lv || 1))}</span>
       <span class="tiny dim">HP ${st.hp} · ${st.mel ? esc(st.mel.name) : esc(st.gun ? st.gun.name : '')} · ${n} gear</span>
       ${rec.pendingPerk ? '<span class="tiny green">Perk ready</span>' : ''}</div>
   </button><button class="sqtog ${inSq ? 'on' : ''}" data-act="toggleSquad" data-id="${id}" title="${inSq ? 'Take out of the squad' : 'Put in the squad'}">${inSq ? '✓<small>SQUAD</small>' : '+<small>SQUAD</small>'}</button></div>`;
@@ -64,7 +64,7 @@ function heroShow(ctx, id) {
   return `<div class="heroshow">
     <button class="hsport" data-act="openHero" data-id="${id}" style="background-image:url(${d.portrait})" title="Open ${esc(d.name)}'s gear and abilities"><span class="hslv">Lv ${lv}</span></button>
     <div class="hsbody">
-      <div class="hsname"><span class="h">${esc(d.name)}</span><span class="tiny gold">${esc(d.species)} · ${esc(cls.name || d.role)} · ${esc(rankName(lv))}</span></div>
+      <div class="hsname"><span class="h">${esc(d.name)}</span><span class="tiny gold">${esc(d.species)} · ${esc(d.roleTag || cls.name || d.role)} · ${esc(rankName(lv))}</span></div>
       <div class="xpbar" title="Experience"><i style="width:${pct}%"></i></div>
       <div class="tiny dim">${need ? `${rec.xp || 0}/${need} XP to level ${lv + 1}` : 'Max rank'}${rec.pendingPerk ? ' · <span class="green">Perk ready</span>' : ''}</div>
       <div class="hsstats">${show.map(stat).join('')}</div>

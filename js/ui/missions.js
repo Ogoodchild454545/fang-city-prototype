@@ -42,6 +42,13 @@ function campaign(ctx, m, gi, den) {
 }
 
 // v0.10 Ops: short turn-based fights for operators. Open ops, plus one locked teaser.
+// v0.19: an operator who joins on the first clear of this op (Jinx on "Hot metal")
+function opJoiner(s, op) {
+  const id = Object.keys(HEROES).find((k) => HEROES[k].unlock?.kind === 'op' && HEROES[k].unlock.op === op.id);
+  if (!id || s.heroes?.owned?.[id]) return '';
+  return `<div class="tiny gold opjoin"><img loading="lazy" decoding="async" src="${HEROES[id].thumb}" alt="" style="width:18px;height:18px;border-radius:4px;vertical-align:middle;margin-right:4px">${esc(HEROES[id].name)} joins your crew on the first clear</div>`;
+}
+
 function opCard(ctx, op) {
   const s = ctx.state;
   const st = O.opStatus(s, op);
@@ -59,6 +66,7 @@ function opCard(ctx, op) {
     <div class="ophd"><b class="h">${esc(op.name)}</b>${st.cleared ? '<span class="optag ok">✓ Complete</span>' : op.tut ? '<span class="optag">TUTORIAL · FREE</span>' : '<span class="optag new">NEW</span>'}</div>
     <div class="tiny gold">${esc(map.name || 'Docklands')} · ${op.lesson ? '1 v 1' : `${n} v ${op.foes.length}`} · ~${op.foes.length <= 1 ? 3 : op.foes.length <= 2 ? 4 : 5} min</div>
     <div class="tiny dim opblurb">${esc(op.blurb)}</div>
+    ${opJoiner(s, op)}
     <div class="opfoes">${foes}<span class="tiny dim">Lv ${op.elv}</span></div>
     <div class="tiny">${money(r.cash)}${r.influence ? ` · ${ico('influence')} ${r.influence}` : ''} · +${xp} XP${first && !op.tut ? ' <span class="gold">first clear ×2</span>' : st.cleared && !op.tut ? ' <span class="dim">replay · ½ rewards</span>' : ''}</div>
     <button class="btn ${st.cleared ? '' : 'red'} block" data-act="startOp" data-id="${op.id}">${st.cleared ? (op.tut ? '↻ Replay · free' : '↻ Replay · ⚡1') : op.tut ? 'Play · free' : 'Play · ⚡1'}</button>

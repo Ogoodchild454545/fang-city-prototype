@@ -223,6 +223,7 @@ const WEAPON_SFX = {
   brick: 'rifle', slab: 'rifle',
   vesper: 'pistol', pact: 'pistol', pip: 'pistol', knack: 'pistol', hook: 'pistol',
   ivory: 'shotgun', marlow: 'shotgun', bruno: 'shotgun',
+  sledge: 'shotgun', vigil: 'rifle', jinx: 'pistol', sable: 'pistol', reed: 'pistol',
   nile: 'melee', rill: 'melee',
 };
 

@@ -60,6 +60,13 @@ export const ACTORS = {
     height: 86, breath: 2.9, walk: 0.62,
     origin: [0.50, 0.985], gunTip: [0.95, 0.50], colour: '#8a6a3a',
   },
+  // v0.19 New Operators Day: Classic style draws the painted figurine art as a flat stamp (no
+  // separate classic sprite or rig), so switching Settings → Unit style never 404s or vanishes.
+  sledge: { idle: 'assets/actors/sledge-fig.webp', height: 88, breath: 3.0, walk: 0.64, origin: [0.48, 0.992], gunTip: [0.08, 0.40], colour: '#5a3a26', melee: 1 },
+  vigil: { idle: 'assets/actors/vigil-fig.webp', height: 78, breath: 1.9, walk: 0.42, origin: [0.40, 0.992], gunTip: [0.97, 0.62], colour: '#4a5a3a' },
+  jinx: { idle: 'assets/actors/jinx-fig.webp', height: 76, breath: 2.1, walk: 0.44, origin: [0.51, 0.992], gunTip: [0.63, 0.47], colour: '#5a5e66' },
+  sable: { idle: 'assets/actors/sable-fig.webp', height: 74, breath: 1.8, walk: 0.38, origin: [0.43, 0.992], gunTip: [0.98, 0.49], colour: '#1a1a22' },
+  reed: { idle: 'assets/actors/reed-fig.webp', height: 74, breath: 2.0, walk: 0.42, origin: [0.58, 0.992], gunTip: [0.74, 0.41], colour: '#c8a020' },
   hook: {
     idle: 'assets/actors/hook-idle.webp',
     height: 78, breath: 2.0, walk: 0.42,
@@ -307,7 +314,7 @@ function poseOf(unit, now) {
 // painted reference sizes; on the map a 1.8 m wolf or fox stands 21 px — about 0.7 of a
 // door (31 px) and half a full room wall (40 px). Bigger species a little taller, rats shorter.
 // See docs/unit-scale.md.
-const SPECIES_H = { Wolf: 27, Fox: 27, Badger: 28, Bear: 32, Croc: 31, Snake: 27, Rat: 20, Rhino: 31 };
+const SPECIES_H = { Wolf: 27, Fox: 27, Badger: 28, Bear: 32, Croc: 31, Snake: 27, Rat: 20, Rhino: 31, Buffalo: 32, Owl: 25, Raccoon: 24, Cat: 25, Otter: 24 };
 function worldHeight(id) {
   let sp = '';
   try { sp = (defOf(id) || {}).species || ''; } catch (e) { sp = ''; }
@@ -508,6 +515,11 @@ export const FIGS = {
   pact: { img: 'assets/actors/pact-fig.webp', origin: [0.499, 0.992], gunTip: [0.68, 0.34], head: [0.46, 0.06], h: 1.0 },
   bruno: { img: 'assets/actors/bruno-fig.webp', origin: [0.425, 0.992], gunTip: [0.84, 0.49], head: [0.52, 0.06], h: 1.0 },
   ash: { img: 'assets/actors/ash-fig.webp', origin: [0.381, 0.992], gunTip: [0.60, 0.50], head: [0.44, 0.06], h: 1.0 },
+  sledge: { img: 'assets/actors/sledge-fig.webp', origin: [0.48, 0.992], gunTip: [0.08, 0.40], head: [0.47, 0.07], h: 1.06 },
+  vigil: { img: 'assets/actors/vigil-fig.webp', origin: [0.40, 0.992], gunTip: [0.97, 0.62], head: [0.42, 0.06], h: 1.0 },
+  jinx: { img: 'assets/actors/jinx-fig.webp', origin: [0.51, 0.992], gunTip: [0.63, 0.47], head: [0.50, 0.06], h: 1.0 },
+  sable: { img: 'assets/actors/sable-fig.webp', origin: [0.43, 0.992], gunTip: [0.98, 0.49], head: [0.70, 0.08], h: 1.0 },
+  reed: { img: 'assets/actors/reed-fig.webp', origin: [0.58, 0.992], gunTip: [0.74, 0.41], head: [0.60, 0.06], h: 1.0 },
   mica: { img: 'assets/actors/mica-fig.webp', origin: [0.443, 0.992], gunTip: [0.86, 0.60], head: [0.37, 0.06], h: 1.0 },
 };
 // base in world px: radius across, depth (ellipse), thickness
@@ -788,11 +800,15 @@ if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, 
 export const BASE_THEME = {
   rook: 'docks', anvil: 'club', pip: 'drain', lumen: 'roof', brick: 'stagedoor', vesper: 'clinic',
   ivory: 'warehouse', nile: 'quay', marlow: 'scrap', stitch: 'clinic',
+  // v0.19: Thaw barricade, bell-tower slates, a gutted Helix lab, a neon fire escape, a canal lock
+  sledge: 'barricade', vigil: 'belfry', jinx: 'lab', sable: 'fireescape', reed: 'canal',
 };
 const BASE_COL = {
   tarmac: ['#3a3834', '#22211f'], docks: ['#2e3640', '#1a2028'], club: ['#3a1416', '#1c0a0b'], drain: ['#2f302c', '#1b1c19'],
   roof: ['#34302c', '#1f1c19'], stagedoor: ['#5a3420', '#2e1a10'], clinic: ['#d8d2c0', '#9a9482'], warehouse: ['#55524a', '#2f2d28'],
   quay: ['#5a4630', '#2e2418'], scrap: ['#4a3a2c', '#2a1f16'],
+  barricade: ['#3c3430', '#1e1a18'], belfry: ['#3a4048', '#1c2026'], lab: ['#c8ccd0', '#7c8288'],
+  fireescape: ['#2a2430', '#141018'], canal: ['#4a4a44', '#262622'],
 };
 function drawBaseTop(g, z, rx, ry, th, theme, now) {
   const cy = -th;
@@ -853,6 +869,45 @@ function drawBaseTop(g, z, rx, ry, th, theme, now) {
     g.save(); g.translate(0, cy + 3.2 * z);
     for (let i = -6; i <= 6; i++) { g.fillStyle = i & 1 ? '#e0b020' : '#111'; g.fillRect(i * 1.3 * z, -0.5 * z, 1.3 * z, 1 * z); }
     g.restore();
+  } else if (theme === 'barricade') {
+    // cracked paving, a sandbag, a red rebel rag and a scorch mark from the brazier
+    L(-rx / z, -0.8, rx / z, 1.2, 'rgba(0,0,0,0.45)', 0.3); L(-2, -4, 1, 4, 'rgba(0,0,0,0.4)', 0.25);
+    g.fillStyle = 'rgba(20,10,6,0.45)'; g.beginPath(); g.ellipse(3.4 * z, cy + 0.8 * z, 3 * z, 1.3 * z, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#8a7a58'; g.beginPath(); g.ellipse(-4.6 * z, cy - 1.2 * z, 2.6 * z, 1.2 * z, 0.2, 0, Math.PI * 2); g.fill();
+    L(-6.4, -1.3, -2.8, -1.0, 'rgba(60,50,30,0.7)', 0.3);
+    g.fillStyle = '#a8201c'; g.beginPath(); g.moveTo(-0.6 * z, cy + 2.2 * z); g.lineTo(2.6 * z, cy + 1.6 * z); g.lineTo(2.2 * z, cy + 3.0 * z); g.lineTo(-1.0 * z, cy + 3.3 * z); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,140,50,0.18)'; g.beginPath(); g.ellipse(3.4 * z, cy + 0.6 * z, 4.5 * z, 2 * z, 0, 0, Math.PI * 2); g.fill();
+  } else if (theme === 'belfry') {
+    // overlapping roof slates with moss and a fallen barn-owl feather
+    for (let r = -3; r <= 3; r++) for (let c = -5; c <= 5; c++) { const x = (c * 2.2 + (r & 1) * 1.1) * z, y = cy + r * 1.35 * z; g.strokeStyle = 'rgba(10,12,16,0.55)'; g.lineWidth = 0.3 * z; g.beginPath(); g.moveTo(x - 1.05 * z, y); g.lineTo(x - 1.05 * z, y + 1.2 * z); g.moveTo(x - 1.1 * z, y + 1.3 * z); g.lineTo(x + 1.1 * z, y + 1.3 * z); g.stroke(); }
+    g.fillStyle = 'rgba(90,120,60,0.35)'; g.beginPath(); g.ellipse(-4 * z, cy + 1.6 * z, 2.4 * z, 0.9 * z, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#e6d2a6'; g.lineWidth = 0.6 * z; g.beginPath(); g.moveTo(2 * z, cy + 1.8 * z); g.quadraticCurveTo(3.6 * z, cy + 0.4 * z, 5.6 * z, cy - 0.6 * z); g.stroke();
+    g.strokeStyle = 'rgba(200,160,90,0.8)'; g.lineWidth = 0.25 * z;
+    for (let i = 0; i < 5; i++) { const t = i / 5, x = 2 * z + 3.6 * z * t, y = cy + 1.8 * z - 2.4 * z * t; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 0.6 * z, y + 0.7 * z); g.stroke(); }
+  } else if (theme === 'lab') {
+    // white lab tiles, a snipped cable and a cracked frosted vial leaking pale blue
+    for (let r = -3; r <= 3; r++) L(-rx / z, r * 1.5, rx / z, r * 1.5, 'rgba(60,70,80,0.35)', 0.22);
+    for (let c = -5; c <= 5; c++) L(c * 2, -5, c * 2, 5, 'rgba(60,70,80,0.3)', 0.22);
+    g.strokeStyle = '#2a2a2a'; g.lineWidth = 0.55 * z; g.beginPath(); g.moveTo(-6.5 * z, cy - 1 * z); g.quadraticCurveTo(-4 * z, cy + 1.5 * z, -1.6 * z, cy + 0.2 * z); g.stroke();
+    g.strokeStyle = '#d0a040'; g.lineWidth = 0.3 * z; g.beginPath(); g.moveTo(-1.6 * z, cy + 0.2 * z); g.lineTo(-1.0 * z, cy - 0.3 * z); g.moveTo(-1.6 * z, cy + 0.2 * z); g.lineTo(-0.9 * z, cy + 0.6 * z); g.stroke();
+    g.fillStyle = 'rgba(140,210,255,0.45)'; g.beginPath(); g.ellipse(3.6 * z, cy + 1.6 * z, 2.6 * z, 0.9 * z, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(220,240,255,0.9)'; g.fillRect(2.4 * z, cy + 0.9 * z, 1.8 * z, 0.7 * z);
+  } else if (theme === 'fireescape') {
+    // iron fire-escape grating over a drop, wet with a magenta and teal neon sheen
+    g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(-rx, cy - ry, rx * 2, ry * 2);
+    for (let i = -6; i <= 6; i++) L(i * 1.5, -5, i * 1.5, 5, 'rgba(70,64,80,0.9)', 0.35);
+    for (let r = -3; r <= 3; r++) L(-rx / z, r * 1.5, rx / z, r * 1.5, 'rgba(50,46,60,0.9)', 0.3);
+    g.fillStyle = 'rgba(255,60,170,0.18)'; g.beginPath(); g.ellipse(-3 * z, cy, 4 * z, 1.6 * z, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(60,220,210,0.14)'; g.beginPath(); g.ellipse(4 * z, cy + 1.4 * z, 3.4 * z, 1.2 * z, 0, 0, Math.PI * 2); g.fill();
+  } else if (theme === 'canal') {
+    // a canal-lock coping stone edge over black water, an iron ring and a frosted vial crate corner
+    g.fillStyle = 'rgba(10,16,22,0.85)'; g.beginPath(); g.ellipse(0, cy + 3.4 * z, rx, 2.2 * z, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(140,170,200,0.25)'; g.fillRect(-4 * z, cy + 3.2 * z, 6 * z, 0.35 * z);
+    L(-rx / z, 1.8, rx / z, 1.8, 'rgba(200,190,170,0.6)', 0.4);
+    for (let c = -4; c <= 4; c++) L(c * 2.4, -5, c * 2.4 + 0.3, 1.8, 'rgba(0,0,0,0.35)', 0.25);
+    g.strokeStyle = '#2a2a2a'; g.lineWidth = 0.45 * z; g.beginPath(); g.ellipse(-3.6 * z, cy + 0.4 * z, 1 * z, 0.5 * z, 0, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#6a4a2a'; g.fillRect(2.6 * z, cy - 2.8 * z, 3.6 * z, 2.2 * z);
+    g.fillStyle = 'rgba(170,230,255,0.85)'; for (let i = 0; i < 3; i++) g.fillRect((3.0 + i * 1.1) * z, cy - 2.6 * z, 0.6 * z, 0.9 * z);
   } else {
     g.fillStyle = 'rgba(255,255,255,0.05)';
     for (let i = 0; i < 6; i++) { const aa = i * 2.1, rr = (0.25 + (i % 3) * 0.2); g.fillRect(Math.cos(aa) * rx * rr, cy + Math.sin(aa) * ry * rr, 0.9 * z, 0.6 * z); }

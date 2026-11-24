@@ -9,7 +9,7 @@ import { rollClearDrop } from './shards.js';
 import { ensurePvp } from './pvp.js';
 import { ensureItems } from './items.js';
 import { kitFits } from './loadout.js';
-import { ensureProgress, estimateLevel, trimSquad, grantsFor as regrant } from './progression.js';
+import { ensureProgress, estimateLevel, trimSquad, grantsFor as regrant, catchUpOperators } from './progression.js';
 setClearLoot(rollClearDrop);
 
 export const SAVE_KEY = 'fangcity.save.v2'; // key kept; the object inside carries its own version
@@ -199,6 +199,8 @@ export function migrate(s, now = Date.now()) {
   ensureItems(s);
   ensurePvp(s);
   ensureProgress(s, now);
+  catchUpOperators(s);
+  ensureItems(s);
   dropShakeDown(s);
   return s;
 }
