@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.16.0)
+# Fang City: Animal Gangs (playable prototype v0.17.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,33 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.17.0 (easier to use, battles that read at a glance)
+
+- **Why is it 65%?** Targeting a rival now breaks the hit chance down: base aim, cover, range, flank, status and
+  perks/kit, as small chips under the attack button and a full list in the rival's panel (with a note when the
+  5–95% cap kicks in).
+- **Overwatch you can see:** a rival on Overwatch paints its real firing zone on the board (every open tile it can
+  see within gun range) as an amber area with a marching outline. If your planned route walks into it, the
+  move bar warns "Walks into Overwatch (name)" and the path turns amber. Your own Overwatch shows as a faint
+  gold wash.
+- **Stance cues:** pieces on Overwatch (gold dashed ring + eye), Brace (steel-blue ring + shield) or taunting
+  (orange ring) are marked under their base.
+- **Better hops:** figurines crouch, spring up stretched, hang at the top of the arc and squash on landing; they
+  turn to face each step with a quick 130 ms pivot instead of snapping.
+- **Punchier hits:** a sharper freeze-frame on contact (longer for crits and knockouts), a star flash on the
+  target, an "ARMOUR −2" callout when armour, a shield, hide or a bodyguard soaks part of a blow, and coloured
+  status tags (Bleeding, Shaken, Taunted, Suppressed, Rallied, Stubborn) that float up over the piece.
+- **Snappier rival turns:** shorter pause between rivals, rivals hop a little quicker and recover faster after a
+  shot, while the camera still lands on each one before they act.
+- **Indoor maps stay dry:** Club Velvet has no rain or drizzle any more; it keeps its warm lights and floor
+  reflections (now a warm polished-floor sheen).
+- **UI pass on every screen (844×390 and 844×340):** primary buttons are at least 44 px tall (Play, Collect,
+  Claim, End turn, Find match, Best gear...), sheet close buttons are a clear 40 px round button that stays
+  pinned while you scroll, filter chips and tabs got bigger hit boxes, and an automated audit checks every screen
+  for small taps and clipped text.
+- **Fewer taps:** the Safehouse has a "Collect all · N ready" button that sweeps the stockpile, finished operator
+  jobs, the daily pay-out and finished daily jobs in one go.
 
 ## v0.16.0 (every piece is a painted figurine)
 

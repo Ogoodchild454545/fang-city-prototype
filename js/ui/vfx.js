@@ -396,6 +396,17 @@ function drawBit(g, b, z, now) {
       g.lineWidth = (3 * (1 - u) + 0.6) * z;
       g.beginPath(); g.ellipse(b.x, b.y, r, r * 0.5, 0, 0, Math.PI * 2); g.stroke();
       g.restore();
+    } else if (b.typ === 'star') {
+      // v0.17 impact star: a hard four-point flash that lands with the hit-stop
+      const e = 1 - u, r = (b.r * (0.7 + 0.5 * Math.min(1, age / 50))) * z;
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      g.translate(b.x, b.y); g.rotate(b.rot || 0);
+      g.fillStyle = `rgba(255,248,225,${0.95 * e})`;
+      g.beginPath();
+      for (let i = 0; i < 8; i++) { const rr = i % 2 ? r * 0.22 : r; const a = i * Math.PI / 4; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr * 0.8); }
+      g.closePath(); g.fill();
+      g.restore();
     } else if (b.typ === 'crack') {
       const grow = Math.min(1, age / 90);
       const fade = u < 0.6 ? 1 : 1 - (u - 0.6) / 0.4;
@@ -445,7 +456,7 @@ function drawBit(g, b, z, now) {
       g.lineJoin = 'round';
       g.lineWidth = 2.2 * z;
       g.strokeStyle = 'rgba(8,6,6,0.85)';
-      g.fillStyle = b.kind === 'miss' ? '#c8d0d8' : b.kind === 'crit' ? '#ffe27a' : b.kind === 'overwatch' ? '#e0c15a' : '#f4f0e4';
+      g.fillStyle = b.kind === 'miss' ? '#c8d0d8' : b.kind === 'crit' ? '#ffe27a' : b.kind === 'overwatch' ? '#e0c15a' : b.kind === 'armour' ? '#a9cdf0' : '#f4f0e4';
       g.strokeText(b.text, 0, 0);
       g.fillText(b.text, 0, 0);
       g.restore();
@@ -543,4 +554,11 @@ export function spawnDust(fx, x, y, z, n = 3) {
     fx.bits.push({ typ: 'dust', x: x + s * 5 * z, y: y + 1 * z, vx: s * 0.5, vy: -0.15, r: 1.6, grow: 5, t0: now, life: 380, a: 0.3 });
   }
   for (let i = n0; i < fx.bits.length; i++) fx.bits[i].zs = z;
+}
+
+// v0.17 sharper hit feedback: a quick star flash on the target plus a tight ring.
+export function spawnHitPop(fx, x, y, z, crit = 0) {
+  const now = performance.now();
+  fx.bits.push({ typ: 'star', x, y, r: crit ? 15 : 10, rot: Math.random() * 0.6, t0: now, life: crit ? 150 : 110 });
+  fx.bits.push({ typ: 'ring', x, y, r0: 2, r1: crit ? 16 : 11, t0: now, life: 260, col: crit ? '255,220,120' : '255,240,220' });
 }

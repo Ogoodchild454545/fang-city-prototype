@@ -418,6 +418,7 @@ function resolveHit(b, att, def, mode, prev) {
   let dmg = prev.dmg[0] + Math.floor(rngNext(b) * span);
   const cc = critChance(att, mode);
   if (Math.floor(rngNext(b) * 100) < cc) { ev.crit = 1; dmg += 2; }
+  const raw = dmg; // v0.17: remember the blow before armour so the UI can call out what was soaked
   const tdef = defOf(def.hero);
   if (tdef.passive?.id === 'hide' || tdef.species === 'Croc') dmg = Math.max(1, dmg - 1);
   if (def.armor) dmg = Math.max(1, dmg - def.armor);
@@ -430,6 +431,7 @@ function resolveHit(b, att, def, mode, prev) {
     if (brick) dmg = Math.max(1, dmg - 1);
   }
   dmg = Math.max(1, dmg);
+  if (raw > dmg) ev.blocked = raw - dmg;
   if (tdef.species === 'Badger' && !def.stubbornUsed && def.hp - dmg <= 0) {
     ev.stubborn = 1;
     dmg = Math.max(0, def.hp - 1);

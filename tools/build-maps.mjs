@@ -55,7 +55,7 @@ const sideSpawns = (k, rows = [5, 10]) => { k.spawn('P', 1, rows[0], 2, rows[1])
 
 // ---------------- Velvet Den: Club Velvet ----------------
 {
-  const k = add(new MapKit({ id: 'club_velvet', name: 'Club Velvet', theme: 'velvet', env: { weather: 'clear' }, notes: 'Fight through the club: booths, speaker stacks and the bar. Two doors each side.' }));
+  const k = add(new MapKit({ id: 'club_velvet', name: 'Club Velvet', theme: 'velvet', env: { weather: 'clear', indoor: true }, notes: 'Fight through the club: booths, speaker stacks and the bar. Two doors each side.' }));
   k.ground('a', 0, 0, 21, 15).ground('p', 0, 0, 21, 2).ground('p', 0, 13, 21, 15);
   sideSpawns(k, [5, 10]);
   k.room('club', 5, 3, 16, 12, { doors: [[5, 6], [5, 9], [16, 6], [16, 9], [10, 12], [11, 3]] });

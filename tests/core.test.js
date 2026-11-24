@@ -1609,3 +1609,25 @@ test('v0.14.1: Shake down is gone; old saves with its counter or daily job still
   for (const j of back.jobs.list) assert.ok(M.jobProgress(back, j).t, 'every job has a template');
   assert.ok(back.jobs.list.find((j) => j.id === 'win').claimed, 'claimed jobs kept');
 });
+
+test('v0.17: hit events report armour-blocked damage; previewShot parts add up to the chance', () => {
+  const s = newGame(T0, 7);
+  const b = T.startStreet(s, 22);
+  const me = b.units.find((u) => u.side === 'player' && T.gunOf(u));
+  const foe = b.units.find((u) => u.side === 'enemy' && u.hp > 0);
+  me.x = 6; me.y = 9; foe.x = 8; foe.y = 9; me.ammo = 9;
+  let sawBlock = false;
+  for (let i = 0; i < 40 && !sawBlock; i++) {
+    foe.hp = foe.maxHp; foe.armor = 3; me.ap = 4; me.acted = 0; me.fired = 0;
+    b.acting = me.uid; b.side = me.side; b.status = 'active';
+    const pr = T.previewShot(b, me, foe, 'shot');
+    assert.ok(pr && pr.ok, pr && pr.reason);
+    const sum = pr.parts.reduce((a, p) => a + p.val, 0);
+    assert.ok(sum === pr.chance || pr.chance === 5 || pr.chance === 95, `parts ${sum} vs ${pr.chance}`);
+    const r = T.apply(b, { type: 'shot', uid: me.uid, target: foe.uid, mode: 'shot' });
+    assert.ok(r.ok, r.reason);
+    const hit = r.events.find((e) => e.typ === 'shot' && e.hit);
+    if (hit) { assert.ok(hit.blocked >= 1, 'armour 3 soaks some of the blow'); assert.ok(hit.dmg >= 1); sawBlock = true; }
+  }
+  assert.ok(sawBlock, 'at least one hit in 40 shots');
+});

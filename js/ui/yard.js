@@ -1055,7 +1055,7 @@ function paintThemeBackdrop(g, m, z, bd) {
 export function drawWeather(g, w, h, m, now) {
   const env = (m && m.env) || {};
   if (env.time === 'night') { g.fillStyle = 'rgba(4,6,14,0.16)'; g.fillRect(0, 0, w, h); }
-  if (env.weather === 'rain' || env.time === 'night' && env.weather !== 'fog') {
+  if (!isIndoor(m) && (env.weather === 'rain' || env.time === 'night' && env.weather !== 'fog')) {
     // v0.16: two depths of rain (far: short and faint, near: longer); a light drizzle on dry nights
     const t = (now || 0) / 1000, heavy = env.weather === 'rain', k = Math.max(1, w / 900);
     g.save(); g.lineCap = 'round';
@@ -1700,6 +1700,8 @@ export function drawYard(g, m, z, now) {
 // On night and rain maps the tarmac reads wet: each light throws a long, broken reflection down the
 // ground, scattered puddle glints twinkle, and in the rain, splash rings pop up. All cheap world-space
 // strokes, drawn under the pieces so nothing on the board gets harder to read.
+// v0.17: indoor maps (Club Velvet) keep their warm lights and polished-floor reflections but get no rain.
+export function isIndoor(m) { const e = (m && m.env) || {}; return !!e.indoor || (m && m.id) === 'club_velvet'; }
 export function isWet(m) { const e = (m && m.env) || {}; return e.weather === 'rain' || (e.time === 'night' && e.weather !== 'fog'); }
 const WET = new WeakMap();
 function wetPrep(m, p) {
@@ -1717,7 +1719,8 @@ function wetPrep(m, p) {
 }
 function drawWet(g, m, z, now, p) {
   if (!isWet(m)) return;
-  const w = wetPrep(m, p), t = now / 1000, rain = m.env && m.env.weather === 'rain';
+  const w = wetPrep(m, p), t = now / 1000, rain = m.env && m.env.weather === 'rain' && !isIndoor(m);
+  const glintCol = isIndoor(m) ? '255,215,170' : '190,210,240'; // indoors: warm sheen on a polished floor
   g.save();
   g.globalCompositeOperation = 'lighter';
   // light reflections: a soft vertical smear under each light, rippling slightly
@@ -1741,7 +1744,7 @@ function drawWet(g, m, z, now, p) {
     const k = Math.pow(0.5 + 0.5 * Math.sin(t * q.sp + q.ph), 6);
     if (k < 0.08) continue;
     const c = toWorld(q.x, q.y);
-    g.strokeStyle = `rgba(190,210,240,${0.22 * k})`;
+    g.strokeStyle = `rgba(${glintCol},${0.22 * k})`;
     g.beginPath(); g.moveTo((c.x - q.len / 2) * z, c.y * z); g.lineTo((c.x + q.len / 2) * z, c.y * z); g.stroke();
   }
   g.globalCompositeOperation = 'source-over';

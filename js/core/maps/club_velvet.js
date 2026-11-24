@@ -7,7 +7,7 @@ export const CLUB_VELVET = {
   "w": 22,
   "h": 16,
   "theme": "velvet",
-  "env": {"time":"night","weather":"clear"},
+  "env": {"time":"night","weather":"clear","indoor":true},
   "ground": [
     "pppppppppppppppppppppp",
     "pppppppppppppppppppppp",

@@ -53,13 +53,23 @@ export function live(ctx, now) {
   }
 }
 
+// v0.17 fewer taps: everything in the Safehouse that is ready to collect right now.
+export function readyList(s, now) {
+  const out = [];
+  if (P.isUnlocked(s, 'stockpile')) { const p = P.stockpile(s, now); if (p.cash >= 1 || p.ammo >= 1) out.push({ k: 'stock' }); }
+  for (const j of s.opJobs || []) if (now >= j.end) out.push({ k: 'opjob', id: j.hero });
+  if (!M.dailyStatus(s, now).claimedToday) out.push({ k: 'daily' });
+  for (const j of (s.jobs && s.jobs.list) || []) if (!j.claimed && M.jobProgress(s, j).done) out.push({ k: 'job', id: j.id });
+  return out;
+}
+
 export function render(ctx) {
   const s = ctx.state, now = ctx.now();
   M.ensureJobs(s, now);
   const ds = M.dailyStatus(s, now);
   const passTier = Math.floor(s.passXp / 100);
   return `
-  <div class="title"><span class="h">Safehouse</span><span class="sub">/ Stockpile · Jobs</span></div>
+  <div class="title"><span class="h">Safehouse</span><span class="sub">/ Stockpile · Jobs</span>${(() => { const r = readyList(s, now); return r.length >= 2 ? `<button class="btn red collall" data-act="collectAll">Collect all <span class="badge-ready">${r.length} ready</span></button>` : ''; })()}</div>
   <div class="shgrid">${stockPanel(s, now)}${jobsPanel(s, now)}</div>
   <div class="sect">Daily</div>
   <div class="tagline">Show up every day. The family notices.</div>
@@ -96,6 +106,14 @@ export const actions = {
       <p class="tiny faint">You must keep at least one operator home for ops.</p>`, { center: true });
   },
   sendJob(ctx, el) { const r = P.sendOnJob(ctx.state, el.dataset.hero, el.dataset.job, ctx.now()); ctx.closeModal(true); if (!r.ok) return ctx.toast(r.reason); ctx.toast(`${HEROES[el.dataset.hero].name} is out: ${r.job.name}`); ctx.render(); },
+  collectAll(ctx) {
+    const s = ctx.state, now = ctx.now(); let n = 0;
+    for (const r of readyList(s, now)) {
+      const res = r.k === 'stock' ? P.collectStockpile(s, now) : r.k === 'opjob' ? P.collectJob(s, r.id, now) : r.k === 'daily' ? M.claimDaily(s, now) : M.claimJob(s, r.id);
+      if (res && res.ok) n++;
+    }
+    ctx.toast(n ? `Collected ${n} reward${n > 1 ? 's' : ''}` : 'Nothing ready yet'); ctx.save?.(); ctx.render();
+  },
   claimDaily(ctx) { const r = M.claimDaily(ctx.state, ctx.now()); if (r.ok) ctx.toast('Collected: ' + rewardTextPlain(r.reward)); ctx.render(); },
   claimJob(ctx, el) { const r = M.claimJob(ctx.state, el.dataset.id); if (r.ok) ctx.toast('Job done: ' + rewardTextPlain(r.reward)); ctx.render(); },
 };

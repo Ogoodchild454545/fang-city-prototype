@@ -82,12 +82,47 @@ function movePreview(u, b, sel, x, y) {
     } finally { sel.x = ox; sel.y = oy; }
     let cover = 0;
     for (const [dx, dy] of DIRS4) { const t = tile(b.map, x + dx, y + dy); if (t && t.cover) cover = Math.max(cover, t.cover); }
-    pv = { x, y, path: info.path, cost: info.cost, threats, cover };
+    // v0.17: which rival overwatchers this route walks into (they fire at the first tile they see)
+    const zones = overwatchZones(b), owBy = new Set();
+    for (const st of info.path) { const e = zones.get(`${st.x},${st.y}`); if (e) for (const id of e.foe) owBy.add(id); }
+    pv = { x, y, path: info.path, cost: info.cost, threats, cover, overwatch: [...owBy] };
   }
   u._pvKey = key; u._pv = pv;
   return pv;
 }
 function MANH(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
+
+// v0.17 Overwatch zones (XCOM / Invisible Inc): every open tile a watching piece can see and reach
+// with its gun. Stepping into one triggers a reaction shot, so the board shows it as a hatched tile.
+// Returns Map "x,y" -> { foe: [uids watching for the rivals], mine: [uids watching for your crew] }.
+export function overwatchZones(b) {
+  const out = new Map();
+  for (const o of b.units) {
+    if (o.hp <= 0 || !o.overwatch) continue;
+    const gun = T.gunOf(o);
+    if (!gun || (o.ammo || 0) <= 0) continue;
+    const R = gun.range + (o.rangeBonus || 0);
+    for (let y = Math.max(0, o.y - R); y <= Math.min(b.map.h - 1, o.y + R); y++) {
+      for (let x = Math.max(0, o.x - R); x <= Math.min(b.map.w - 1, o.x + R); x++) {
+        const d = MANH(o.x, o.y, x, y);
+        if (d < 1 || d > R) continue;
+        const t = tile(b.map, x, y);
+        if (!t || t.block) continue;
+        if (!T.hasLOS(b, o.x, o.y, x, y)) continue;
+        const k = `${x},${y}`;
+        let e = out.get(k); if (!e) { e = { foe: [], mine: [] }; out.set(k, e); }
+        (o.side === 'enemy' ? e.foe : e.mine).push(o.uid);
+      }
+    }
+  }
+  return out;
+}
+function cachedZones(u, b) {
+  let key = boardKey(b);
+  for (const o of b.units) if (o.overwatch) key += '|ow' + o.uid + (o.ammo || 0);
+  if (u._owKey !== key) { u._owKey = key; u._ow = overwatchZones(b); }
+  return u._ow;
+}
 
 // Path ribbon on the board: dark outline + bright core, step dots, arrow head at the end.
 function drawPathRibbon(g, sel, pv, z, now) {
@@ -96,7 +131,7 @@ function drawPathRibbon(g, sel, pv, z, now) {
   g.lineCap = 'round'; g.lineJoin = 'round';
   const trace = () => { g.beginPath(); g.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y); };
   g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 5 * z; trace(); g.stroke();
-  const danger = pv.threats.length > 0;
+  const danger = pv.threats.length > 0 || (pv.overwatch || []).length > 0;
   g.strokeStyle = danger ? 'rgba(255,190,90,.95)' : 'rgba(150,215,255,.95)'; g.lineWidth = 2.2 * z;
   g.setLineDash([5 * z, 3 * z]); g.lineDashOffset = -now / 40; trace(); g.stroke(); g.setLineDash([]);
   for (let i = 1; i < pts.length - 1; i++) { g.fillStyle = '#f3e7c9'; g.beginPath(); g.arc(pts[i].x, pts[i].y, 1.5 * z, 0, Math.PI * 2); g.fill(); }
@@ -282,6 +317,49 @@ function hexPoly(g, x, y, z, fill, stroke) {
   g.closePath();
   if (fill) { g.fillStyle = fill; g.fill(); }
   if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(1, z); g.stroke(); }
+}
+
+// v0.17 overwatch zone tile: a light amber wash with a bold marching outline round the edge of the
+// zone (rival watchers), or a faint gold wash for your own. `has(x,y)` says if a neighbour is in the zone.
+function drawOwTile(g, x, y, z, now, foe, mine, tx, ty, has) {
+  const w = TW * z, h = TH * z;
+  const T = [x, y - h / 2], R = [x + w / 2, y], B = [x, y + h / 2], L = [x - w / 2, y];
+  g.save();
+  g.beginPath(); g.moveTo(...T); g.lineTo(...R); g.lineTo(...B); g.lineTo(...L); g.closePath();
+  if (foe) {
+    const pulse = 0.5 + 0.5 * Math.sin(now / 420);
+    g.fillStyle = `rgba(255,150,40,${0.07 + 0.04 * pulse})`; g.fill();
+    // outline only where the zone ends, so the danger area reads as one shape
+    const edges = [];
+    if (!has(tx + 1, ty)) edges.push([R, B]);
+    if (!has(tx - 1, ty)) edges.push([L, T]);
+    if (!has(tx, ty + 1)) edges.push([B, L]);
+    if (!has(tx, ty - 1)) edges.push([T, R]);
+    if (edges.length) {
+      g.lineCap = 'round';
+      g.strokeStyle = 'rgba(20,10,0,0.55)'; g.lineWidth = 2.6 * z;
+      g.beginPath(); for (const [a, c] of edges) { g.moveTo(...a); g.lineTo(...c); } g.stroke();
+      g.strokeStyle = `rgba(255,190,70,${0.75 + 0.2 * pulse})`; g.lineWidth = 1.3 * z;
+      g.setLineDash([3 * z, 2 * z]); g.lineDashOffset = -now / 60;
+      g.beginPath(); for (const [a, c] of edges) { g.moveTo(...a); g.lineTo(...c); } g.stroke();
+    }
+  } else if (mine) {
+    g.fillStyle = 'rgba(224,193,90,0.07)'; g.fill();
+  }
+  g.restore();
+}
+
+// v0.17 stance cue under a piece: Overwatch (gold, eye), Brace (steel blue, shield), Taunt (orange).
+function drawStanceRing(g, x, y, z, now, kind) {
+  const col = kind === 'ow' ? '224,193,90' : kind === 'brace' ? '140,190,240' : '255,150,60';
+  const pulse = 0.5 + 0.5 * Math.sin(now / 300);
+  g.save();
+  g.strokeStyle = `rgba(${col},${0.65 + 0.3 * pulse})`;
+  g.lineWidth = 1.3 * z;
+  g.setLineDash(kind === 'ow' ? [3 * z, 2 * z] : kind === 'brace' ? [] : [1.5 * z, 1.5 * z]);
+  g.lineDashOffset = -now / (kind === 'ow' ? 45 : 90);
+  g.beginPath(); g.ellipse(x, y, (10.5 + pulse) * z, (4.8 + pulse * 0.45) * z, 0, 0, Math.PI * 2); g.stroke();
+  g.restore();
 }
 
 function drawDecor(g, t, x, y, z) {
@@ -748,6 +826,14 @@ function drawChanceBreakdown(g, cx, y, z, prev) {
   });
 }
 
+function drawShieldIcon(g, x, y, z) {
+  const s = 5 * z;
+  g.save(); g.translate(x, y);
+  g.fillStyle = 'rgba(10,18,30,0.9)'; g.beginPath(); g.arc(0, 0, s * 1.15, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#a9cdf0';
+  g.beginPath(); g.moveTo(0, -s * 0.75); g.lineTo(s * 0.62, -s * 0.48); g.lineTo(s * 0.55, s * 0.15); g.quadraticCurveTo(s * 0.3, s * 0.62, 0, s * 0.8); g.quadraticCurveTo(-s * 0.3, s * 0.62, -s * 0.55, s * 0.15); g.lineTo(-s * 0.62, -s * 0.48); g.closePath(); g.fill();
+  g.restore();
+}
 function drawOverwatchEye(g, x, y, z) {
   const s = 5.5 * z;
   g.save();
@@ -849,10 +935,13 @@ function draw(ctx) {
   Dock.drawYard(g, b.map, z, now);
   Dock.drawBackdrop(g, b.map, z, now);
   for (const sp of Dock.sceneryOf(b.map)) if (sp.depth < 0) Dock.drawScenery(g, sp, z, now);
+  const owz = cachedZones(u, b);
   for (const c of order) {
     const t = tile(b.map, c.x, c.y);
     const p = toWorld(c.x, c.y);
     const sx = p.x * z, sy = p.y * z;
+    const oz = owz.size ? owz.get(`${c.x},${c.y}`) : null;
+    if (oz) drawOwTile(g, sx, sy, z, now, oz.foe.length > 0, oz.mine.length > 0, c.x, c.y, (qx, qy) => { const e = owz.get(`${qx},${qy}`); if (e && e.foe.length) return true; const tt = tile(b.map, qx, qy); return !!(tt && tt.block); });
     if (reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel && sel.x === c.x && sel.y === c.y)) {
       hexPoly(g, sx, sy, z, 'rgba(70,140,255,0.22)', 'rgba(140,190,255,0.55)');
     }
@@ -916,9 +1005,11 @@ function draw(ctx) {
     const acting = actor && actor.uid === un.uid;
     const def = defOf(un.hero);
     Actors.tickAnim(un, now, !!(u.hitstop && now < u.hitstop));
-    if (un.overwatch && un.hp > 0) {
-      const fac = (Actors.ensureAnim(un).facing) || 1;
-      drawOverwatchCone(g, sx, sy, z, fac, now);
+    if (un.hp > 0) {
+      // v0.17: stance rings replace the old decorative cone; the real Overwatch reach is the hatched zone
+      if (un.overwatch) drawStanceRing(g, sx, sy, z, now, 'ow');
+      if (un.brace) drawStanceRing(g, sx, sy, z, now, 'brace');
+      if (b.units.some((o) => o.hp > 0 && o.taunt === un.uid)) drawStanceRing(g, sx, sy, z, now, 'taunt');
     }
     let cx = sx, cy = sy - 10 * z, r = 16 * z;
     g.save();
@@ -991,6 +1082,7 @@ function draw(ctx) {
     if (un.overwatch && un.hp > 0) {
       drawOverwatchEye(g, cx, barY - 6 * z, z * 0.7);
     }
+    if (un.brace && un.hp > 0) drawShieldIcon(g, cx + (un.overwatch ? 7 * z : 0), barY - 6 * z, z * 0.7);
     // v0.14: small status chips to the left of the HP bar (XCOM style), and a marker on the inspected piece
     if (!dead) drawStatusChips(g, T.statusesOf(b, un), cx - bw / 2 - 1.6 * z, barY + 0.9 * z, z);
     if (u.inspect === un.uid) {
@@ -1068,10 +1160,11 @@ function draw(ctx) {
     g.restore();
   }
 
-  u.floats = u.floats.filter((f) => now - f.t < 900);
+  u.floats = u.floats.filter((f) => now - f.t < (f.pill ? 1250 : 900));
   for (const f of u.floats) {
     const age = now - f.t;
-    const k = age / 900;
+    if (age < 0) continue; // delayed pop not due yet
+    const k = age / (f.pill ? 1250 : 900);
     const pop = age < 100 ? 0.5 + 0.9 * (age / 100) : age < 180 ? 1.4 - 0.4 * ((age - 100) / 80) : 1;
     g.save();
     g.globalAlpha = 1 - k * k;
@@ -1087,9 +1180,20 @@ function draw(ctx) {
     g.lineJoin = 'round';
     g.lineWidth = 2.2 * z;
     g.strokeStyle = 'rgba(10,8,8,0.8)';
+    if (f.pill) {
+      // v0.17 status popup: a small coloured tag with the status name
+      g.font = `bold ${Math.round(8.5 * z)}px Oswald, sans-serif`;
+      const tw2 = g.measureText(f.text).width, ph = 11 * z, pw = tw2 + 12 * z;
+      g.fillStyle = 'rgba(12,10,10,0.82)';
+      g.beginPath(); g.roundRect(-pw / 2, -ph * 0.78, pw, ph, ph / 2); g.fill();
+      g.lineWidth = 1.2 * z; g.strokeStyle = f.pill; g.stroke();
+      g.fillStyle = f.pill;
+      g.fillText(f.text, 0, ph * 0.02);
+    } else {
     g.fillStyle = f.heal ? '#8fe08f' : f.miss ? '#d0d0d0' : (f.crit ? '#ffd23a' : '#ff6a52');
     g.strokeText(f.text, 0, 0);
     g.fillText(f.text, 0, 0);
+    }
     g.restore();
   }
   g.restore();
@@ -1133,6 +1237,8 @@ function loop(ctx) {
     if (a.stepI !== i) {
       if (a.stepI != null && Actors.isFig() && !a.leap && u.cam) { const lp = toWorld(pts[i].x, pts[i].y); Vfx.spawnDust(Vfx.ensure(u), lp.x * u.cam.z, lp.y * u.cam.z, u.cam.z, 3); }
       a.stepI = i; Audio.play('footstep');
+      // v0.17: turn to face each hop's direction (crisp pivot), not just the final tile
+      { const mv = b && b.units.find((x) => x.uid === a.uid); if (mv && !a.leap) Actors.faceToward(mv, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y); }
     }
     if (!a.noFollow && !(u.fx && u.fx.pan)) { const w = toWorld(a.x, a.y); followCam(u, document.getElementById('tacv'), w.x, w.y - 16); }
     if (t >= 1) u.pathAnim = null;
@@ -1305,6 +1411,36 @@ function clickTile(ctx, x, y) {
   ctx.render();
 }
 
+// v0.17 hit-chance breakdown (XCOM): group previewShot parts into base aim, cover, range/flank,
+// status and other, so the player sees at a glance why a shot is 45% and not 80%.
+const ODDS_GROUP = {
+  'Half cover': 'Cover', 'Full cover': 'Cover', Fortify: 'Cover',
+  Range: 'Range', 'Close range': 'Range', 'Long shot': 'Range', Flank: 'Flank', 'Knife flank': 'Flank', Sneak: 'Flank',
+  Shaken: 'Status', Taunted: 'Status', Suppressed: 'Status', Rallied: 'Status', Dodge: 'Status', 'Moved rat': 'Status', Overwatch: 'Status',
+};
+export function oddsGroups(prev) {
+  const parts = (prev && prev.parts) || [];
+  const order = ['Aim', 'Cover', 'Range', 'Flank', 'Status', 'Bonus'];
+  const sum = new Map(order.map((k) => [k, { key: k, val: 0, items: [] }]));
+  for (const p of parts) {
+    const k = p.label === 'Aim' ? 'Aim' : (ODDS_GROUP[p.label] || 'Bonus');
+    const g = sum.get(k); g.val += p.val; g.items.push(p);
+  }
+  const rows = order.map((k) => sum.get(k)).filter((g) => g.key === 'Aim' || g.items.length);
+  const total = rows.reduce((a, g) => a + g.val, 0);
+  return { rows, total, chance: prev ? prev.chance : 0, capped: prev && total !== prev.chance };
+}
+const ODDS_LABEL = { Aim: 'Base aim', Cover: 'Cover', Range: 'Range', Flank: 'Flank', Status: 'Status', Bonus: 'Perks & kit' };
+function oddsBreakdownHtml(prev, compact) {
+  const og = oddsGroups(prev);
+  if (!og.rows.length) return '';
+  const sgn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
+  if (compact) {
+    return `<div class="tabodds" id="tabodds">${og.rows.map((g) => `<span class="${g.key === 'Aim' ? 'base' : g.val >= 0 ? 'up' : 'dn'}" title="${esc(g.items.map((q) => q.label + ' ' + q.val).join(', '))}"><em>${ODDS_LABEL[g.key]}</em>${g.key === 'Aim' ? g.val : sgn(g.val)}</span>`).join('')}</div>`;
+  }
+  return `<div class="tibrk" id="tibrk">${og.rows.map((g) => `<div class="${g.key === 'Aim' ? 'base' : g.val >= 0 ? 'up' : 'dn'}"><span>${ODDS_LABEL[g.key]}${g.key !== 'Aim' && g.items.length && !(g.items.length === 1 && ODDS_LABEL[g.key] === g.items[0].label) ? `<small>${g.items.map((q) => esc(q.label)).join(', ')}</small>` : ''}</span><b>${g.key === 'Aim' ? g.val : sgn(g.val)}</b></div>`).join('')}<div class="tot"><span>Hit chance${og.capped ? ' <small>(5–95% cap)</small>' : ''}</span><b>${og.chance}%</b></div></div>`;
+}
+
 // v0.15 action bar (bottom centre): move preview confirm, undo, and the big attack button with hit % and damage.
 function actionBarHtml(b, u, canAct, actor) {
   if (!canAct || !actor) return '';
@@ -1312,10 +1448,12 @@ function actionBarHtml(b, u, canAct, actor) {
   const pv = u.preview ? movePreview(u, b, actor, u.preview.x, u.preview.y) : null;
   if (pv) {
     const flank = pv.threats.filter((t) => t.flank).length;
-    const warn = pv.threats.length
+    const owN = (pv.overwatch || []).map((id) => b.units.find((q) => q.uid === id)).filter(Boolean);
+    const owWarn = owN.length ? `<span class="tabwarn ow">◉ Walks into Overwatch (${owN.map((q) => esc(defOf(q.hero).name)).join(', ')})</span>` : '';
+    const warn = owWarn + (pv.threats.length
       ? `<span class="tabwarn">⚠ ${pv.threats.length} rival${pv.threats.length > 1 ? 's' : ''} can hit you here${flank ? ` · ${flank} flanking` : ''}</span>`
-      : `<span class="tabok">${pv.cover >= 2 ? 'Full cover' : pv.cover ? 'Half cover' : 'No cover'} · safe from rival fire</span>`;
-    out.push(`<button class="btn red tabgo" data-act="tmoveGo">Move here · ${pv.cost} AP</button>${warn}<button class="btn dim tabx" data-act="tmoveCancel" aria-label="Cancel">✕</button>`);
+      : `<span class="tabok">${pv.cover >= 2 ? 'Full cover' : pv.cover ? 'Half cover' : 'No cover'} · safe from rival fire</span>`);
+    out.push(`<button class="btn red tabgo" data-act="tmoveGo">Move here · ${pv.cost} AP</button><div class="tabwarns">${warn}</div><button class="btn dim tabx" data-act="tmoveCancel" aria-label="Cancel">✕</button>`);
   } else if (u.inspect) {
     const en = b.units.find((q) => q.uid === u.inspect && q.side === 'enemy' && q.hp > 0);
     if (en) {
@@ -1325,7 +1463,7 @@ function actionBarHtml(b, u, canAct, actor) {
       if (pr && pr.ok) {
         const band = pr.chance >= 75 ? 'hi' : pr.chance >= 50 ? 'mid' : 'lo';
         const dmg = pr.dmg ? `${pr.dmg[0]}–${pr.dmg[1]} dmg` : '';
-        out.push(`<button class="btn red tabatk" data-act="tconfirm" data-uid="${en.uid}"><span class="tabico">${abilityIcon(ICONS[mode] ? mode : 'shot')}</span><b>${esc(nm)}</b><span class="tabpct ${band}">${pr.chance}%</span><span class="tabdmg">${dmg}</span></button><span class="tabwarn dim">on ${esc(defOf(en.hero).name)}</span>`);
+        out.push(`<button class="btn red tabatk" data-act="tconfirm" data-uid="${en.uid}"><span class="tabico">${abilityIcon(ICONS[mode] ? mode : 'shot')}</span><b>${esc(nm)}</b><span class="tabpct ${band}">${pr.chance}%</span><span class="tabdmg">${dmg}</span></button><span class="tabwarn dim">on ${esc(defOf(en.hero).name)}</span>${oddsBreakdownHtml(pr, true)}`);
       } else {
         out.push(`<span class="tabwarn">${esc((pr && pr.reason) || 'Out of reach')}: move closer or pick another target</span>`);
       }
@@ -1352,7 +1490,7 @@ function inspectHtml(b, u) {
     const nm = (defOf(sel.hero).abilities.find((a) => a.id === mode) || {}).name || (mode === 'melee' ? 'Strike' : 'Shoot');
     // v0.15: the attack button lives in the action bar (bottom left); the panel lists the odds
     atk = prev && prev.ok
-      ? `<div class="tiodds">${esc(nm)}: <b>${prev.chance}%</b>${prev.dmg ? ` · ${prev.dmg[0]}–${prev.dmg[1]} dmg` : ''}${(prev.parts || []).length ? `<small>${prev.parts.map((q) => `${esc(q.label)} ${q.val > 0 && q.label !== 'Aim' ? '+' : ''}${q.val}`).join(' · ')}</small>` : ''}</div>`
+      ? `<div class="tiodds">${esc(nm)}: <b>${prev.chance}%</b>${prev.dmg ? ` · ${prev.dmg[0]}–${prev.dmg[1]} dmg` : ''}</div>${oddsBreakdownHtml(prev, false)}`
       : `<div class="tinone">${esc((prev && prev.reason) || 'Out of reach')}</div>`;
   }
   const pct = Math.max(0, Math.round(100 * un.hp / un.maxHp));
@@ -1364,6 +1502,14 @@ function inspectHtml(b, u) {
     <div class="tists">${sts.length ? sts.map((st) => `<div class="tist ${st.kind}"><i>${statusSvg(st.id)}</i><div><b>${esc(st.name)}${st.turns != null ? `<small>${st.id === 'bleed' || st.id === 'venom' ? `${st.turns} left` : `${st.turns} turn${st.turns > 1 ? 's' : ''}`}</small>` : ''}</b><span>${esc(st.text)}</span></div></div>`).join('') : '<div class="tinone">No buffs or debuffs.</div>'}</div>
     ${atk}
   </div>`;
+}
+
+// v0.17 floating status popups (Bleeding, Shaken, Taunted...) drawn as coloured tags over the piece.
+const STATUS_POP = { BLEEDING: '#ff5a4a', SHAKEN: '#d9a3ff', TAUNTED: '#ff9f43', SUPPRESSED: '#9fb4c8', RALLIED: '#8fe08f', STUBBORN: '#e0c15a', POISONED: '#9be36a', BRACED: '#a9cdf0', OVERWATCH: '#e0c15a' };
+function statusPop(u, unit, text, delay = 0) {
+  if (!unit || !u.cam) return;
+  const q = toWorld(unit.x, unit.y), z = u.cam.z;
+  u.floats.push({ t: performance.now() + delay, x: q.x * z, y: (q.y - Actors.actorHeight(unit.hero) - 7) * z, z0: z, text, pill: STATUS_POP[text] || '#f4f0e4' });
 }
 
 async function playEvents(ctx, events) {
@@ -1381,10 +1527,12 @@ async function playEvents(ctx, events) {
       if (mover && ev.path.length) {
         const dest = ev.path[ev.path.length - 1];
         u.cutFocus = { uids: [mover.uid], until: performance.now() + ev.path.length * 320 + 600 };
-        Actors.faceToward(mover, start.x, start.y, dest.x, dest.y);
+        Actors.faceToward(mover, start.x, start.y, ev.path[0].x, ev.path[0].y);
         Actors.playClip(mover, 'walk');
       }
-      u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * (Actors.isFig() ? Actors.FIG_STEP_MS : 140)) / SPEED, x: start.x, y: start.y, noFollow: !!ev.noFollow };
+      // v0.17 pacing: rivals hop a little quicker so their turn stays snappy but readable
+      const rival = mover && mover.side === 'enemy' ? 0.8 : 1;
+      u.pathAnim = { uid: ev.uid, path: ev.path, from: start, t0: performance.now(), dur: Math.max(180, ev.path.length * (Actors.isFig() ? Actors.FIG_STEP_MS : 140) * rival) / SPEED, x: start.x, y: start.y, noFollow: !!ev.noFollow };
       await wait(u.pathAnim.dur);
       u.pathAnim = null;
       if (mover) { if (mover.anim) mover.anim.hop = null; Actors.playClip(mover, 'idle'); }
@@ -1430,8 +1578,10 @@ async function playEvents(ctx, events) {
         }
         await wait(melee ? 20 : 120);
         if (ev.hit) {
-          u.shake = ev.crit ? 11 : 7; Audio.play('hit');
-          u.hitstop = performance.now() + (ev.crit ? 120 : 80);
+          u.shake = ev.crit ? 12 : 8; Audio.play('hit');
+          // v0.17: a crisper freeze-frame on contact (longer on crits and finishing blows) and a star flash
+          u.hitstop = performance.now() + (ev.ko ? 150 : ev.crit ? 130 : 85);
+          Vfx.spawnHitPop(Vfx.ensure(u), tx, ty, zz, ev.crit || ev.ko);
           // knock-back along the line of the attack, red flash for blows, white for bullets
           const dl = Math.hypot(tw.x - a.x, tw.y - a.y) || 1;
           const kb = melee ? 6 : 3.5;
@@ -1450,13 +1600,17 @@ async function playEvents(ctx, events) {
           Vfx.spawnCallout(u.fx, tx, (tw.y - tH - 22) * zz, ev.crit ? 'CRIT' : 'HIT', ev.crit ? 'crit' : 'hit');
           u.floats.push({ t: performance.now(), x: tx + fac * 13 * zz, y: (tw.y - tH * 0.7) * zz, z0: zz, text: ev.crit ? `-${ev.dmg}!` : `-${ev.dmg}`, heal: 0, crit: ev.crit, dmg: 1 });
           if (ev.ko) say(u, b, ev.target, 'ko');
-          if (ev.bleed && !ev.ko) u.floats.push({ t: performance.now() + 250, x: tx - fac * 16 * zz, y: (tw.y - tH * 0.45) * zz, z0: zz, text: 'BLEEDING', heal: 0, dmg: 1 });
+          // v0.17: say when armour (or a shield, hide or a bodyguard) soaked part of the blow
+          if (ev.blocked) Vfx.spawnCallout(u.fx, tx - fac * 18 * zz, (tw.y - tH * 0.35) * zz, `ARMOUR −${ev.blocked}`, 'armour');
+          if (ev.bleed && !ev.ko) statusPop(u, def, 'BLEEDING', 250);
+          if (ev.mode === 'suppress' && def.suppressed && !ev.ko) statusPop(u, def, 'SUPPRESSED', 300);
+          if (ev.stubborn) statusPop(u, def, 'STUBBORN', 200);
           if (ev.leech) u.floats.push({ t: performance.now() + 150, x: a.x * zz, y: (a.y - Actors.actorHeight(att.hero) * 0.7) * zz, z0: zz, text: '+1 Grit', heal: 1 });
           await wait(Math.max(0, u.hitstop - performance.now() + 40));
         } else {
           Vfx.spawnCallout(u.fx, tx, (tw.y - tH - 22) * zz, 'MISS', 'miss');
         }
-        await wait(240);
+        await wait(att.side === 'enemy' ? 190 : 240);
       }
     }
     if (ev.typ === 'pounce') {
@@ -1486,12 +1640,12 @@ async function playEvents(ctx, events) {
         for (const id of ev.shaken || []) {
           const f = b.units.find((x) => x.uid === id); if (!f) continue;
           const q = toWorld(f.x, f.y);
-          u.floats.push({ t: performance.now() + 200, x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(f.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: 'SHAKEN', heal: 0, dmg: 1 });
+          statusPop(u, f, 'SHAKEN', 200);
         }
         for (const id of ev.rallied || []) {
           const f = b.units.find((x) => x.uid === id); if (!f) continue;
           const q = toWorld(f.x, f.y);
-          u.floats.push({ t: performance.now() + 200, x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(f.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: 'RALLIED', heal: 1 });
+          statusPop(u, f, 'RALLIED', 200);
         }
         await wait(700);
       }
@@ -1519,7 +1673,7 @@ async function playEvents(ctx, events) {
         for (const id of ev.taunted || []) {
           const f = b.units.find((x) => x.uid === id); if (!f) continue;
           const q = toWorld(f.x, f.y);
-          u.floats.push({ t: performance.now() + 200, x: q.x * u.cam.z, y: (q.y - Actors.actorHeight(f.hero) * 0.8) * u.cam.z, z0: u.cam.z, text: 'TAUNTED', heal: 0, dmg: 1 });
+          statusPop(u, f, 'TAUNTED', 200);
         }
         await wait(650);
       }
@@ -1674,7 +1828,8 @@ async function enemyTurn(ctx) {
     const up = T.actingUnit(b);
     if (up && up.uid !== lastUid) {
       lastUid = up.uid;
-      if (!ctx.fast) { ctx.render(); await new Promise((r) => setTimeout(r, 620 / SPEED)); }
+      // v0.17: a shorter beat (was 620ms); the camera glide still lands before they act
+      if (!ctx.fast) { ctx.render(); await new Promise((r) => setTimeout(r, (guard === 1 ? 520 : 400) / SPEED)); }
       if (u.closed || ctx.state.tactics !== b) return;
     }
     const act = chooseAction(b, T.think);

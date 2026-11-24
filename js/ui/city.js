@@ -44,7 +44,7 @@ export function render(ctx) {
         <div class="small">${esc(lg.name)} · ${pv.trophies} trophies${lg.next ? ` · ${lg.next.min - pv.trophies} to ${esc(lg.next.name)}` : ''}. Any mix of classes is allowed. Matched against a crew near your trophies${s.heroes.tutorialDone ? '' : ' · lesson still open'}.</div>
       </div>
       <div class="col"><button class="btn sm" data-act="nav" data-tab="heroes">Operators</button>
-      ${s.heroes.tutorialDone ? '<button class="btn red sm" data-act="startStreet">Find match</button>' : '<button class="btn gold sm" data-act="startTutorial">Lesson</button>'}</div></div>
+      ${s.heroes.tutorialDone ? '<button class="btn red" data-act="startStreet">Find match</button>' : '<button class="btn gold" data-act="startTutorial">Lesson</button>'}</div></div>
     </div>`; })()}
     <div class="card" style="margin-top:4px">
       <div class="row"><div class="grow"><div class="tiny red h">Reputation</div><div class="h" style="font-size:17px">${tier.name} · ${s.rep}</div></div>

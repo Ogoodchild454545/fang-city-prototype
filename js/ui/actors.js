@@ -146,8 +146,14 @@ export function faceToward(unit, x0, y0, x1, y1) {
   const a = ensureAnim(unit);
   const A = toWorld(x0, y0), B = toWorld(x1, y1);
   const dx = B.x - A.x;
-  if (Math.abs(dx) > 0.4) a.facing = dx >= 0 ? 1 : -1;
+  if (Math.abs(dx) > 0.4) {
+    const nf = dx >= 0 ? 1 : -1;
+    // v0.17: a crisp 130ms pivot (the piece turns like a card) instead of an instant mirror
+    if (a.facing != null && nf !== a.facing) a.turnT0 = performance.now();
+    a.facing = nf;
+  }
 }
+export const TURN_MS = 130;
 
 export function playClip(unit, clip, opts = {}) {
   if (!hasActor(unit.hero)) return;
@@ -511,13 +517,25 @@ function figPose(unit, a, now) {
   const t = a.t, f = a.facing;
   let rot = 0, ox = 0, oy = 0, sx = 1, sy = 1, sway = 0, lift = 0;
   if (a.clip === 'walk') {
+    // v0.17 hop: crouch (anticipation) -> spring up stretched -> eased arc -> squash on landing
     const p = a.hop != null ? a.hop : (t / (FIG_STEP_MS / 1000)) % 1;
-    lift = Math.sin(p * Math.PI) * 9;                 // arc over the tile
-    const land = Math.max(0, 1 - p / 0.22);           // squash just after touching down
-    const take = Math.max(0, (p - 0.86) / 0.14);      // crouch before the next hop
-    const sq = 0.13 * land * land + 0.07 * take;
-    sx = 1 + sq; sy = 1 - sq;
-    rot = f * 7 * DEG * Math.sin(p * Math.PI);        // lean into the hop
+    const P0 = 0.14, P1 = 0.86;
+    let sq = 0;
+    if (p < P0) {
+      const e = p / P0;                               // crouch, then release
+      sq = 0.10 * Math.sin(e * Math.PI * 0.5) * (1 - e * e * 0.9);
+    } else if (p < P1) {
+      const e = (p - P0) / (P1 - P0);
+      const arc = 4 * e * (1 - e);                    // parabola: fast off the ground, hang at the top
+      lift = 10 * Math.pow(arc, 0.85);
+      const v = 1 - 2 * e;                            // vertical speed: + rising, - falling
+      sq = -0.085 * Math.abs(v) * Math.min(1, e * 6); // stretch along the motion, none at the apex
+      rot = f * 6 * DEG * Math.sin(e * Math.PI);      // lean into the hop
+    } else {
+      const e = (p - P1) / (1 - P1);                  // touch down: quick squash that recovers
+      sq = 0.15 * Math.sin(Math.min(1, e * 1.15) * Math.PI);
+    }
+    sx = 1 + sq * 0.8; sy = 1 - sq;
   } else if (a.clip === 'shoot') {
     if (t < 0.10) { rot = -f * 4 * DEG * (t / 0.10); }
     else if (t < 0.18) {
@@ -662,7 +680,13 @@ function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
   g.translate(0, -th);
   if (pose.sway) g.rotate(pose.sway);
   const flip = pose.facing * imgFacing;
-  g.scale(flip, 1);
+  let flipS = flip;
+  if (a.turnT0 != null) {
+    const k = (now - a.turnT0) / TURN_MS;
+    if (k >= 1 || k < 0) a.turnT0 = null;
+    else { const e = k * k * (3 - 2 * k); flipS = flip * Math.max(0.12, Math.abs(2 * e - 1)) * (e < 0.5 ? -1 : 1); }
+  }
+  g.scale(flipS, 1);
   const oxp = fo[0] * w, oyp = fo[1] * h;
   if (im && im.complete && im.naturalWidth) {
     if (ko) g.filter = 'saturate(0.55) brightness(0.8)';
@@ -710,7 +734,7 @@ function drawFigurine(g, unit, def, a, worldX, worldY, z, now, hl) {
   a.headX = head.x; a.headY = head.y;
   return { headX: head.x, headY: head.y, footX: worldX, footY: worldY, gunX: tip.x, gunY: tip.y, z, w, h };
 }
-if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, playClip, ensureAnim, FIGS };
+if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, playClip, ensureAnim, FIGS, figPose, faceToward };
 
 // ---------------------------------------------------------------- story bases (v0.14)
 // Each operator's base top is a scrap of the place they come from. Rivals stand on plain tarmac.
