@@ -33,7 +33,7 @@ export function render(ctx) {
       <svg>${links}</svg>
       ${DISTRICTS.map((d) => { const st = districtState(s, d); const own = st === 'own';
         return `<button class="dnode ${st}" style="left:${d.x}%;top:${d.y}%" data-act="district" data-id="${d.id}">
-          <div class="dot" style="${own ? `background-image:url(assets/boss-magrey.jpg)` : d.rival ? `background-image:url(${d.tier >= 5 ? 'assets/croc.jpg' : gangImg(M.districtRival(s, d))})` : ''}">${st === 'locked' ? '🔒' : ''}</div>
+          <div class="dot" style="${own ? `background-image:url(assets/boss-magrey.webp)` : d.rival ? `background-image:url(${d.tier >= 5 ? 'assets/croc.webp' : gangImg(M.districtRival(s, d))})` : ''}">${st === 'locked' ? '🔒' : ''}</div>
           <div class="lbl" style="color:${own ? '#ff8a7a' : d.rival ? GANGS[M.districtRival(s, d)].colour : '#ccc'}">${d.name}</div></button>`; }).join('')}
     </div>
   </div>
@@ -78,7 +78,7 @@ export const actions = {
       const e = M.districtEnemy(d, s);
       const rv = e.gang;
       const rw = M.districtReward(s, d, now);
-      body = `<div class="row" style="margin:8px 0"><div class="portrait" style="width:64px;height:64px;background-image:url(${d.tier >= 5 ? 'assets/croc.jpg' : gangImg(rv)})"></div>
+      body = `<div class="row" style="margin:8px 0"><div class="portrait" style="width:64px;height:64px;background-image:url(${d.tier >= 5 ? 'assets/croc.webp' : gangImg(rv)})"></div>
         <div class="grow"><div class="h" style="color:${GANGS[rv].colour}">${GANGS[rv].name}</div><div class="tiny dim">${GANGS[rv].blurb}</div>
         <div class="small">${e.count} defenders · level ~${e.level}${e.boss ? ' · <b class="gold">Boss: Old Scales</b>' : ''}</div></div></div>
         <div class="card"><div class="tiny red h">Take it and you get</div>

@@ -14,90 +14,90 @@ const DEG = Math.PI / 180;
 
 export const ACTORS = {
   anvil: {
-    idle: 'assets/actors/anvil-idle.png',
+    idle: 'assets/actors/anvil-idle.webp',
     height: 84, breath: 3.0, walk: 0.62,
     origin: [0.47, 0.985], gunTip: [0.93, 0.58], colour: '#4a4a4e',
   },
   rook: {
-    idle: 'assets/actors/rook-idle.png',
+    idle: 'assets/actors/rook-idle.webp',
     height: 78, breath: 2.15, walk: 0.46,
     origin: [0.48, 0.985], gunTip: [0.84, 0.545], colour: '#6a4a32',
   },
   brick: {
-    idle: 'assets/actors/brick-idle.png',
+    idle: 'assets/actors/brick-idle.webp',
     height: 74, breath: 2.7, walk: 0.56,
     origin: [0.50, 0.985], gunTip: [0.90, 0.52], colour: '#c46a28',
   },
   lumen: {
-    idle: 'assets/actors/lumen-idle.png',
+    idle: 'assets/actors/lumen-idle.webp',
     height: 82, breath: 1.9, walk: 0.40,
     origin: [0.46, 0.985], gunTip: [0.92, 0.58], colour: '#c45a28',
   },
   vesper: {
-    idle: 'assets/actors/vesper-idle.png',
+    idle: 'assets/actors/vesper-idle.webp',
     height: 76, breath: 2.35, walk: 0.50,
     origin: [0.42, 0.98], gunTip: [0.22, 0.50], colour: '#1a6a62',
     imageFacing: -1,
   },
   pip: {
-    idle: 'assets/actors/pip-idle.png',
+    idle: 'assets/actors/pip-idle.webp',
     height: 62, breath: 1.7, walk: 0.38,
     origin: [0.42, 0.985], gunTip: [0.62, 0.48], colour: '#c9a227',
   },
   ivory: {
-    idle: 'assets/actors/ivory-idle.png',
+    idle: 'assets/actors/ivory-idle.webp',
     height: 80, breath: 2.1, walk: 0.44,
     origin: [0.50, 0.985], gunTip: [0.92, 0.52], colour: '#c8d0d8',
   },
   nile: {
-    idle: 'assets/actors/nile-idle.png',
+    idle: 'assets/actors/nile-idle.webp',
     height: 76, breath: 2.8, walk: 0.58,
     origin: [0.40, 0.985], gunTip: [0.12, 0.68], colour: '#3a6a58',
     imageFacing: -1, melee: 1,
   },
   marlow: {
-    idle: 'assets/actors/marlow-idle.png',
+    idle: 'assets/actors/marlow-idle.webp',
     height: 86, breath: 2.9, walk: 0.62,
     origin: [0.50, 0.985], gunTip: [0.95, 0.50], colour: '#8a6a3a',
   },
   hook: {
-    idle: 'assets/actors/hook-idle.png',
+    idle: 'assets/actors/hook-idle.webp',
     height: 78, breath: 2.0, walk: 0.42,
     origin: [0.50, 0.985], gunTip: [0.78, 0.50], colour: '#1a1a1a',
   },
   knack: {
-    idle: 'assets/actors/knack-idle.png',
+    idle: 'assets/actors/knack-idle.webp',
     height: 66, breath: 1.8, walk: 0.40,
     origin: [0.48, 0.985], gunTip: [0.68, 0.48], colour: '#3a3228',
   },
   slab: {
-    idle: 'assets/actors/slab-idle.png',
+    idle: 'assets/actors/slab-idle.webp',
     height: 72, breath: 2.6, walk: 0.56,
     origin: [0.50, 0.985], gunTip: [0.92, 0.55], colour: '#222',
   },
   rill: {
-    idle: 'assets/actors/rill-idle.png',
+    idle: 'assets/actors/rill-idle.webp',
     height: 76, breath: 2.8, walk: 0.58,
     origin: [0.40, 0.985], gunTip: [0.10, 0.70], colour: '#1a1a18',
     imageFacing: -1, melee: 1,
   },
   pact: {
-    idle: 'assets/actors/pact-idle.png',
+    idle: 'assets/actors/pact-idle.webp',
     height: 80, breath: 2.4, walk: 0.50,
     origin: [0.50, 0.98], gunTip: [0.72, 0.46], colour: '#0a0a0a',
   },
   bruno: {
-    idle: 'assets/actors/bruno-idle.png',
+    idle: 'assets/actors/bruno-idle.webp',
     height: 86, breath: 2.9, walk: 0.62,
     origin: [0.50, 0.985], gunTip: [0.92, 0.50], colour: '#1a1410',
   },
   ash: {
-    idle: 'assets/actors/ash-idle.png',
+    idle: 'assets/actors/ash-idle.webp',
     height: 80, breath: 2.2, walk: 0.46,
     origin: [0.48, 0.985], gunTip: [0.78, 0.55], colour: '#111',
   },
   mica: {
-    idle: 'assets/actors/mica-idle.png',
+    idle: 'assets/actors/mica-idle.webp',
     height: 80, breath: 1.9, walk: 0.40,
     origin: [0.46, 0.985], gunTip: [0.98, 0.62], colour: '#141414',
   },
@@ -607,7 +607,7 @@ function pieceMatrix(footX, footY, z, pose) {
   return m;
 }
 
-function drawBase(g, z, side, hl, now, flash, theme = 'tarmac') {
+function paintBase(g, z, side, theme) {
   const rx = BASE.rx * z, ry = BASE.ry * z, th = BASE.th * z;
   const rim = side === 'player' ? '#5aa8ff' : '#ff5a48';
   // side band of the cylinder
@@ -624,21 +624,68 @@ function drawBase(g, z, side, hl, now, flash, theme = 'tarmac') {
   g.beginPath(); g.ellipse(0, -th * 0.45, rx - 0.3 * z, ry, 0, 0, Math.PI); g.stroke();
   g.restore();
   // top face: a little diorama from the operator's own story (docks, club door, rooftop...)
-  drawBaseTop(g, z, rx, ry, th, theme, now);
+  drawBaseTop(g, z, rx, ry, th, theme, 0);
   g.strokeStyle = rim; g.lineWidth = 0.8 * z;
   g.beginPath(); g.ellipse(0, -th, rx - 0.4 * z, ry - 0.2 * z, 0, 0, Math.PI * 2); g.stroke();
   // highlight on the near lip
   g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 0.5 * z;
   g.beginPath(); g.ellipse(0, -th, rx - 0.4 * z, ry - 0.2 * z, 0, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+}
+function paintRing(g, z, side, hl) {
+  // selection glow ring at full strength; the caller fades it with globalAlpha (the stroke alpha and the
+  // shadow under it scale together, so this matches the old live shadowBlur exactly)
+  const rx = BASE.rx * z, ry = BASE.ry * z, th = BASE.th * z;
+  const rim = side === 'player' ? '#5aa8ff' : '#ff5a48';
+  g.shadowColor = hl === 2 ? '#f0d060' : rim; g.shadowBlur = 6 * z;
+  g.strokeStyle = hl === 2 ? 'rgb(240,208,96)' : rim;
+  g.lineWidth = 1.4 * z;
+  g.beginPath(); g.ellipse(0, -th * 0.5, rx + 1.6 * z, ry + 0.9 * z, 0, 0, Math.PI * 2); g.stroke();
+}
+// v0.18: the figurine base (cylinder band, rim, story diorama, lip) and the selection ring are static per
+// side/theme/zoom, so they are baked once per zoom step (1.5%) instead of re-stroking ~60 paths per piece
+// per frame. Sprites are rendered at device resolution, so 4.2x zoom stays as sharp as before.
+const BASE_SPR = new Map();
+const ZSTEP = Math.log(1.015);
+function baseSprite(z, side, theme, kind) {
+  const zi = Math.round(Math.log(z) / ZSTEP), zb = Math.exp(zi * ZSTEP);
+  const key = `${kind}|${side}|${theme}|${zi}`;
+  let sp = BASE_SPR.get(key);
+  if (sp) { BASE_SPR.delete(key); BASE_SPR.set(key, sp); return { sp, f: z / zb }; }
+  const rx = BASE.rx * zb, ry = BASE.ry * zb, th = BASE.th * zb;
+  const pad = (kind === 'base' ? 2 : 14) * zb;
+  const ox = rx + pad + 1.6 * zb, oy = th + ry + pad + 0.9 * zb;
+  const W = Math.ceil(ox * 2), H = Math.ceil(oy + ry + pad + 1);
+  if (W * H > 2.5e6) return null;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.translate(ox, oy);
+  if (kind === 'base') paintBase(g, zb, side, theme); else paintRing(g, zb, side, kind === 'ring2' ? 2 : 1);
+  sp = { cv, ox, oy };
+  BASE_SPR.set(key, sp);
+  if (BASE_SPR.size > 64) BASE_SPR.delete(BASE_SPR.keys().next().value);
+  return { sp, f: z / zb };
+}
+function blit(g, s) { g.drawImage(s.sp.cv, -s.sp.ox * s.f, -s.sp.oy * s.f, s.sp.cv.width * s.f, s.sp.cv.height * s.f); }
+
+function drawBase(g, z, side, hl, now, flash, theme = 'tarmac') {
+  const rx = BASE.rx * z, ry = BASE.ry * z, th = BASE.th * z;
+  const rim = side === 'player' ? '#5aa8ff' : '#ff5a48';
+  const bs = baseSprite(z, side, theme, 'base');
+  if (bs) blit(g, bs); else paintBase(g, z, side, theme);
   if (hl) {
     // selection glow ring, breathing slowly; brighter gold for the unit that is acting
     const k = 0.6 + 0.4 * Math.sin(now / 260);
+    const al = hl === 2 ? 0.55 + 0.4 * k : 0.45 + 0.4 * k;
     g.save();
     g.globalCompositeOperation = 'lighter';
-    g.shadowColor = hl === 2 ? '#f0d060' : rim; g.shadowBlur = 6 * z;
-    g.strokeStyle = hl === 2 ? `rgba(240,208,96,${0.55 + 0.4 * k})` : hexRgba(rim, 0.45 + 0.4 * k);
-    g.lineWidth = 1.4 * z;
-    g.beginPath(); g.ellipse(0, -th * 0.5, rx + 1.6 * z, ry + 0.9 * z, 0, 0, Math.PI * 2); g.stroke();
+    const rs = baseSprite(z, side, 'ring', hl === 2 ? 'ring2' : 'ring1');
+    if (rs) { g.globalAlpha = Math.min(1, al); blit(g, rs); }
+    else {
+      g.shadowColor = hl === 2 ? '#f0d060' : rim; g.shadowBlur = 6 * z;
+      g.strokeStyle = hl === 2 ? `rgba(240,208,96,${al})` : hexRgba(rim, al);
+      g.lineWidth = 1.4 * z;
+      g.beginPath(); g.ellipse(0, -th * 0.5, rx + 1.6 * z, ry + 0.9 * z, 0, 0, Math.PI * 2); g.stroke();
+    }
     g.restore();
   }
   if (flash > 0) {

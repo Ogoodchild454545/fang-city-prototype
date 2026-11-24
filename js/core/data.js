@@ -1,15 +1,15 @@
 // Static game definitions. Pure data: safe to share between client and a future server.
 
-export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.17.0' };
+export const GAME = { title: 'FANG CITY', subtitle: 'Animal Gangs', version: '0.18.0' };
 
 export const SPECIES = {
-  wolf:   { name: 'Wolf',      gang: 'grey',  img: 'assets/wolf.jpg',   base: { muscle: 55, aim: 60, nerve: 62 }, trait: 'pack',  traitName: 'Pack Tactics', traitDesc: '+15% damage when next to an ally' },
-  rat:    { name: 'Rat',       gang: 'grey',  img: 'assets/rat.jpg',    base: { muscle: 35, aim: 55, nerve: 45 }, trait: 'scurry', traitName: 'Scurry', traitDesc: '+1 AP every turn' },
-  badger: { name: 'Badger',    gang: 'iron',  img: 'assets/badger.jpg', base: { muscle: 72, aim: 40, nerve: 66 }, trait: 'hide',  traitName: 'Thick Hide', traitDesc: 'Takes 1 less damage from every hit' },
-  bear:   { name: 'Bear',      gang: 'iron',  img: 'assets/bear.jpg',   base: { muscle: 82, aim: 30, nerve: 50 }, trait: 'bulk',  traitName: 'Bulk', traitDesc: '+30% max health' },
-  fox:    { name: 'Fox',       gang: 'velvet',img: 'assets/fox.jpg',    base: { muscle: 42, aim: 72, nerve: 64 }, trait: 'cold',  traitName: 'Cold Blood', traitDesc: '+15% critical chance' },
-  croc:   { name: 'Crocodile', gang: 'swamp', img: 'assets/croc.jpg',   base: { muscle: 78, aim: 42, nerve: 58 }, trait: 'roll',  traitName: 'Death Roll', traitDesc: '+25% melee damage' },
-  snake:  { name: 'Snake',     gang: 'swamp', img: 'assets/snake.jpg',  base: { muscle: 40, aim: 62, nerve: 60 }, trait: 'venom', traitName: 'Venom', traitDesc: 'Hits poison the target (3 dmg for 2 turns)' },
+  wolf:   { name: 'Wolf',      gang: 'grey',  img: 'assets/wolf.webp',   base: { muscle: 55, aim: 60, nerve: 62 }, trait: 'pack',  traitName: 'Pack Tactics', traitDesc: '+15% damage when next to an ally' },
+  rat:    { name: 'Rat',       gang: 'grey',  img: 'assets/rat.webp',    base: { muscle: 35, aim: 55, nerve: 45 }, trait: 'scurry', traitName: 'Scurry', traitDesc: '+1 AP every turn' },
+  badger: { name: 'Badger',    gang: 'iron',  img: 'assets/badger.webp', base: { muscle: 72, aim: 40, nerve: 66 }, trait: 'hide',  traitName: 'Thick Hide', traitDesc: 'Takes 1 less damage from every hit' },
+  bear:   { name: 'Bear',      gang: 'iron',  img: 'assets/bear.webp',   base: { muscle: 82, aim: 30, nerve: 50 }, trait: 'bulk',  traitName: 'Bulk', traitDesc: '+30% max health' },
+  fox:    { name: 'Fox',       gang: 'velvet',img: 'assets/fox.webp',    base: { muscle: 42, aim: 72, nerve: 64 }, trait: 'cold',  traitName: 'Cold Blood', traitDesc: '+15% critical chance' },
+  croc:   { name: 'Crocodile', gang: 'swamp', img: 'assets/croc.webp',   base: { muscle: 78, aim: 42, nerve: 58 }, trait: 'roll',  traitName: 'Death Roll', traitDesc: '+25% melee damage' },
+  snake:  { name: 'Snake',     gang: 'swamp', img: 'assets/snake.webp',  base: { muscle: 40, aim: 62, nerve: 60 }, trait: 'venom', traitName: 'Venom', traitDesc: 'Hits poison the target (3 dmg for 2 turns)' },
 };
 
 export const GANGS = {
@@ -126,9 +126,9 @@ export const DEPLOY_CAP = 8; // troops per battle (bosses come on top)
 
 // Bosses: named, collectable heroes with a once-per-battle skill. Unlocked by Den level.
 export const BOSSES = {
-  magrey: { name: 'Ma Grey', species: 'wolf', img: 'assets/boss-magrey.jpg', den: 2, cost: 2500, role: 'shooter', base: { muscle: 66, aim: 74, nerve: 80 }, weapon: 'smg', armour: 'leather', hp: 1.5,
+  magrey: { name: 'Ma Grey', species: 'wolf', img: 'assets/boss-magrey.webp', den: 2, cost: 2500, role: 'shooter', base: { muscle: 66, aim: 74, nerve: 80 }, weapon: 'smg', armour: 'leather', hp: 1.5,
             skill: 'howl', skillName: 'Rally Howl', skillDesc: 'Every crew member gets +2 AP right now. Once per battle.' },
-  scales: { name: 'Old Scales', species: 'croc', img: 'assets/boss.jpg', den: 4, cost: 40000, role: 'enforcer', base: { muscle: 92, aim: 50, nerve: 76 }, weapon: 'sledge', armour: 'ironhide', hp: 1.9,
+  scales: { name: 'Old Scales', species: 'croc', img: 'assets/boss.webp', den: 4, cost: 40000, role: 'enforcer', base: { muscle: 92, aim: 50, nerve: 76 }, weapon: 'sledge', armour: 'ironhide', hp: 1.9,
             skill: 'roll', skillName: 'Death Roll', skillDesc: 'A crushing bite on an adjacent enemy: triple damage that ignores armour, and he heals half of it. Once per battle.' },
 };
 export const BOSS_ORDER = ['magrey', 'scales'];
@@ -139,11 +139,11 @@ export const BOSS_REST_MIN = 10; // minutes a knocked-out boss needs before the 
 export const MISSIONS = [
   { gang: 'grey',   name: "Grey Pack Turf",      img: 'assets/turf/grey-pack.jpg',      den: 1, blurb: 'Tower blocks and a scrapyard held by wolves and rats.',
     stages: [{ name: 'Corner Shakedown', count: 3, level: 1, tier: 0 }, { name: 'Scrapyard Ambush', count: 4, level: 3, tier: 1 }, { name: 'The Pack Leader', count: 4, level: 5, tier: 1 }] },
-  { gang: 'iron',   name: 'Iron Claw Yards',     img: 'assets/turf/iron-claw.jpg',      den: 2, blurb: 'Warehouses, trucks and a boxing gym run by badgers and bears.',
+  { gang: 'iron',   name: 'Iron Claw Yards',     img: 'assets/turf/iron-claw.webp',      den: 2, blurb: 'Warehouses, trucks and a boxing gym run by badgers and bears.',
     stages: [{ name: 'Loading Bay', count: 4, level: 5, tier: 1 }, { name: 'Gym Brawl', count: 4, level: 7, tier: 2 }, { name: 'Iron Foreman', count: 5, level: 9, tier: 2 }] },
-  { gang: 'velvet', name: 'Velvet Den Strip',    img: 'assets/turf/velvet-den.jpg',     den: 3, blurb: 'Neon clubs and a casino where the foxes count the money.',
+  { gang: 'velvet', name: 'Velvet Den Strip',    img: 'assets/turf/velvet-den.webp',     den: 3, blurb: 'Neon clubs and a casino where the foxes count the money.',
     stages: [{ name: 'Velvet Rope', count: 4, level: 9, tier: 2 }, { name: 'Casino Floor', count: 5, level: 11, tier: 3 }, { name: 'The Gryphon Penthouse', count: 5, level: 13, tier: 3 }] },
-  { gang: 'swamp',  name: 'Swamp Syndicate Docks', img: 'assets/turf/swamp-syndicate.jpg', den: 4, blurb: 'Fog, containers and a pawn shop. Crocs and snakes own the harbour.',
+  { gang: 'swamp',  name: 'Swamp Syndicate Docks', img: 'assets/turf/swamp-syndicate.webp', den: 4, blurb: 'Fog, containers and a pawn shop. Crocs and snakes own the harbour.',
     stages: [{ name: 'Fog on the Quay', count: 5, level: 13, tier: 3 }, { name: 'Container Maze', count: 5, level: 16, tier: 4 }, { name: 'Deacon Mire', count: 5, level: 19, tier: 4, boss: true }] },
 ];
 

@@ -13,16 +13,16 @@ export function fmt(n, dec = 1) {
 }
 export const money = (n) => '$' + fmt(n);
 export const ICO = {
-  cash: 'assets/icons/cash-64.png',
-  influence: 'assets/icons/rep-64.png',
-  teeth: 'assets/icons/ice-64.png',
-  ammo: 'assets/icons/ammo-64.png',
-  medkits: 'assets/icons/medkit-64.png',
-  parts: 'assets/icons/parts-64.png',
+  cash: 'assets/icons/cash-64.webp',
+  influence: 'assets/icons/rep-64.webp',
+  teeth: 'assets/icons/ice-64.webp',
+  ammo: 'assets/icons/ammo-64.webp',
+  medkits: 'assets/icons/medkit-64.webp',
+  parts: 'assets/icons/parts-64.webp',
 };
 const NAMES = { influence: 'Rep', cash: 'Cash', teeth: 'Ice', ammo: 'Ammo', medkits: 'Medkits', parts: 'Parts' };
 export const resName = (r) => NAMES[r] || r;
-export const ico = (r, cls = 'ico-img') => `<img class="${cls}" src="${ICO[r] || ICO.cash}" alt="${resName(r)}">`;
+export const ico = (r, cls = 'ico-img') => `<img loading="lazy" decoding="async" class="${cls}" src="${ICO[r] || ICO.cash}" alt="${resName(r)}">`;
 export function dur(sec) {
   sec = Math.max(0, Math.ceil(sec));
   if (sec < 60) return `${sec}s`;

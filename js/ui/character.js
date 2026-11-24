@@ -15,7 +15,7 @@ import * as Audio from './audio.js';
 import { abilityIcon } from './tactics.js';
 
 // v0.11: painted item icons (assets/items/{id}.webp), framed by rarity. No emoji for items.
-export const itemImg = (id, cls = '') => `<img class="iimg ${cls}" src="${itemIcon(id)}" alt="" draggable="false" loading="lazy">`;
+export const itemImg = (id, cls = '') => `<img decoding="async" class="iimg ${cls}" src="${itemIcon(id)}" alt="" draggable="false" loading="lazy">`;
 // Empty slots show a faded silhouette of a typical piece for that slot.
 const GHOST = { primary: 'carbine', melee: 'tyreiron', head: 'flatcap', jacket: 'hoodie', body: 'gilet', gloves: 'fingerless', boots: 'workboots', acc1: 'watch', acc2: 'ring', utility: 'pipebomb', consumable: 'dressings', trinket: 'dice' };
 const icoOf = (id) => itemImg(id);
@@ -218,7 +218,7 @@ export function render(ctx) {
     <div class="charbody">
       <div class="doll">
         <div class="dcol">${L.map((x) => slotBtn(s, rec, c, x)).join('')}</div>
-        <div class="dpor"><img src="${d.portrait}" alt="${esc(d.name)}"><div class="dcls tiny">${esc((classOf(d) || {}).blurb || '')}</div></div>
+        <div class="dpor"><img loading="lazy" decoding="async" src="${d.portrait}" alt="${esc(d.name)}"><div class="dcls tiny">${esc((classOf(d) || {}).blurb || '')}</div></div>
         <div class="dcol">${R.map((x) => slotBtn(s, rec, c, x)).join('')}</div>
       </div>
       ${statPanel(s, c)}

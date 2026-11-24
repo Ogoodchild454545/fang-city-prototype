@@ -50,7 +50,7 @@ export function render(ctx) {
   ${crateBlock(s, now)}
 
   ${starterOwned ? '' : `<div class="card featured"><div class="row">
-    <div class="img" style="background-image:url(assets/fox.jpg)"></div>
+    <div class="img" style="background-image:url(assets/fox.webp)"></div>
     <div class="grow"><div class="tiny gold h">One-time offer</div><div class="h" style="font-size:20px">Starter Crate</div>
       <div class="tiny dim">${SHOP.offers[0].desc}</div>
       <button class="btn red" style="margin-top:6px" data-act="buy" data-kind="offer" data-id="starter">${SHOP.offers[0].price}</button></div></div></div>`}

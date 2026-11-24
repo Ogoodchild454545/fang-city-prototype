@@ -25,7 +25,7 @@ function jobsPanel(s, now) {
   const act = s.opJobs.map((j) => {
     const job = P.OP_JOBS.find((x) => x.id === j.job) || P.OP_JOBS[0];
     const done = now >= j.end;
-    return `<div class="shrow"><img src="${HEROES[j.hero]?.thumb || HEROES[j.hero]?.portrait}" alt=""><div class="grow"><b class="small">${esc(HEROES[j.hero]?.name || j.hero)}</b>
+    return `<div class="shrow"><img loading="lazy" decoding="async" src="${HEROES[j.hero]?.thumb || HEROES[j.hero]?.portrait}" alt=""><div class="grow"><b class="small">${esc(HEROES[j.hero]?.name || j.hero)}</b>
       <div class="tiny dim">${esc(job.name)} · ${done ? '<span class="green">Done</span>' : left(j.end, now)}</div></div>
       ${done ? `<button class="btn sm red" data-act="collectOpJob" data-id="${j.hero}">Collect</button>` : ''}</div>`;
   }).join('');

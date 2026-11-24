@@ -21,17 +21,34 @@ const ALL_SPRITES = ['hq1', 'hq2', 'hq3', ...Object.keys(BUILDINGS).filter((k) =
 
 const imgs = {};
 let loaded = 0;
-export function preload(onAll) {
-  const list = [...new Set(ALL_SPRITES)];
+const views = new Set(); // live BaseViews, redrawn when a lazily requested sprite arrives
+// Building / obstacle sprites load on demand: only what the base actually shows is fetched up front,
+// anything else (a new build, an upgrade, the build menu ghost) is requested the first time it's drawn.
+function want(n, done) {
+  if (imgs[n]) { done?.(); return imgs[n]; }
+  const im = new Image(); im.decoding = 'async';
+  im.onload = () => { loaded++; done?.(); for (const v of views) v.dirty = true; };
+  im.onerror = () => done?.();
+  im.src = `assets/base/${n}.webp`; imgs[n] = im;
+  return im;
+}
+export function spriteNames(st) {
+  const out = new Set();
+  for (const b of st?.base?.buildings || []) out.add(spriteFor(b.t, Math.max(1, b.lv)));
+  for (const o of st?.base?.obstacles || []) out.add(o.t);
+  return [...out].filter((n) => ALL_SPRITES.includes(n));
+}
+export function preload(onAll, names = ALL_SPRITES) {
+  const list = [...new Set(names)];
   const tex = ['ground', 'grass', 'asphalt'];
-  const icons = { icon_cash: 'assets/icons/cash.png', icon_influence: 'assets/icons/rep.png', icon_ammo: 'assets/icons/ammo.png', icon_medkits: 'assets/icons/medkit.png', icon_parts: 'assets/icons/parts.png' };
+  const icons = { icon_cash: 'assets/icons/cash.webp', icon_influence: 'assets/icons/rep.webp', icon_ammo: 'assets/icons/ammo.webp', icon_medkits: 'assets/icons/medkit.webp', icon_parts: 'assets/icons/parts.webp' };
   let need = list.length + tex.length + Object.keys(icons).length;
   const done = () => { loaded++; if (--need === 0) onAll?.(); };
-  for (const n of list) { if (imgs[n]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = `assets/base/${n}.webp`; imgs[n] = im; }
-  for (const n of tex) { if (imgs[n]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = `assets/base/${n}.jpg`; imgs[n] = im; }
+  for (const n of list) want(n, done);
+  for (const n of tex) { if (imgs[n]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = `assets/base/${n}.${n === 'grass' ? 'jpg' : 'webp'}`; imgs[n] = im; }
   for (const [k, src] of Object.entries(icons)) { if (imgs[k]) { done(); continue; } const im = new Image(); im.onload = done; im.onerror = done; im.src = src; imgs[k] = im; }
 }
-export const spriteImg = (n) => imgs[n];
+export const spriteImg = (n) => imgs[n] || (ALL_SPRITES.includes(n) ? want(n) : undefined);
 
 // tile (top corner) -> world px
 export const tileToWorld = (i, j) => ({ x: (i - j) * TW / 2, y: (i + j) * TH / 2 });
@@ -130,9 +147,11 @@ export class BaseView {
     this.hitBubbles = [];
     this.resize();
     this.bind();
+    this.fx = new FxCache();
+    views.add(this);
     this.raf = requestAnimationFrame(this.frame.bind(this));
   }
-  destroy() { cancelAnimationFrame(this.raf); this.dead = true; this.ro?.disconnect(); }
+  destroy() { cancelAnimationFrame(this.raf); this.dead = true; this.ro?.disconnect(); views.delete(this); }
   resize() {
     const r = this.cv.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -238,17 +257,20 @@ export class BaseView {
   // ----- drawing
   frame(ts) {
     if (this.dead) return;
+    // the screen was swapped out (battle, another tab): stop for good instead of drawing to a detached canvas
+    if (!this.cv.isConnected) { this.destroy(); return; }
     this.raf = requestAnimationFrame(this.frame.bind(this));
     if (!this.dirty && !this.anim) return;
     if (!this.dirty && ts - (this.lastDraw || 0) < 40) return; // idle animation (bubbles, timers) capped ~25fps
+    // idle animation pauses while the tab is hidden or a sheet/modal covers the base; input still redraws
+    if (!this.dirty && (document.hidden || document.querySelector('.overlay'))) return;
     this.lastDraw = ts;
     this.dirty = false;
     this.draw(ts);
   }
-  draw(ts = performance.now()) {
-    const st = this.hooks.getState();
-    if (!st) return;
-    const g = this.g, dpr = this.dpr, z = this.cam.z;
+  drawScene(st, g) {
+    const mainG = this.g; this.g = g;
+    const dpr = this.dpr, z = this.cam.z;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = '#0a0908'; g.fillRect(0, 0, this.w, this.h);
     // world transform
@@ -274,7 +296,7 @@ export class BaseView {
       const type = it.ref.t;
       const lv = isB ? Math.max(1, it.ref.lv) : 1;
       const name = isB ? spriteFor(type, lv) : type;
-      const im = imgs[name];
+      const im = imgs[name] || want(name);
       const tw = SPR[name] || { w: 1 };
       const bottom = tileToWorld(it.x + it.s, it.y + it.s);
       const w = it.s * TW * tw.w * (isB ? 1 + Math.min(0.08, 0.01 * (lv - 1)) : 1);
@@ -289,9 +311,10 @@ export class BaseView {
       g.save();
       if (it.kind === 'ghost') g.globalAlpha = 0.8;
       else if (isB && it.ref.lv === 0) g.globalAlpha = 0.5;
-      if (isB && lv >= 7 && it.kind !== 'ghost') { g.shadowColor = 'rgba(255,190,70,0.75)'; g.shadowBlur = 16; }
-      else if (isB && lv >= 4 && it.kind !== 'ghost') { g.shadowColor = 'rgba(255,120,60,0.45)'; g.shadowBlur = 10; }
-      if (im && im.complete && im.naturalWidth) g.drawImage(im, x, y, w, h);
+      const glow = isB && it.kind !== 'ghost' ? (lv >= 7 ? 2 : lv >= 4 ? 1 : 0) : 0;
+      const gs = glow && im && im.complete && im.naturalWidth ? this.fx.glow(name, im, glow, w, h, z * dpr) : null;
+      if (gs) g.drawImage(gs.cv, x - gs.pad, y - gs.pad, w + gs.pad * 2, h + gs.pad * 2);
+      else if (im && im.complete && im.naturalWidth) g.drawImage(im, x, y, w, h);
       else { g.fillStyle = '#3a2e26'; g.fillRect(x, y + h * 0.4, w, h * 0.6); }
       g.restore();
       if (it.kind !== 'ghost') {
@@ -302,15 +325,45 @@ export class BaseView {
       over.push({ it, top, bottom, isB, lv });
     }
     this.lastBoxes = boxes;
+    this.sceneOver = over;
     // overlays in screen space
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     // dusk grade: warm from the top-left, cold in the shadows
-    const grd = g.createLinearGradient(0, 0, this.w, this.h);
-    grd.addColorStop(0, 'rgba(255,140,60,0.10)'); grd.addColorStop(0.5, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(30,40,90,0.22)');
-    g.fillStyle = grd; g.fillRect(0, 0, this.w, this.h);
-    const vg = g.createRadialGradient(this.w / 2, this.h / 2, Math.min(this.w, this.h) * 0.45, this.w / 2, this.h / 2, Math.max(this.w, this.h) * 0.75);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
-    g.fillStyle = vg; g.fillRect(0, 0, this.w, this.h);
+    g.drawImage(this.fx.grade(this.w, this.h, dpr), 0, 0, this.w, this.h);
+    this.g = mainG;
+  }
+  // Everything up to the dusk grade (ground, highlights, sprites, glows) only changes when the camera,
+  // the canvas size or the base layout does. It is rendered once into an offscreen layer; the 25fps idle
+  // animation (bubbles bobbing, build timers) just blits that layer and redraws the overlays on top.
+  sceneKey(st) {
+    const c = this.cam, gh = this.ghost;
+    let k = `${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(4)},${this.w}x${this.h}@${this.dpr}|${this.sel}|${this.hidden}|${gh ? `${gh.type},${gh.x},${gh.y},${gh.ok},${gh.lv}` : ''}|${st.base.seed}|${loaded}`;
+    for (const b of st.base.buildings) k += `|${b.id}${b.t}${b.x},${b.y},${b.lv}`;
+    for (const o of st.base.obstacles) k += `|${o.id}${o.t}${o.x},${o.y}`;
+    return k;
+  }
+  draw(ts = performance.now()) {
+    const st = this.hooks.getState();
+    if (!st) return;
+    const g = this.g, dpr = this.dpr, z = this.cam.z;
+    const key = this.sceneKey(st);
+    if (key !== this.sceneK || !this.scene || this.scene.width !== this.cv.width || this.scene.height !== this.cv.height) {
+      if (!this.scene) this.scene = document.createElement('canvas');
+      if (this.scene.width !== this.cv.width || this.scene.height !== this.cv.height) { this.scene.width = this.cv.width; this.scene.height = this.cv.height; }
+      this.drawScene(st, this.scene.getContext('2d'));
+      this.sceneK = key;
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'copy';
+    g.drawImage(this.scene, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const byId = new Map();
+    for (const x of st.base.buildings) byId.set(x.id, x);
+    for (const x of st.base.obstacles) byId.set(x.id, x);
+    const over = this.sceneOver || [];
+    for (const o of over) if (o.it.kind !== 'ghost') o.it.ref = byId.get(o.it.id) || o.it.ref;
+    const now = this.hooks.now();
     this.hitBubbles = [];
     let animating = false;
     for (const o of over) {
@@ -352,12 +405,8 @@ export class BaseView {
         animating = true;
         const icon = imgs['icon_' + (bub.res || 'cash')] || imgs.icon_cash;
         const s = Math.max(28, Math.round(r * 2.6));
-        g.save();
-        g.shadowColor = 'rgba(0,0,0,0.65)'; g.shadowBlur = 8; g.shadowOffsetY = 2;
-        g.beginPath(); g.arc(bx, by, s / 2 + 2, 0, Math.PI * 2);
-        g.fillStyle = bub.full ? 'rgba(80,16,12,0.92)' : 'rgba(10,8,8,0.78)';
-        g.fill();
-        g.restore();
+        const disc = this.fx.disc(s / 2 + 2, !!bub.full, dpr);
+        g.drawImage(disc.cv, bx - disc.half, by - disc.half, disc.half * 2, disc.half * 2);
         const ring = { cash: '#e0a526', influence: '#d4a03a', ammo: '#9aaa5a', medkits: '#3aa07a', parts: '#c07a3a' };
         g.strokeStyle = ring[bub.res] || '#e0a526';
         g.lineWidth = 2;
@@ -377,6 +426,63 @@ export class BaseView {
     g.fillStyle = fill; g.fill(); g.lineWidth = 2 / this.cam.z; g.strokeStyle = stroke; g.stroke();
   }
   rr(x, y, w, h, r) { const g = this.g; g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+}
+
+// Pre-rendered effects for the base view so the idle animation never runs shadowBlur or builds gradients:
+// the dusk grade + vignette (one canvas per size), bubble discs with their drop shadow, and the warm glow
+// around Lv 4+ / Lv 7+ buildings, baked at the current device scale so it looks exactly like the live blur.
+class FxCache {
+  constructor() { this.gradeKey = ''; this.gradeCv = null; this.discs = new Map(); this.glows = new Map(); }
+  grade(w, h, dpr) {
+    const key = `${w}x${h}@${dpr}`;
+    if (this.gradeKey === key) return this.gradeCv;
+    const cv = this.gradeCv || document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w * dpr)); cv.height = Math.max(1, Math.round(h * dpr));
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    const grd = g.createLinearGradient(0, 0, w, h);
+    grd.addColorStop(0, 'rgba(255,140,60,0.10)'); grd.addColorStop(0.5, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(30,40,90,0.22)');
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    const vg = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45, w / 2, h / 2, Math.max(w, h) * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    g.fillStyle = vg; g.fillRect(0, 0, w, h);
+    this.gradeKey = key; this.gradeCv = cv;
+    return cv;
+  }
+  disc(rad, full, dpr) {
+    const key = `${rad}|${full}|${dpr}`;
+    let d = this.discs.get(key);
+    if (d) return d;
+    const half = rad + 12; // room for the 8px blur + 2px drop
+    const cv = document.createElement('canvas'); cv.width = cv.height = Math.ceil(half * 2 * dpr);
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.shadowColor = 'rgba(0,0,0,0.65)'; g.shadowBlur = 8; g.shadowOffsetY = 2; // device px, like the live shadow was
+    g.beginPath(); g.arc(half, half, rad, 0, Math.PI * 2);
+    g.fillStyle = full ? 'rgba(80,16,12,0.92)' : 'rgba(10,8,8,0.78)'; g.fill();
+    d = { cv, half };
+    if (this.discs.size > 24) this.discs.clear();
+    this.discs.set(key, d);
+    return d;
+  }
+  glow(name, im, band, w, h, scale) {
+    // scale = device px per world unit; bucket it so a pinch doesn't rebuild every frame
+    const sb = Math.round(scale * 16) / 16;
+    const key = `${name}|${band}|${sb}|${Math.round(w)}`;
+    let e = this.glows.get(key);
+    if (e) { this.glows.delete(key); this.glows.set(key, e); return e; }
+    const blur = band === 2 ? 16 : 10; // device px, as the live shadowBlur was
+    const pad = (blur * 1.5) / sb; // world units
+    const cw = Math.ceil((w + pad * 2) * sb), ch = Math.ceil((h + pad * 2) * sb);
+    if (cw * ch > 4.2e6) return null; // absurd zoom: fall back to the live path
+    const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+    const g = cv.getContext('2d');
+    g.shadowColor = band === 2 ? 'rgba(255,190,70,0.75)' : 'rgba(255,120,60,0.45)'; g.shadowBlur = blur;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(im, pad * sb, pad * sb, w * sb, h * sb);
+    e = { cv, pad };
+    this.glows.set(key, e);
+    if (this.glows.size > 40) this.glows.delete(this.glows.keys().next().value);
+    return e;
+  }
 }
 
 function fmtDur(sec) {

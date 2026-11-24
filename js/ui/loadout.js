@@ -87,7 +87,7 @@ function slot(ctx, d, i) {
   const capA = carryOf(s, id), capM = medCarry(s, id);
   const a = d.ammo[id] || 0, m = d.medkits[id] || 0;
   return `<article class="loadslot">
-    <img src="${h.portrait}" alt="">
+    <img loading="lazy" decoding="async" src="${h.portrait}" alt="">
     <div class="grow">
       <div class="hn">${esc(h.name)} <span class="tiny dim">Lv ${rec.lv || 1} ${esc(rankName(rec.lv || 1))}${rec.gear ? ' · ' + esc(KIT[rec.gear].name) : ''}</span>
         <button class="x sm" data-act="dropLoadHero" data-id="${id}">✕</button></div>

@@ -69,7 +69,7 @@ function propHtml(t, lv, fx, fy, size, extra = '') {
   const tw = SPR[name] || { w: 1 };
   const bx = cx(fx + size - 1, fy), by = cy(fx + size - 1, fy) + G.ch / 2;
   const w = size * G.cw * tw.w * (size > 1 ? 0.9 : 1);
-  return `<img class="iprop ${extra.includes('data-w') ? 'wrecked' : ''}" ${extra} src="assets/base/${name}.webp" alt="" style="left:${bx}px;top:${by}px;width:${w}px;transform:translate(-50%,calc(-100% + ${(tw.dy || 0) * G.ch * size}px));z-index:${Math.round(by)}">`;
+  return `<img loading="lazy" decoding="async" class="iprop ${extra.includes('data-w') ? 'wrecked' : ''}" ${extra} src="assets/base/${name}.webp" alt="" style="left:${bx}px;top:${by}px;width:${w}px;transform:translate(-50%,calc(-100% + ${(tw.dy || 0) * G.ch * size}px));z-index:${Math.round(by)}">`;
 }
 
 function unitHtml(b, u, sel, tgt) {
@@ -90,7 +90,7 @@ function unitHtml(b, u, sel, tgt) {
   </div>`;
 }
 
-const unitImg = (u) => u.img || (u.boss ? 'assets/croc.jpg' : SPECIES[u.species].img);
+const unitImg = (u) => u.img || (u.boss ? 'assets/croc.webp' : SPECIES[u.species].img);
 const PLAYER_SIDE = { name: 'Your Crew', colour: '#c9302c' };
 const starRow = (n) => `<span class="stars">${[0, 1, 2].map((i) => (i < n ? '★' : '<span class="off">★</span>')).join('')}</span>`;
 

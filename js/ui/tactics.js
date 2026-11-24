@@ -894,8 +894,14 @@ function draw(ctx) {
     if (u.shake < 0.4) u.shake = 0;
   }
   g.setTransform(1, 0, 0, 1, 0, 0);
-  g.clearRect(0, 0, cv.width, cv.height);
-  Dock.drawSky(g, cv.width, cv.height, b.map);
+  {
+    // night tint + vignette live in a CSS layer over the canvas: composited, never re-rasterised
+    const tv = cv.nextElementSibling;
+    if (tv && tv.classList.contains('tvig')) {
+      const k = `${w}x${h}|${b.map.env && b.map.env.time}`;
+      if (tv.dataset.k !== k) { tv.style.background = Dock.screenTint(w, h, b.map); tv.dataset.k = k; }
+    }
+  }
 
   const fx = Vfx.ensure(u);
   const dt = Math.min(0.05, Math.max(0, (now - (u.lastFx || now)) / 1000));
@@ -903,8 +909,34 @@ function draw(ctx) {
   Vfx.tick(fx, dt);
   Vfx.applyPan(fx, cam);
   const nudge = Vfx.nudgeOffset(fx, cam, cv);
+  const offX = cam.x + shakeX + nudge.x, offY = cam.y + shakeY + nudge.y;
+  // Static ground layer (v0.18): sky + baked yard + close-zoom detail + scorch marks. While the camera
+  // holds still it is painted once into a layer and the frame starts with a single copy of it; while
+  // the camera moves it is drawn directly (a layer is only built once the same view repeats).
+  {
+    const sky = Dock.skyCanvas(cv.width, cv.height, b.map);
+    g.setTransform(1, 0, 0, 1, offX, offY);
+    const gk = `${offX},${offY},${z},${cv.width}x${cv.height},${Dock.groundSig(g, b.map, z)},${b.map.theme},${b.map.env && b.map.env.time}`;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    const paintGround = (gg) => {
+      gg.setTransform(1, 0, 0, 1, 0, 0);
+      gg.globalCompositeOperation = 'copy'; gg.drawImage(sky, 0, 0); gg.globalCompositeOperation = 'source-over';
+      gg.setTransform(1, 0, 0, 1, offX, offY);
+      Dock.drawYardStatic(gg, b.map, z);
+      gg.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    if (u._gk !== gk && u._gkPrev === gk) {
+      const L = u._gcv || (u._gcv = document.createElement('canvas'));
+      if (L.width !== cv.width || L.height !== cv.height) { L.width = cv.width; L.height = cv.height; }
+      paintGround(L.getContext('2d'));
+      u._gk = gk;
+    }
+    if (u._gk === gk && u._gcv) { g.globalCompositeOperation = 'copy'; g.drawImage(u._gcv, 0, 0); g.globalCompositeOperation = 'source-over'; }
+    else paintGround(g);
+    u._gkPrev = gk;
+  }
   g.save();
-  g.translate(cam.x + shakeX + nudge.x, cam.y + shakeY + nudge.y);
+  g.translate(offX, offY);
 
   const actor = T.actingUnit(b);
   const sel = (actor && actor.side === 'player' && actor.hp > 0)
@@ -927,32 +959,36 @@ function draw(ctx) {
     danger = u._danger;
   }
 
-  const order = [];
-  for (let y = 0; y < b.map.h; y++) for (let x = 0; x < b.map.w; x++) order.push({ x, y, depth: x + y });
-  order.sort((a, c) => a.depth - c.depth);
+  // tile draw order + key strings are fixed per map: built once, not every frame
+  if (u._orderMap !== b.map || !u._order) {
+    const o = [];
+    for (let y = 0; y < b.map.h; y++) for (let x = 0; x < b.map.w; x++) { const p = toWorld(x, y); o.push({ x, y, depth: x + y, k: `${x},${y}`, wx: p.x, wy: p.y }); }
+    o.sort((a, c) => a.depth - c.depth);
+    u._order = o; u._orderMap = b.map;
+  }
+  const order = u._order;
 
   Dock.prepMap(b.map);
-  Dock.drawYard(g, b.map, z, now);
+  Dock.drawYardLive(g, b.map, z, now);
   Dock.drawBackdrop(g, b.map, z, now);
   for (const sp of Dock.sceneryOf(b.map)) if (sp.depth < 0) Dock.drawScenery(g, sp, z, now);
   const owz = cachedZones(u, b);
   for (const c of order) {
     const t = tile(b.map, c.x, c.y);
-    const p = toWorld(c.x, c.y);
-    const sx = p.x * z, sy = p.y * z;
-    const oz = owz.size ? owz.get(`${c.x},${c.y}`) : null;
+    const sx = c.wx * z, sy = c.wy * z;
+    const oz = owz.size ? owz.get(c.k) : null;
     if (oz) drawOwTile(g, sx, sy, z, now, oz.foe.length > 0, oz.mine.length > 0, c.x, c.y, (qx, qy) => { const e = owz.get(`${qx},${qy}`); if (e && e.foe.length) return true; const tt = tile(b.map, qx, qy); return !!(tt && tt.block); });
-    if (reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel && sel.x === c.x && sel.y === c.y)) {
+    if (reach && reach.has(c.k) && !t.block && !(sel && sel.x === c.x && sel.y === c.y)) {
       hexPoly(g, sx, sy, z, 'rgba(70,140,255,0.22)', 'rgba(140,190,255,0.55)');
     }
-    if (danger && danger.has(`${c.x},${c.y}`) && !t.block) hexPoly(g, sx, sy, z, 'rgba(255,60,40,0.16)', 'rgba(255,110,90,0.45)');
+    if (danger && danger.has(c.k) && !t.block) hexPoly(g, sx, sy, z, 'rgba(255,60,40,0.16)', 'rgba(255,110,90,0.45)');
     if (pv && pv.x === c.x && pv.y === c.y) {
       hexPoly(g, sx, sy, z, pv.threats.length ? 'rgba(255,170,60,0.28)' : 'rgba(120,200,255,0.30)', pv.threats.length ? '#ffbe5a' : '#9fdcff');
       drawDestCover(g, b, c.x, c.y, sx, sy, z);
     }
     if (sel && u.hover && u.hover.x === c.x && u.hover.y === c.y && !(pv && pv.x === c.x && pv.y === c.y)) {
       hexPoly(g, sx, sy, z, 'rgba(255,220,120,0.16)', '#f0d060');
-      if (!u.hover.uid && reach && reach.has(`${c.x},${c.y}`) && !t.block && !(sel.x === c.x && sel.y === c.y)) {
+      if (!u.hover.uid && reach && reach.has(c.k) && !t.block && !(sel.x === c.x && sel.y === c.y)) {
         drawDestCover(g, b, c.x, c.y, sx, sy, z);
       }
     }
@@ -1137,9 +1173,12 @@ function draw(ctx) {
       const pts = [toWorld(hx + rr, hy), toWorld(hx, hy + rr), toWorld(hx - rr, hy), toWorld(hx, hy - rr)];
       g.save();
       g.globalAlpha = Math.max(0, 1 - k);
-      g.strokeStyle = '#e0a526'; g.lineWidth = 3 * z; g.shadowColor = 'rgba(224,165,38,.8)'; g.shadowBlur = 12 * z;
-      g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x * z, p.y * z) : g.moveTo(p.x * z, p.y * z))); g.closePath(); g.stroke();
+      g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x * z, p.y * z) : g.moveTo(p.x * z, p.y * z))); g.closePath();
       g.fillStyle = 'rgba(224,165,38,0.08)'; g.fill();
+      // glow as soft layered strokes (no shadowBlur: that was a full blur pass every frame of the ring)
+      g.lineJoin = 'round';
+      for (const [lw, a] of [[15, 0.10], [9, 0.18], [5.5, 0.3]]) { g.strokeStyle = `rgba(224,165,38,${a})`; g.lineWidth = lw * z; g.stroke(); }
+      g.strokeStyle = '#e0a526'; g.lineWidth = 3 * z; g.stroke();
       g.restore();
     }
   }
@@ -1197,8 +1236,7 @@ function draw(ctx) {
     g.restore();
   }
   g.restore();
-  Dock.drawWeather(g, cv.width, cv.height, b.map, now);
-  Dock.drawVignette(g, cv.width, cv.height);
+  Dock.drawWeather(g, cv.width, cv.height, b.map, now, true);
 
   // live PvP countdown in the HUD chip
   const tel = document.getElementById('ttimer');
@@ -1244,7 +1282,8 @@ function loop(ctx) {
     if (t >= 1) u.pathAnim = null;
   }
   if (b && !u.busy) syncTimer(u, b);
-  draw(ctx);
+  { const t0 = performance.now(); draw(ctx); const dt = performance.now() - t0; // v0.18: draw-time ring buffer for the perf tests
+    const pf = u.perf || (u.perf = { ms: new Float32Array(120), i: 0, n: 0 }); pf.ms[pf.i] = dt; pf.i = (pf.i + 1) % 120; pf.n++; }
   if (b && !u.busy && pvpTimerOn(b) && b.side === 'player' && u.deadline && remainMs(u) <= 0) {
     u.deadline = 0;
     doAct(ctx, { type: 'timeout' });
@@ -1495,7 +1534,7 @@ function inspectHtml(b, u) {
   }
   const pct = Math.max(0, Math.round(100 * un.hp / un.maxHp));
   return `<div class="tinsp ${foe ? 'foe' : ''}" id="tinsp">
-    <div class="tihead"><img src="${d.thumb || d.portrait}" alt=""><div><b>${esc(d.name)}</b><span>${foe ? 'Rival' : 'Your crew'} · ${esc((cls && cls.name) || d.role || '')} · ${esc(d.species || '')}</span></div><button class="tix" data-act="closeInspect" aria-label="Close">×</button></div>
+    <div class="tihead"><img loading="lazy" decoding="async" src="${d.thumb || d.portrait}" alt=""><div><b>${esc(d.name)}</b><span>${foe ? 'Rival' : 'Your crew'} · ${esc((cls && cls.name) || d.role || '')} · ${esc(d.species || '')}</span></div><button class="tix" data-act="closeInspect" aria-label="Close">×</button></div>
     <div class="tihp"><i style="width:${pct}%"></i><span>${Math.max(0, un.hp)}/${un.maxHp} HP</span></div>
     <div class="tistats"><span><em>Armour</em>${un.armor || 0}</span><span><em>AP</em>${un.ap}/${un.maxAp}</span><span><em>Move</em>${un.move}</span><span><em>Aim</em>${d.aim + (un.aimMod || 0)}</span><span><em>Ammo</em>${gun ? (un.ammo || 0) : '–'}</span>${un.dodge ? `<span><em>Dodge</em>${un.dodge}%</span>` : ''}</div>
     <div class="tiwep">${gun ? `${esc(gun.name)} ${gun.dmg[0]}–${gun.dmg[1]} · rng ${gun.range + (un.rangeBonus || 0)}` : 'No gun'}${mel ? ` · ${esc(mel.name)} ${mel.dmg[0] + (un.mdmg || 0)}–${mel.dmg[1] + (un.mdmg || 0)}` : ''}</div>
@@ -1866,7 +1905,7 @@ export function resultHtml(res, squad) {
   const sq = squad.map((x) => {
     const d = defOf(x.hero);
     const tag = x === mvp && res.win && x.kills ? '<em class="mvp">MVP</em>' : (x.hp <= 0 ? '<em class="ko">KO</em>' : '');
-    return `<div class="rsq ${x.hp <= 0 ? 'down' : ''} ${x === mvp && res.win && x.kills ? 'star' : ''}"><img src="${d.thumb || d.portrait}" alt=""><b>${esc(d.name)}</b><span>${x.kills ? x.kills + ' KO' : (x.hp > 0 ? 'Standing' : 'Down')}</span>${tag}</div>`;
+    return `<div class="rsq ${x.hp <= 0 ? 'down' : ''} ${x === mvp && res.win && x.kills ? 'star' : ''}"><img loading="lazy" decoding="async" src="${d.thumb || d.portrait}" alt=""><b>${esc(d.name)}</b><span>${x.kills ? x.kills + ' KO' : (x.hp > 0 ? 'Standing' : 'Down')}</span>${tag}</div>`;
   }).join('');
   const quipHero = mvp && defOf(mvp.hero);
   const qset = quipHero && quipHero.quips && (res.win ? (quipHero.quips.win || quipHero.quips.shoot) : (quipHero.quips.ko || quipHero.quips.hit));
@@ -1877,7 +1916,7 @@ export function resultHtml(res, squad) {
   if (res.trophies) tiles.push(`<div class="rt troph ${res.trophies < 0 ? 'neg' : ''}"><i class="trico">🏆</i><b data-count="${res.trophies}" data-sign="1">0</b><span>Trophies</span></div>`);
   if (res.shardDrop && res.shardDrop.added) {
     const sd = res.shardDrop, d = sd.id ? defOf(sd.id) : null;
-    tiles.push(`<div class="rt shard">${d ? `<img src="${d.thumb || d.portrait}" alt="">` : '<i class="trico">◆</i>'}<b data-count="${sd.added}" data-sign="1">0</b><span>${esc(sd.name)} shards${sd.unlocked ? ' · UNLOCKED' : ''}</span></div>`);
+    tiles.push(`<div class="rt shard">${d ? `<img loading="lazy" decoding="async" src="${d.thumb || d.portrait}" alt="">` : '<i class="trico">◆</i>'}<b data-count="${sd.added}" data-sign="1">0</b><span>${esc(sd.name)} shards${sd.unlocked ? ' · UNLOCKED' : ''}</span></div>`);
   }
   if (res.item && ITEMS[res.item]) {
     const it = ITEMS[res.item];
@@ -2031,7 +2070,7 @@ function queueHtml(b) {
     const foe = un.side === 'enemy' ? 'foe' : '';
     const dead = un.hp <= 0 ? 'dead' : '';
     const hp = Math.max(0, Math.min(1, un.hp / (un.maxHp || 1)));
-    return `<div class="tq ${on} ${foe} ${dead}" title="${esc(d.name)}"><img src="${d.thumb || d.portrait}" alt="">`
+    return `<div class="tq ${on} ${foe} ${dead}" title="${esc(d.name)}"><img loading="lazy" decoding="async" src="${d.thumb || d.portrait}" alt="">`
       + `<i class="tqhp"><i style="width:${Math.round(hp * 100)}%"></i></i>${dead ? '<b class="tqko">KO</b>' : ''}</div>`;
   }).join('')}</div>`;
 }
@@ -2188,11 +2227,11 @@ export function render(ctx) {
   if (actor && u.bannerAt && nowMs - u.bannerAt < 1250) {
     const ad = defOf(actor.hero), ac = classOf(ad);
     const foe = actor.side === 'enemy';
-    banner = `<div class="tbanner ${foe ? 'foe' : ''}" style="animation-delay:-${Math.round(nowMs - u.bannerAt)}ms"><img src="${ad.thumb || ad.portrait}" alt=""><div><b>${esc(ad.name)}</b><span>${foe ? 'Rival turn' : 'Your move'} · ${esc((ac && ac.name) || ad.role)}</span></div></div>`;
+    banner = `<div class="tbanner ${foe ? 'foe' : ''}" style="animation-delay:-${Math.round(nowMs - u.bannerAt)}ms"><img loading="lazy" decoding="async" src="${ad.thumb || ad.portrait}" alt=""><div><b>${esc(ad.name)}</b><span>${foe ? 'Rival turn' : 'Your move'} · ${esc((ac && ac.name) || ad.role)}</span></div></div>`;
   }
   return `
   <div class="twrap">
-    <canvas id="tacv"></canvas>
+    <canvas id="tacv"></canvas><div class="tvig"></div>
     <div class="tbar">
       <div class="tturn">${esc(turnLbl)} · ${esc(b.label)} · T${b.turn}${b.highStakes ? ' · <b class="hsflag">HIGH STAKES</b>' : ''}</div>
       <div class="ttimer" id="ttimer"></div>
@@ -2209,7 +2248,7 @@ export function render(ctx) {
     ${sel ? `
     <div class="tdock">
       <div class="thero ${sel.side === 'enemy' ? 'foe' : ''}">
-        <img class="tport" src="${def.portrait}" alt="">
+        <img loading="lazy" decoding="async" class="tport" src="${def.portrait}" alt="">
         <div class="tinfo">
           <div class="tuname">${esc(def.name)} <span class="tcls">${esc((cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
           <div class="thp"><i style="width:${Math.max(0, Math.round(100 * sel.hp / sel.maxHp))}%"></i><span>${sel.hp}/${sel.maxHp}</span></div>
@@ -2240,6 +2279,7 @@ export function mount(ctx, el) {
   // test/debug hook: replay a list of battle events (used by the v0.14 visual tests)
   window.__tfx = {
     play: (evs) => playEvents(ctx, evs),
+    perf() { const pf = ui(ctx).perf; if (!pf) return null; const a = [...pf.ms.slice(0, Math.min(120, pf.n))].sort((x, y) => x - y); return { avg: a.reduce((s2, v) => s2 + v, 0) / a.length, p95: a[Math.floor(a.length * 0.95)], n: pf.n }; },
     move(uid, x, y) {
       const bb = ctx.state.tactics, un = bb && bb.units.find((q) => q.uid === uid);
       const r = un && T.pathTo(bb, un, x, y);

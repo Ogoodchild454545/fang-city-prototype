@@ -18,7 +18,7 @@ export const TROOPS_UI = false;
 
 function bossSlot(ctx, id, i) {
   const s = ctx.state, now = ctx.now();
-  if (!id) return `<div class="bslot locked"><div class="bpor" style="background-image:url(assets/turf/lineup.jpg)"></div><div class="bmeta"><b class="h small">Locked</b><span class="tiny faint">Den 6 · coming soon</span></div><span class="lockic">🔒</span></div>`;
+  if (!id) return `<div class="bslot locked"><div class="bpor" style="background-image:url(assets/turf/lineup.webp)"></div><div class="bmeta"><b class="h small">Locked</b><span class="tiny faint">Den 6 · coming soon</span></div><span class="lockic">🔒</span></div>`;
   const d = BOSSES[id], own = s.bosses[id];
   const unlocked = C.bossUnlocked(s, id);
   const resting = own && own.restUntil > now;

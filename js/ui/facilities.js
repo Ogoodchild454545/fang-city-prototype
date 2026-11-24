@@ -21,12 +21,12 @@ function clinicHtml(ctx) {
     if (!p) return `<div class="bed empty"><div class="bedimg"></div><b class="tiny dim">Bed ${i + 1}</b><span class="tiny faint">Free</span></div>`;
     const h = HEROES[p.hero] || {};
     const pct = Math.min(100, ((now - p.start) / (p.end - p.start)) * 100);
-    return `<div class="bed"><div class="bedimg"><img src="${h.thumb || h.portrait}" alt=""></div><b class="small">${esc(h.name || p.hero)}</b>
+    return `<div class="bed"><div class="bedimg"><img loading="lazy" decoding="async" src="${h.thumb || h.portrait}" alt=""></div><b class="small">${esc(h.name || p.hero)}</b>
       <div class="bar"><i style="width:${pct}%"></i></div><span class="tiny dim">Patching up · ${left(p.end, now)}</span>
       <button class="btn sm gold" data-act="rushPatient" data-id="${p.hero}">Rush · ${ico('teeth')} ${P.RUSH_ICE}</button></div>`;
   };
   const queue = s.clinic.filter((x) => x.start > now);
-  return `<div class="facp clinicp"><div class="fachead"><img src="assets/base/clinic.webp" alt=""><div><div class="h" style="font-size:22px">Clinic</div>
+  return `<div class="facp clinicp"><div class="fachead"><img loading="lazy" decoding="async" src="assets/base/clinic.webp" alt=""><div><div class="h" style="font-size:22px">Clinic</div>
       <div class="tiny dim">${beds} beds · ${P.CLINIC_MIN} min per patient${beds < 3 ? ' · 3rd bed at Clinic level 4' : ''}</div></div></div>
     <div class="beds">${Array.from({ length: beds }, (_, i) => bed(i)).join('')}</div>
     ${queue.length ? `<div class="tiny" style="margin-top:6px">Waiting: ${queue.map((p) => `${esc(HEROES[p.hero]?.name || p.hero)} (${left(p.end, now)})`).join(', ')}</div>` : ''}
@@ -64,7 +64,7 @@ function factoryHtml(ctx) {
   const btn = pk.owned
     ? `<button class="btn ${can.ok ? 'red' : 'off'} block" data-act="fxCraft" data-id="${pk.id}">${can.ok ? 'Craft' : esc(can.reason)}</button>`
     : '<div class="tiny red">No blueprint yet. Blueprints turn up in op loot, Rookie Track rewards and crates.</div>';
-  return `<div class="facp factoryp"><div class="fachead"><img src="assets/base/factory.webp" alt=""><div><div class="h" style="font-size:22px">Factory</div>
+  return `<div class="facp factoryp"><div class="fachead"><img loading="lazy" decoding="async" src="assets/base/factory.webp" alt=""><div><div class="h" style="font-size:22px">Factory</div>
       <div class="tiny dim">${owned.length}/${list.length} blueprints · ${itemImg('blueprint', 'mini')} find more in op loot</div></div></div>
     ${bench}
     <div class="fxbody"><div class="bpgrid">${list.map(card).join('')}</div>

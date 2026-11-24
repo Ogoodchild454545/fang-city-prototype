@@ -5,7 +5,7 @@ import * as E from '../core/economy.js';
 import * as M from '../core/meta.js';
 import * as C from '../core/crew.js';
 import { TROOPS, TROOP_ORDER, BOSSES, BOSS_ORDER } from '../core/data.js';
-import { BaseView, preload, tileToWorld } from './iso.js';
+import { BaseView, preload, spriteNames, tileToWorld } from './iso.js';
 import { fmt, money, dur, esc, rewardText, rewardTextPlain, resName, ico } from './fmt.js';
 import * as Audio from './audio.js';
 import * as P from '../core/progression.js';
@@ -75,7 +75,7 @@ export function mount(ctx, el) {
   });
   view.sel = u.sel;
   syncGhost(ctx);
-  preload(() => { view && (view.dirty = true); });
+  preload(() => { view && (view.dirty = true); }, spriteNames(ctx.state));
   panel(ctx);
   window.__base = {
     view,
@@ -241,11 +241,12 @@ export function live(ctx, now) {
   if (u.sel) {
     const it = BS.byId(s, u.sel);
     const j = it && BS.jobOf(it);
-    if (j) { set('[data-live="jobleft"]', dur((j.endsAt - now) / 1000)); set('[data-live="speedc"]', ''); const sc=document.querySelector('[data-live="speedc"]'); if(sc) sc.innerHTML = ico('teeth') + ' ' + BS.speedUpCost(it, now); }
+    if (j) { set('[data-live="jobleft"]', dur((j.endsAt - now) / 1000)); const sc = document.querySelector('[data-live="speedc"]'); if (sc) { const c = String(BS.speedUpCost(it, now)); if (sc.dataset.c !== c) { sc.dataset.c = c; sc.innerHTML = ico('teeth') + ' ' + c; } } }
     if (it && BUILDINGS[it.t]?.produce) set('[data-live="till"]', BUILDINGS[it.t].produce.res === 'cash' ? money(it.till) : fmt(it.till));
   }
   FAC.live(ctx, now);
-  if (view) view.dirty = true;
+  // a 5 Hz nudge so timers/bubbles track the state; skipped while a sheet covers the base (v0.18)
+  if (view && !document.querySelector('.overlay')) view.dirty = true;
 }
 
 // called by app when timers finish or state changes outside this screen

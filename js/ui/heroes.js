@@ -166,7 +166,7 @@ function card(s, id, rec, inSquad, feat, now) {
   const canPin = id !== 'rook';
   const st = have ? statsFor(id, { stars: rec.stars, lv: rec.lv, perks: rec.perks, gear: rec.gear, equip: rec.equip || {} }) : null;
   return `<article class="hcard ${have ? '' : 'locked'} ${inSquad ? 'in' : ''} ${pinned ? 'pinned' : ''} ${featured ? 'feat' : ''}" data-act="${have ? 'openHero' : 'heroInfo'}" data-id="${id}">
-    <img src="${h.portrait}" alt="${esc(h.name)}">
+    <img loading="lazy" decoding="async" src="${h.portrait}" alt="${esc(h.name)}">
     ${inSquad ? '<span class="squadtag">SQUAD</span>' : ''}
     ${featured ? '<span class="feattag">FEATURED</span>' : ''}
     ${pinned ? '<span class="pintag">PINNED</span>' : ''}

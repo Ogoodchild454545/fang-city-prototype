@@ -1631,3 +1631,15 @@ test('v0.17: hit events report armour-blocked damage; previewShot parts add up t
   }
   assert.ok(sawBlock, 'at least one hit in 40 shots');
 });
+
+test('v0.18: saved image paths move from .jpg/.png to .webp; kept files and other strings untouched', () => {
+  const s = newGame(T0, 7);
+  s.crew = s.crew || [];
+  s.crew.push({ id: 'x1', img: 'assets/boss-magrey.jpg', name: 'Ma Grey' });
+  s.__probe = { bg: 'assets/turf/velvet-den.jpg', keep: 'assets/turf/grey-pack.jpg', ico: 'assets/icons/parts-64.png', note: 'photo.jpg', w: 'assets/heroes/rook.webp' };
+  const back = deserialize(serialize(s), T0);
+  assert.ok(back, 'loads');
+  assert.equal(back.crew.find((m) => m.id === 'x1').img, 'assets/boss-magrey.webp');
+  assert.deepEqual(back.__probe, { bg: 'assets/turf/velvet-den.webp', keep: 'assets/turf/grey-pack.jpg', ico: 'assets/icons/parts-64.webp', note: 'photo.jpg', w: 'assets/heroes/rook.webp' });
+  for (const f of ['assets/boss-magrey.webp', 'assets/turf/velvet-den.webp', 'assets/turf/grey-pack.jpg', 'assets/icons/parts-64.webp']) assert.ok(readFileSync(new URL('../' + f, import.meta.url)).length > 100, f);
+});

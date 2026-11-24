@@ -103,6 +103,21 @@ export function migrateV2(old, now) {
   return s;
 }
 
+// v0.18: portraits, icons and sprites moved from .jpg/.png to .webp. A save can hold image paths
+// (recruited bosses keep their portrait, mission results keep a backdrop), so any stored
+// 'assets/....jpg|png' string is pointed at the .webp. Idempotent; runs on every load.
+const KEPT_ASSETS = new Set(['assets/turf/grey-pack.jpg', 'assets/base/grass.jpg']);
+export function fixAssetPaths(o, depth = 0) {
+  if (!o || typeof o !== 'object' || depth > 8) return o;
+  for (const k of Object.keys(o)) {
+    const v = o[k];
+    if (typeof v === 'string') {
+      if (v.startsWith('assets/') && /\.(jpe?g|png)$/i.test(v) && !KEPT_ASSETS.has(v)) o[k] = v.replace(/\.(jpe?g|png)$/i, '.webp');
+    } else if (v && typeof v === 'object') fixAssetPaths(v, depth + 1);
+  }
+  return o;
+}
+
 export function migrate(s, now = Date.now()) {
   if (!s || typeof s !== 'object') return null;
   if (s.v === 1) s = migrateV1(s, now);
@@ -173,6 +188,7 @@ export function migrate(s, now = Date.now()) {
     s.migratedTo10 = 1;
   }
   if (s.v !== STATE_VERSION || !s.base) return null;
+  fixAssetPaths(s);
   for (const d of DISTRICTS) if (!s.districts[d.id]) s.districts[d.id] = { owner: d.owner === 'player' ? 'player' : d.rival };
   s.missions ||= {}; s.bosses ||= {}; s.troopLv ||= {}; s.queue ||= []; s.army ||= {}; s.extraHousing ||= 0;
   if (s.ammo == null) s.ammo = 30;

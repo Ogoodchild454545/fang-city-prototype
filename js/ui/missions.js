@@ -50,7 +50,7 @@ function opCard(ctx, op) {
   const r = O.opReward(s, op, first);
   const n = Math.max(1, Math.min(op.foes.length, P.opsSquad(s, ctx.now()).length));
   const xp = O.opXp(op, true, first);
-  const foes = op.foes.map((f) => `<img src="${defOf(f).thumb || defOf(f).portrait}" alt="" title="${esc(defOf(f).name)} · ${esc(defOf(f).role)}">`).join('');
+  const foes = op.foes.map((f) => `<img loading="lazy" decoding="async" src="${defOf(f).thumb || defOf(f).portrait}" alt="" title="${esc(defOf(f).name)} · ${esc(defOf(f).role)}">`).join('');
   if (st.locked) {
     return `<article class="opscard locked" data-act="opLocked" data-id="${op.id}"><div class="ophd"><b class="h">${esc(op.name)}</b><span class="tiny">🔒 ${esc(st.reason)}</span></div>
       <div class="tiny dim">${esc(map.name || '')} · ${op.foes.length} ${op.foes.length === 1 ? 'foe' : 'foes'}</div><div class="opfoes dimmed">${foes}</div></article>`;

@@ -19,7 +19,6 @@ import * as Audio from './audio.js';
 import * as Tactics from './tactics.js';
 import * as Heroes from './heroes.js';
 import * as Loadout from './loadout.js';
-import * as Editor from './editor.js';
 import * as Character from './character.js';
 import * as Facilities from './facilities.js';
 import { formatDrop } from '../core/shards.js';
@@ -31,7 +30,11 @@ const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
 if (params.has('reset')) storage.clear();
 
-const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes, loadout: Loadout, editor: Editor, hero: Character };
+// The map editor (42 KB) is only fetched the first time it is opened (v0.18).
+const EditorStub = { render: () => '<div class="pad muted">Loading the editor…</div>', mount() {}, actions: {} };
+const SCREENS = { base: Hideout, crew: Crew, missions: Missions, city: City, jobs: Jobs, shop: Shop, battle: Battle, tactics: Tactics, heroes: Heroes, loadout: Loadout, editor: EditorStub, hero: Character };
+let editorMod = null;
+const loadEditor = () => editorMod ? Promise.resolve(editorMod) : import('./editor.js').then((m) => { editorMod = m; SCREENS.editor = m; return m; });
 // [tab, icon, label, feature that unlocks it (player level)]
 const NAV = [
   ['base', '🏚️', 'Hideout'], ['crew', '🐾', 'Crew'], ['missions', '🎯', 'Ops'], ['jobs', '🛏️', 'Safehouse', 'stockpile'], ['city', '📍', 'City', 'pvpcopy'], ['shop', '⚖️', 'Market', 'market'],
@@ -263,7 +266,7 @@ const GLOBAL_ACTIONS = {
   refillEnergy: (c) => { const r = P.refillEnergy(c.state, c.now()); if (!r.ok) return toast(r.reason); closeModal(true); toast('Energy refilled'); render(); },
   lockedFeature: (c, el) => { const u = P.UNLOCKS.find((x) => x.id === el.dataset.id); toast(u ? `${u.name} unlocks at player level ${u.lv}` : 'Locked'); },
   collectStockHud: (c) => { const r = P.collectStockpile(c.state, c.now()); if (!r.ok) return toast(r.reason); Audio.play('collect'); toast(`Stockpile: +${money(r.cash)}${r.ammo ? ` · +${r.ammo} ammo` : ''}`); render(); },
-  openEditor: (c, el) => { c.sub.editorBack = c.tab === 'editor' ? (c.sub.editorBack || 'heroes') : c.tab; c.closeModal && c.closeModal(); Editor.openEditor(c, el && el.dataset && el.dataset.id); },
+  openEditor: (c, el) => { c.sub.editorBack = c.tab === 'editor' ? (c.sub.editorBack || 'heroes') : c.tab; c.closeModal && c.closeModal(); const id = el && el.dataset && el.dataset.id; loadEditor().then((Ed) => Ed.openEditor(c, id)).catch(() => toast('Could not load the editor')); },
 };
 function unlockAudio() { Audio.unlock(); syncBattleMute(); }
 document.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });

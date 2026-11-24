@@ -1052,15 +1052,19 @@ function paintThemeBackdrop(g, m, z, bd) {
 }
 
 // Weather and time-of-day overlay in screen space (purely visual).
-export function drawWeather(g, w, h, m, now) {
+export function drawWeather(g, w, h, m, now, cssTint = false) {
   const env = (m && m.env) || {};
-  if (env.time === 'night') { g.fillStyle = 'rgba(4,6,14,0.16)'; g.fillRect(0, 0, w, h); }
+  // cssTint: the night tint is a CSS layer *above* the canvas, so the rain is pre-brightened by the
+  // inverse of that tint to land on exactly the colour it had when it was drawn over the tint.
+  const tint = env.time === 'night' ? NIGHT_TINT : 0;
+  if (tint && !cssTint) { g.fillStyle = 'rgba(4,6,14,0.16)'; g.fillRect(0, 0, w, h); }
+  const rainCol = cssTint && tint ? [175, 195, 225].map((v, i) => Math.min(255, Math.round((v - [4, 6, 14][i] * tint) / (1 - tint)))).join(',') : '175,195,225';
   if (!isIndoor(m) && (env.weather === 'rain' || env.time === 'night' && env.weather !== 'fog')) {
     // v0.16: two depths of rain (far: short and faint, near: longer); a light drizzle on dry nights
     const t = (now || 0) / 1000, heavy = env.weather === 'rain', k = Math.max(1, w / 900);
     g.save(); g.lineCap = 'round';
     for (const [n, al, len, sp, lw] of heavy ? [[150, 0.12, 10, 620, 0.8], [70, 0.2, 22, 980, 1.2]] : [[60, 0.07, 9, 560, 0.8], [18, 0.1, 18, 900, 1]]) {
-      g.strokeStyle = `rgba(175,195,225,${al})`; g.lineWidth = lw * k;
+      g.strokeStyle = `rgba(${rainCol},${al})`; g.lineWidth = lw * k;
       g.beginPath();
       for (let i = 0; i < n; i++) {
         const sx = (hash(i, len, 1) * w + t * 70) % w, sy = (hash(i, len, 2) * h + t * (sp + hash(i, 3) * 260) * k) % h;
@@ -1074,9 +1078,8 @@ export function drawWeather(g, w, h, m, now) {
     g.save();
     for (let i = 0; i < 4; i++) {
       const x = ((hash(i, 7) * w + t * 12 * (i + 1)) % (w * 1.6)) - w * 0.3, y = h * (0.25 + 0.18 * i);
-      const gr = g.createRadialGradient(x, y, 0, x, y, w * 0.45);
-      gr.addColorStop(0, 'rgba(150,170,160,0.09)'); gr.addColorStop(1, 'rgba(150,170,160,0)');
-      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      const R = w * 0.45, fs = radialSprite('fog', [[0, 'rgba(150,170,160,0.09)'], [1, 'rgba(150,170,160,0)']]);
+      g.drawImage(fs, x - R, y - R, R * 2, R * 2);
     }
     g.fillStyle = 'rgba(120,140,130,0.05)'; g.fillRect(0, 0, w, h);
     g.restore();
@@ -1627,24 +1630,62 @@ function detailFor(m, g, z) {
   }
   return d.bk && Math.abs(d.bk.Z / z - 1) < 0.35 ? d.bk : null;
 }
-export function drawYard(g, m, z, now) {
+// ---------- v0.18 cached gradient sprites ----------
+// Radial / linear gradients used to be rebuilt every frame (light pools, scorch marks, canal streaks,
+// fog banks). Their stops are linear in alpha, so one sprite per colour drawn with globalAlpha (and
+// stretched to the size needed) gives the same pixels without allocating a gradient per frame.
+const GSPR = new Map();
+function radialSprite(key, stops, n = 128) {
+  let cv = GSPR.get(key);
+  if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = cv.height = n * 2;
+  const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(n, n, 0, n, n, n);
+  for (const [o, c] of stops) gr.addColorStop(o, c);
+  g.fillStyle = gr; g.beginPath(); g.arc(n, n, n, 0, Math.PI * 2); g.fill();
+  GSPR.set(key, cv);
+  return cv;
+}
+function streakSprite() {
+  let cv = GSPR.get('streak');
+  if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = 8; cv.height = 160;
+  const g = cv.getContext('2d');
+  // the live gradient ran from 10 units above to 30 below over a 40-unit rect: peak at 0.4
+  const gr = g.createLinearGradient(0, 0, 0, 160);
+  gr.addColorStop(0, 'rgba(255,170,80,0)'); gr.addColorStop(0.4, 'rgba(255,170,80,1)'); gr.addColorStop(1, 'rgba(255,170,80,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 8, 160);
+  GSPR.set('streak', cv);
+  return cv;
+}
+export function drawYard(g, m, z, now) { drawYardStatic(g, m, z); drawYardLive(g, m, z, now); }
+// v0.18 split: the static half (baked ground, close-zoom detail window, scorch marks) can be cached by
+// the caller while the camera is still; the live half (canal shimmer, light pools, wet glints) animates.
+const CVID = new WeakMap(); let cvSeq = 0;
+const cvId = (c) => { if (!c) return 0; let i = CVID.get(c); if (!i) { i = ++cvSeq; CVID.set(c, i); } return i; };
+export function groundSig(g, m, z) {
+  const bk = bakeYard(m), dk = detailFor(m, g, z);
+  let sc = 0;
+  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) { const d = m.tiles[y][x].decor; if (d === 'barrelWreck' || d === 'wreck') sc = (sc * 31 + x * 97 + y + 1) | 0; }
+  return `${cvId(bk.cv)}|${dk ? cvId(dk.cv) : 0}|${sc}`;
+}
+export function drawYardStatic(g, m, z) {
   const bk = bakeYard(m);
   g.drawImage(bk.cv, bk.minX * z, bk.minY * z, bk.w * z, bk.h * z);
   const dk = detailFor(m, g, z);
   if (dk) g.drawImage(dk.cv, dk.minX * z, dk.minY * z, dk.w * z, dk.h * z);
-  const p = prepMap(m);
   // scorch marks under anything that has blown up
   for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
     const t = m.tiles[y][x];
     if (t.decor !== 'barrelWreck' && t.decor !== 'wreck') continue;
     const c = toWorld(x + (t.decor === 'wreck' ? 0.5 : 0), y);
     const rx = (t.decor === 'wreck' ? 2.2 : 1.3) * HX * z;
-    g.save(); g.translate(c.x * z, c.y * z); g.scale(1, 0.5);
-    const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
-    gr.addColorStop(0, 'rgba(0,0,0,0.75)'); gr.addColorStop(0.6, 'rgba(20,10,5,0.4)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill();
-    g.restore();
+    const sc = radialSprite('scorch', [[0, 'rgba(0,0,0,0.75)'], [0.6, 'rgba(20,10,5,0.4)'], [1, 'rgba(0,0,0,0)']]);
+    g.drawImage(sc, c.x * z - rx, c.y * z - rx * 0.5, rx * 2, rx);
   }
+}
+export function drawYardLive(g, m, z, now) {
+  const p = prepMap(m);
   // shimmering canal (batched into a few alpha buckets)
   const t = now / 1000;
   g.save();
@@ -1679,18 +1720,16 @@ export function drawYard(g, m, z, now) {
     else { R = 2.4; col = '170,205,255'; a = 0.26; }
     const c = toWorld(L.x + (L.kind === 'lamp' ? 0.3 : 0), L.y + (L.kind === 'lamp' ? 0.05 : 0));
     const rx = R * HX * 1.41 * z;
-    g.save(); g.translate(c.x * z, c.y * z); g.scale(1, 0.5);
-    const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
-    gr.addColorStop(0, `rgba(${col},${a})`); gr.addColorStop(0.5, `rgba(${col},${a * 0.45})`); gr.addColorStop(1, `rgba(${col},0)`);
-    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill();
-    g.restore();
+    const pool = radialSprite('pool:' + col, [[0, `rgba(${col},1)`], [0.5, `rgba(${col},0.45)`], [1, `rgba(${col},0)`]]);
+    g.globalAlpha = Math.max(0, Math.min(1, a));
+    g.drawImage(pool, c.x * z - rx, c.y * z - rx * 0.5, rx * 2, rx);
     if (L.kind === 'lamp' && L.x <= 4 && hasCanal(m)) {
       // reflection streak on the canal
       const w0 = toWorld(1.6, L.y);
-      const gr2 = g.createLinearGradient(w0.x * z, (w0.y - 10) * z, w0.x * z, (w0.y + 30) * z);
-      gr2.addColorStop(0, 'rgba(255,170,80,0)'); gr2.addColorStop(0.4, `rgba(255,170,80,${0.12 + 0.05 * Math.sin(t * 3 + L.y)})`); gr2.addColorStop(1, 'rgba(255,170,80,0)');
-      g.fillStyle = gr2; g.fillRect((w0.x - 4) * z, (w0.y - 10) * z, 8 * z, 40 * z);
+      g.globalAlpha = 0.12 + 0.05 * Math.sin(t * 3 + L.y);
+      g.drawImage(streakSprite(), (w0.x - 4) * z, (w0.y - 10) * z, 8 * z, 40 * z);
     }
+    g.globalAlpha = 1;
   }
   g.restore();
   drawWet(g, m, z, now, p);
@@ -1771,6 +1810,29 @@ export function drawNightSky(g, w, h, m) {
   sky.addColorStop(0.6, night ? c[1] : c[2]);
   sky.addColorStop(1, c[3]);
   g.fillStyle = sky; g.fillRect(0, 0, w, h);
+}
+
+// v0.18: the sky gradient is baked once per canvas size + map and blitted (it used to be rebuilt and
+// filled every frame); the night tint and vignette moved to a CSS layer over the canvas (see screenTint).
+const SKY = { key: '', cv: null };
+export function skyCanvas(w, h, m) {
+  const c = themeOf(m).sky, night = !!(m && m.env && m.env.time === 'night');
+  const key = `${w}x${h}|${c.join(',')}|${night}`;
+  if (SKY.key === key) return SKY.cv;
+  const cv = SKY.cv || document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  drawNightSky(cv.getContext('2d'), w, h, m);
+  SKY.key = key; SKY.cv = cv;
+  return cv;
+}
+// CSS for the screen-space grade that sits above the board canvas: the night tint under the vignette,
+// with exactly the stops drawVignette used. w/h in CSS px.
+export const NIGHT_TINT = 0.16;
+export function screenTint(w, h, m) {
+  const env = (m && m.env) || {};
+  const r0 = Math.min(w, h) * 0.35, r1 = Math.max(w, h) * 0.72;
+  const vig = `radial-gradient(circle ${r1.toFixed(1)}px at 50% 52%, rgba(0,0,0,0) ${(100 * r0 / r1).toFixed(2)}%, rgba(0,0,0,0.5) 100%)`;
+  return env.time === 'night' ? `${vig}, linear-gradient(rgba(4,6,14,${NIGHT_TINT}), rgba(4,6,14,${NIGHT_TINT}))` : vig;
 }
 
 export function drawVignette(g, w, h) {

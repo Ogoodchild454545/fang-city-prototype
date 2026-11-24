@@ -35,7 +35,7 @@ export const HEROES = {
   rook: {
     id: 'rook', name: 'Rook', species: 'Wolf', role: 'Bruiser',
     blurb: 'A frontline wolf bruiser. Every new crew starts with him.',
-    portrait: 'assets/heroes/rook.jpg', thumb: 'assets/heroes/rook-64.jpg',
+    portrait: 'assets/heroes/rook.webp', thumb: 'assets/heroes/rook-64.webp',
     mood: 'heroic',
     // Bruiser / Fighter: the melee all-rounder. Enough HP to hold the front alone,
     // respectable damage, and his own sustain (Bruiser Grit, Second Wind).
@@ -84,7 +84,7 @@ export const HEROES = {
   anvil: {
     id: 'anvil', name: 'Anvil', species: 'Rhino', role: 'Tank',
     blurb: 'A rhino in a riot plate. Slow to start, impossible to stop.',
-    portrait: 'assets/heroes/anvil.jpg', thumb: 'assets/heroes/anvil-64.jpg',
+    portrait: 'assets/heroes/anvil.webp', thumb: 'assets/heroes/anvil-64.webp',
     mood: 'heroic',
     hp: 26, ap: 4, move: 3, aim: 60, armor: 1, speed: 4,
     weapon: { name: 'Fists', dmg: [3, 4], range: 1, typ: 'melee' },
@@ -125,7 +125,7 @@ export const HEROES = {
   pip: {
     id: 'pip', name: 'Pip', species: 'Rat', role: 'Scout',
     blurb: 'Tiny, fast, and always first around a corner.',
-    portrait: 'assets/heroes/pip.jpg', thumb: 'assets/heroes/pip-64.jpg',
+    portrait: 'assets/heroes/pip.webp', thumb: 'assets/heroes/pip-64.webp',
     mood: 'heroic',
     hp: 8, ap: 5, move: 7, aim: 68, armor: 0, speed: 12,
     weapon: { name: 'Holdout pistol', dmg: [2, 4], range: 6, typ: 'pistol' },
@@ -149,7 +149,7 @@ export const HEROES = {
   lumen: {
     id: 'lumen', name: 'Lumen', species: 'Fox', role: 'Sniper',
     blurb: 'A rooftop shot. She prefers to stand still and pick her moment.',
-    portrait: 'assets/heroes/lumen.jpg', thumb: 'assets/heroes/lumen-64.jpg',
+    portrait: 'assets/heroes/lumen.webp', thumb: 'assets/heroes/lumen-64.webp',
     mood: 'heroic',
     hp: 9, ap: 4, move: 4, aim: 82, armor: 0, speed: 7,
     weapon: { name: 'Long rifle', dmg: [4, 6], range: 11, typ: 'rifle' },
@@ -173,7 +173,7 @@ export const HEROES = {
   brick: {
     id: 'brick', name: 'Brick', species: 'Badger', role: 'Tank',
     blurb: 'Walks into the street first and dares anyone to move him.',
-    portrait: 'assets/heroes/brick.jpg', thumb: 'assets/heroes/brick-64.jpg',
+    portrait: 'assets/heroes/brick.webp', thumb: 'assets/heroes/brick-64.webp',
     mood: 'heroic',
     hp: 16, ap: 4, move: 4, aim: 62, armor: 1, speed: 5,
     weapon: { name: 'Heavy SMG', dmg: [3, 4], range: 6, typ: 'smg' },
@@ -197,7 +197,7 @@ export const HEROES = {
   vesper: {
     id: 'vesper', name: 'Vesper', species: 'Snake', role: 'Medic',
     blurb: 'Keeps the crew standing and makes sharpshooters miss.',
-    portrait: 'assets/heroes/vesper.jpg', thumb: 'assets/heroes/vesper-64.jpg',
+    portrait: 'assets/heroes/vesper.webp', thumb: 'assets/heroes/vesper-64.webp',
     mood: 'heroic',
     hp: 10, ap: 4, move: 5, aim: 70, armor: 0, speed: 8,
     weapon: { name: 'Dart pistol', dmg: [2, 3], range: 7, typ: 'pistol' },
@@ -221,7 +221,7 @@ export const HEROES = {
   ivory: {
     id: 'ivory', name: 'Ivory', species: 'Wolf', role: 'Assault',
     blurb: 'Closes the gap and finishes the job with a short-barrel shotgun.',
-    portrait: 'assets/heroes/ivory.jpg', thumb: 'assets/heroes/ivory-64.jpg',
+    portrait: 'assets/heroes/ivory.webp', thumb: 'assets/heroes/ivory-64.webp',
     mood: 'heroic',
     hp: 11, ap: 4, move: 6, aim: 70, armor: 0, speed: 9,
     weapon: { name: 'Street shotgun', dmg: [5, 7], range: 5, typ: 'shotgun' },
@@ -245,7 +245,7 @@ export const HEROES = {
   nile: {
     id: 'nile', name: 'Nile', species: 'Croc', role: 'Tank',
     blurb: 'Crosses the street in two strides and ends the argument up close.',
-    portrait: 'assets/heroes/nile.jpg', thumb: 'assets/heroes/nile-64.jpg',
+    portrait: 'assets/heroes/nile.webp', thumb: 'assets/heroes/nile-64.webp',
     mood: 'heroic',
     hp: 14, ap: 4, move: 5, aim: 64, armor: 0, speed: 10,
     weapon: { name: 'Jaw and hook', dmg: [4, 6], range: 1, typ: 'melee' },
@@ -269,7 +269,7 @@ export const HEROES = {
   marlow: {
     id: 'marlow', name: 'Marlow', species: 'Bear', role: 'Demolitions',
     blurb: 'Flushes crews out from behind cover with lobbed charges and a drum shotgun.',
-    portrait: 'assets/heroes/marlow.jpg', thumb: 'assets/heroes/marlow-64.jpg',
+    portrait: 'assets/heroes/marlow.webp', thumb: 'assets/heroes/marlow-64.webp',
     mood: 'heroic',
     hp: 18, ap: 3, move: 3, aim: 60, armor: 1, speed: 4,
     weapon: { name: 'Drum shotgun', dmg: [5, 8], range: 5, typ: 'shotgun' },
@@ -296,7 +296,7 @@ export const HEROES = {
 export const RIVALS = {
   hook: {
     id: 'hook', name: 'Hook', species: 'Fox', role: 'Assault',
-    portrait: 'assets/fox.jpg', thumb: 'assets/fox.jpg',
+    portrait: 'assets/fox.webp', thumb: 'assets/fox.webp',
     hp: 8, ap: 4, move: 5, aim: 58, armor: 0, speed: 7,
     weapon: { name: 'Pistol', dmg: [2, 3], range: 6, typ: 'pistol' },
     abilities: [
@@ -309,7 +309,7 @@ export const RIVALS = {
   },
   knack: {
     id: 'knack', name: 'Knack', species: 'Rat', role: 'Scout',
-    portrait: 'assets/rat.jpg', thumb: 'assets/rat.jpg',
+    portrait: 'assets/rat.webp', thumb: 'assets/rat.webp',
     hp: 7, ap: 5, move: 7, aim: 64, armor: 0, speed: 12,
     weapon: { name: 'Holdout', dmg: [2, 3], range: 6, typ: 'pistol' },
     abilities: [
@@ -322,7 +322,7 @@ export const RIVALS = {
   },
   slab: {
     id: 'slab', name: 'Slab', species: 'Badger', role: 'Tank',
-    portrait: 'assets/badger.jpg', thumb: 'assets/badger.jpg',
+    portrait: 'assets/badger.webp', thumb: 'assets/badger.webp',
     hp: 14, ap: 4, move: 4, aim: 58, armor: 1, speed: 5,
     weapon: { name: 'SMG', dmg: [3, 4], range: 6, typ: 'smg' },
     abilities: [
@@ -335,7 +335,7 @@ export const RIVALS = {
   },
   rill: {
     id: 'rill', name: 'Rill', species: 'Croc', role: 'Tank',
-    portrait: 'assets/croc.jpg', thumb: 'assets/croc.jpg',
+    portrait: 'assets/croc.webp', thumb: 'assets/croc.webp',
     hp: 13, ap: 4, move: 5, aim: 60, armor: 0, speed: 10,
     weapon: { name: 'Hook', dmg: [4, 6], range: 1, typ: 'melee' },
     abilities: [
@@ -348,7 +348,7 @@ export const RIVALS = {
   },
   pact: {
     id: 'pact', name: 'Pact', species: 'Snake', role: 'Medic',
-    portrait: 'assets/snake.jpg', thumb: 'assets/snake.jpg',
+    portrait: 'assets/snake.webp', thumb: 'assets/snake.webp',
     hp: 9, ap: 4, move: 5, aim: 68, armor: 0, speed: 8,
     weapon: { name: 'Dart gun', dmg: [2, 3], range: 7, typ: 'pistol' },
     abilities: [
@@ -361,7 +361,7 @@ export const RIVALS = {
   },
   bruno: {
     id: 'bruno', name: 'Bruno', species: 'Bear', role: 'Demolitions',
-    portrait: 'assets/bear.jpg', thumb: 'assets/bear.jpg',
+    portrait: 'assets/bear.webp', thumb: 'assets/bear.webp',
     hp: 16, ap: 3, move: 3, aim: 58, armor: 1, speed: 4,
     weapon: { name: 'Drum gun', dmg: [5, 7], range: 5, typ: 'shotgun' },
     abilities: [
@@ -374,7 +374,7 @@ export const RIVALS = {
   },
   ash: {
     id: 'ash', name: 'Ash', species: 'Wolf', role: 'Assault',
-    portrait: 'assets/wolf.jpg', thumb: 'assets/wolf.jpg',
+    portrait: 'assets/wolf.webp', thumb: 'assets/wolf.webp',
     hp: 11, ap: 4, move: 5, aim: 70, armor: 0, speed: 8,
     weapon: { name: 'Carbine', dmg: [3, 5], range: 8, typ: 'rifle' },
     abilities: [
@@ -387,7 +387,7 @@ export const RIVALS = {
   },
   mica: {
     id: 'mica', name: 'Mica', species: 'Fox', role: 'Sniper',
-    portrait: 'assets/fox.jpg', thumb: 'assets/fox.jpg',
+    portrait: 'assets/fox.webp', thumb: 'assets/fox.webp',
     hp: 8, ap: 4, move: 4, aim: 80, armor: 0, speed: 7,
     weapon: { name: 'Long rifle', dmg: [4, 6], range: 11, typ: 'rifle' },
     abilities: [
@@ -450,7 +450,7 @@ export function denLv(s) {
 export const FUTURE_HEROES = {
   stitch: {
     id: 'stitch', name: 'Stitch', species: 'Hare', role: 'Medic', classId: 'medic', future: 1,
-    portrait: 'assets/heroes/stitch.jpg', thumb: 'assets/heroes/stitch-64.jpg',
+    portrait: 'assets/heroes/stitch.webp', thumb: 'assets/heroes/stitch-64.webp',
     hp: 13, ap: 4, move: 6, aim: 62, speed: 8, armor: 0,
     weapon: { name: 'Snub revolver', dmg: [2, 4], range: 6, typ: 'pistol' },
     abilities: [

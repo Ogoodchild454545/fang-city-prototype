@@ -54,7 +54,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 .bar.gold>i{background:linear-gradient(90deg,#9a6b10,var(--gold))}.bar.green>i{background:linear-gradient(90deg,#2f6b25,var(--green))}
 
 /* empire */
-.hero{position:relative;height:150px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-bottom:8px;background:#000 url(../assets/title.jpg) center 30%/cover}
+.hero{position:relative;height:150px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-bottom:8px;background:#000 url(../assets/title.webp) center 30%/cover}
 .hero::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1),rgba(0,0,0,.85))}
 .hero .in{position:absolute;left:10px;right:10px;bottom:8px;z-index:1;display:flex;align-items:flex-end;gap:8px}
 .hero .gname{font-family:var(--font);font-size:22px;text-transform:uppercase;line-height:1}
@@ -222,7 +222,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 .gangcard .im{height:96px;background:center 25%/cover}
 .gangcard .tx{padding:6px 8px}
 .gangcard.on{border-color:var(--red);box-shadow:0 0 14px var(--redglow)}
-.splash{position:absolute;inset:0;z-index:70;background:#000 url(../assets/title.jpg) center/cover;display:flex;flex-direction:column;justify-content:flex-end;padding:20px}
+.splash{position:absolute;inset:0;z-index:70;background:#000 url(../assets/title.webp) center/cover;display:flex;flex-direction:column;justify-content:flex-end;padding:20px}
 .splash::before{content:'';position:absolute;inset:0;background:linear-gradient(transparent 30%,#000 92%)}
 .splash>*{position:relative}
 .splash .logo{font-family:var(--font);font-size:56px;line-height:.9;text-transform:uppercase;letter-spacing:.02em;text-shadow:0 4px 20px #000}
@@ -461,6 +461,7 @@ table.stats td{padding:3px 4px;border-bottom:1px solid var(--line)}
 .mode-tactics #screen,.mode-battle #screen{grid-row:1/3;grid-column:1/3;padding:0;overflow:hidden}
 .twrap{position:relative;width:100%;height:100%;background:#2a2c2e}
 .twrap canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.twrap .tvig{position:absolute;inset:0;pointer-events:none}
 .tbar{position:absolute;top:max(6px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(44px,env(safe-area-inset-right));display:flex;align-items:center;gap:8px;z-index:5;pointer-events:none}
 .tbar>*{pointer-events:auto}
 .tturn{flex:1;font-family:var(--font);font-size:13px;color:#f3e7c9;text-shadow:0 1px 2px #000;letter-spacing:.04em}

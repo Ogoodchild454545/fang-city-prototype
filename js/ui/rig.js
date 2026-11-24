@@ -173,7 +173,7 @@ const FITS = {
 const images = {};
 const meta = {};
 
-function srcOf(id, part) { return `${PART_DIR}${id}-${part}.png`; }
+function srcOf(id, part) { return `${PART_DIR}${id}-${part}.webp`; }
 
 export function hasRig(id) { return !!RIGS[id]; }
 

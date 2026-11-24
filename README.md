@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.17.0)
+# Fang City: Animal Gangs (playable prototype v0.18.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,21 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.18.0 (faster, lighter, smoother)
+
+- **Battles hold 60 fps:** a rainy night battle with a full squad went from about 37 fps to a steady 60 fps
+  (frame time 33 ms → 16.7 ms), zoomed-in battles too, with the same look. The sky, ground, light pools,
+  figurine bases and glows are painted once and reused instead of being rebuilt every frame; the night tint and
+  vignette are a CSS layer over the board.
+- **Hideout idles cheaply:** about 1.6% CPU instead of 7–8% while you look at the base, and it stops animating
+  while a sheet is open or the game is in the background.
+- **Smaller download:** first load needs 87 requests instead of 113 and 337 KB of images instead of 840 KB. All
+  art is WebP now; unused legacy files are gone (the art folder went from 28 MB to under 7 MB). List, modal and item
+  images load lazily, the hideout only fetches the buildings you have placed, and the map editor loads when you
+  open it.
+- **Medic emblems** on Pact's bag and Stitch's armband are green crosses.
+- Old saves keep working: stored image paths are pointed at the new WebP files on load.
 
 ## v0.17.0 (easier to use, battles that read at a glance)
 
