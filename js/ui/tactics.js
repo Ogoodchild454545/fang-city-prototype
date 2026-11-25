@@ -1,4 +1,5 @@
 // Canvas tactics view: docklands yard, pan/zoom, hitchance, cover, speed queue and PvP timer.
+import { runSteps, learn } from './tutor.js';
 import { ITEMS, QUALITY } from '../core/items.js';
 import { itemImg } from './character.js';
 import * as T from '../core/tactics.js';
@@ -961,7 +962,7 @@ function draw(ctx) {
   const sel = (actor && actor.side === 'player' && actor.hp > 0)
     ? actor
     : b.units.find((x) => x.uid === u.sel && x.hp > 0);
-  const reach = (sel && b.side === 'player' && !u.busy) ? cachedReach(u, b, sel).dist : null;
+  const reach = (sel && b.side === 'player' && !u.busy && !(actor && u.deselFor === actor.uid)) ? cachedReach(u, b, sel).dist : null;
   // v0.15: the destination being previewed (tap on touch, hover with a mouse)
   let pv = null;
   if (reach && sel && sel.side === 'player') {
@@ -1454,6 +1455,21 @@ function clickTile(ctx, x, y) {
   }
   // Pure inspection: rival turn, tapping an ally (unless healing) or a knocked-out piece.
   if (!canAct) { const t = occ || down; setInspect(ctx, t ? t.uid : null); return; }
+  // v0.19.1 deselect: tapping the selected operator again puts them down (and shows their own buffs)
+  const desel = u.deselFor === sel.uid;
+  if (!desel && occ && occ.uid === sel.uid && !heal && !(u.modePicked && u.mode && !EXPLICIT_ATTACK.includes(u.mode))) return deselect(ctx, sel.uid);
+  if (desel) {
+    // nothing selected: any piece opens its status panel; a reachable tile is a deliberate move, so pick the
+    // operator back up and preview it; empty ground just closes the panel
+    if (occ || down) { setInspect(ctx, (occ || down).uid); return; }
+    if (T.walkable(b, x, y, sel.uid) && cachedReach(u, b, sel).dist.has(`${x},${y}`)) {
+      u.deselFor = null; u.inspect = null;
+      if (u.ptr === 'mouse') return doAct(ctx, { type: 'move', uid: sel.uid, x, y }, { undoable: true });
+      u.preview = { x, y }; ctx.render(); return;
+    }
+    if (u.inspect) { u.inspect = null; ctx.render(); }
+    return;
+  }
   if ((occ && occ.side === 'player' && !heal) || (!occ && down && !heal)) { setInspect(ctx, (occ || down).uid); return; }
   // Enemy: on touch the first tap inspects and shows the attack button (hit % and damage); a second tap or the
   // button fires. A mouse click fires straight away when the shot is possible (hovering already shows the odds);
@@ -1493,9 +1509,18 @@ function clickTile(ctx, x, y) {
     if (u.ptr !== 'mouse' && reachable && !(u.preview && u.preview.x === x && u.preview.y === y)) {
       u.preview = { x, y }; u.inspect = null; ctx.render(); return;
     }
-    return doAct(ctx, { type: 'move', uid: sel.uid, x, y }, { undoable: true });
+    if (reachable) return doAct(ctx, { type: 'move', uid: sel.uid, x, y }, { undoable: true });
   }
-  u.preview = null;
+  // v0.19.1: empty ground out of reach first clears whatever is open (preview, picked ability, panel);
+  // with nothing open it deselects the operator
+  if (u.preview || u.inspect || u.modePicked) { u.preview = null; u.inspect = null; u.mode = null; u.modePicked = false; ctx.render(); return; }
+  if (occ || down) { ctx.render(); return; }
+  deselect(ctx);
+}
+function deselect(ctx, show = null) {
+  const u = ui(ctx), b = ctx.state.tactics, a = b && T.actingUnit(b);
+  if (!a || a.side !== 'player') return;
+  u.deselFor = a.uid; u.preview = null; u.inspect = show; u.mode = null; u.modePicked = false; u.hover = null;
   ctx.render();
 }
 
@@ -1572,7 +1597,7 @@ function inspectHtml(b, u) {
   const foe = un.side === 'enemy';
   const sel = T.actingUnit(b);
   let atk = '';
-  if (foe && un.hp > 0 && sel && sel.side === 'player' && b.side === 'player' && !u.busy) {
+  if (foe && un.hp > 0 && sel && sel.side === 'player' && b.side === 'player' && !u.busy && u.deselFor !== sel.uid) {
     const mode = EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(sel, un);
     const prev = T.previewShot(b, sel, un, mode);
     const nm = (defOf(sel.hero).abilities.find((a) => a.id === mode) || {}).name || (mode === 'melee' ? 'Strike' : 'Shoot');
@@ -2183,43 +2208,143 @@ function xpBlock(res) {
   return `<div class="xpbox">${hs}${lost}${ret}${rows}</div>`;
 }
 
-// v0.15 one-time onboarding hints for the battle board (stored per device).
-const HINT_KEY = 'fangcity.hints';
-function hintsSeen() { try { return JSON.parse(localStorage.getItem(HINT_KEY) || '{}'); } catch (e) { return {}; } }
-function markHint(id) { const h = hintsSeen(); if (h[id]) return; h[id] = 1; try { localStorage.setItem(HINT_KEY, JSON.stringify(h)); } catch (e) { /* private mode */ } }
+// v0.19.1 battle teaching steps (see js/ui/tutor.js). One mechanic at a time, each only when it applies to
+// the acting operator right now: whose turn, AP, moving, cover, attacking and odds, specials, looking around,
+// ending the turn. Learned once per device; every step is checked against AP, cooldown and range.
+const nm = (un) => esc(defOf(un.hero).name);
+const BASIC = ['shot', 'melee'];
+function usableSpecial(b, a) {
+  for (const ab of T.abilitiesOf(a)) {
+    if (BASIC.includes(ab.kind) || ab.gear || T.cooldownLeft(a, ab.id) > 0 || a.ap < (ab.ap || 0)) continue;
+    if (EXPLICIT_ATTACK.includes(ab.id) || EXPLICIT_ATTACK.includes(ab.kind)) {
+      const f = b.units.find((q) => q.side === 'enemy' && q.hp > 0 && (() => { const pr = T.previewShot(b, a, q, ab.id); return pr && pr.ok; })());
+      if (f) return { ab, f };
+    }
+  }
+  return null;
+}
+function firstShot(b, a) {
+  if (a.ap < 2) return null;
+  return b.units.find((q) => q.side === 'enemy' && q.hp > 0 && (() => { const pr = T.previewShot(b, a, q, defaultMode(a, q)); return pr && pr.ok; })()) || null;
+}
+const shortText = (t) => { const x = String(t || '').split(/[.(;:]/)[0].trim(); return x.length > 70 ? x.slice(0, 68) + '…' : x; };
+// Street lesson: how far Rook should walk this turn so he still has the AP to Pounce (or Strike) after.
+function lessonWalk(b, a) {
+  if (!b.tutorial || a.hero !== 'rook') return '';
+  const hook = b.units.find((x) => x.hero === 'hook' && x.hp > 0); if (!hook) return '';
+  const dist = Math.abs(a.x - hook.x) + Math.abs(a.y - hook.y);
+  const pn = T.abilitiesOf(a).find((x) => x.id === 'pounce' && !T.cooldownLeft(a, 'pounce'));
+  if (dist <= 1) return '';
+  const walk = Math.max(1, dist - (pn ? pn.range || 4 : 1));
+  if (pn && walk + pn.ap <= a.ap) return `Rook hits hardest up close. Walk him <b>${walk} tile${walk > 1 ? 's' : ''}</b> toward Hook (1 AP each) and keep ${pn.ap} AP to Pounce.`;
+  if (walk + 2 <= a.ap) return `Rook hits hardest up close. Walk him <b>${walk} tile${walk > 1 ? 's' : ''}</b> toward Hook (1 AP each) and keep 2 AP to Strike.`;
+  return 'Rook hits hardest up close. Walk him toward Hook — blue tiles cost 1 AP each.';
+}
+export const BATTLE_STEPS = [
+  { id: 'turn', // whose go it is, and that their bar shows AP
+    when: ({ a }) => !a.moved && !a.acted,
+    done: ({ u, a }) => !!(u.preview || a.moved || a.acted),
+    html: ({ a }) => `It’s <b>${nm(a)}</b>’s turn. Each turn gives <b>${a.maxAp} AP</b> to spend — the pips on the bar.` },
+  { id: 'move',
+    when: ({ a }) => a.ap >= 1 && !a.moved && !a.acted,
+    done: ({ u, a }) => !!(u.preview || a.moved),
+    html: ({ b, a }) => lessonWalk(b, a) || 'Blue tiles show where they can walk, <b>1 AP</b> a tile. Tap one to see the route.' },
+  { id: 'cover',
+    when: ({ u }) => !!u.preview,
+    done: ({ a }) => !!a.moved,
+    html: () => 'The bar shows the cost, the <b>cover</b> there and who could hit you. Behind a wall, rivals miss more. Tap <b>Move here</b>.' },
+  { id: 'special', // only when the special is ready, affordable and has a target in range right now
+    when: ({ b, a }) => !!usableSpecial(b, a),
+    done: ({ u }) => !!(u.modePicked && u.mode && !BASIC.includes(u.mode) && u.mode !== 'shot' && u.mode !== 'melee'),
+    html: ({ b, a }) => { const { ab, f } = usableSpecial(b, a); return `<b>${esc(ab.name)}</b> is ready (${ab.ap} AP): ${esc(shortText(ab.text))}. Tap it, then tap ${nm(f)}.`; } },
+  { id: 'target',
+    when: ({ b, a, u }) => !u.inspect && !!firstShot(b, a),
+    done: ({ b, u }) => !!(u.inspect && b.units.some((q) => q.uid === u.inspect && q.side === 'enemy')),
+    html: ({ b, a }) => { const f = firstShot(b, a); const melee = defaultMode(a, f) !== 'shot'; return `${nm(f)} is in reach. Tap ${nm(f)} to see your odds${melee ? '' : ' before you shoot'}.`; } },
+  { id: 'odds',
+    when: ({ b, a, u }) => { const f = u.inspect && b.units.find((q) => q.uid === u.inspect && q.side === 'enemy' && q.hp > 0); if (!f || a.ap < 2) return false; const pr = T.previewShot(b, a, f, EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(a, f)); return !!(pr && pr.ok); },
+    done: ({ a }) => !!a.acted,
+    html: () => 'That % is your <b>hit chance</b>. Cover, range and flanking change it. Tap the red button to attack.' },
+  { id: 'end',
+    when: ({ a }) => a.ap <= 0,
+    done: ({ b, u }) => !!(u.endTaught && T.actingUnit(b) && T.actingUnit(b).uid !== u.endTaught),
+    html: ({ u, a }) => { u.endTaught = a.uid; return 'Out of AP. Tap <b>End turn</b> — the next fastest piece goes.'; } },
+  { id: 'look', // later turn, before he does anything: put him down and inspect the board
+    when: ({ b, a }) => b.turn >= 2 && !a.moved && !a.acted,
+    done: ({ u }) => !!(u.deselFor || u.inspect),
+    html: ({ a }) => `Tap <b>${nm(a)}</b> again (or ✕ on the bar) to deselect, then tap any piece to check its buffs and debuffs.` },
+];
 function battleHint(b, u, actor) {
-  if (b.tutorial || b.status !== 'active' || !actor || actor.side !== 'player' || b.side !== 'player' || u.busy) return '';
-  const h = hintsSeen();
-  if (u.preview) { markHint('move'); return ''; }
-  if (u.inspect) { markHint('target'); return ''; }
-  if (!h.move) return 'Tap a <b>blue tile</b> to see the path, its AP cost and who could shoot you there. Tap <b>Move</b> to go; you can undo a plain move.';
-  if (!h.target) return 'Tap a <b>rival</b> to see their status and your odds, then tap the big attack button.';
-  if (actor.ap <= 0 && !h.end) { markHint('end'); return 'Out of AP. Tap <b>End turn</b> to pass to the next operator.'; }
-  return '';
+  if (b.pvp || b.status !== 'active' || !actor || actor.side !== 'player' || b.side !== 'player' || u.busy) return null;
+  return runSteps(BATTLE_STEPS, { b, u, a: actor }, u.hintOff || {});
 }
 
 function coach(b, u) {
-  if (!b.tutorial || b.status !== 'active') return '';
+  if (!b.tutorial || b.status !== 'active' || u.busy) return null;
   const rook = b.units.find((x) => x.hero === 'rook' && x.side === 'player');
-  const hook = b.units.find((x) => x.hero === 'hook');
+  const hook = b.units.find((x) => x.hero === 'hook' && x.hp > 0);
   const actor = T.actingUnit(b);
-  if (actor && actor.hero !== 'rook') return 'Turns go one operator at a time, fastest first. Hook is up now — wait for Rook’s next go, or finish him if you can.';
-  if (!rook || !hook) return '';
+  if (!rook || !hook) return null;
+  const T0 = `t${b.turn}`;
+  if (actor && actor.hero !== 'rook') return { id: `wait-${T0}`, html: 'Hook’s turn. Rook goes again after him.' };
+  const ap = rook.ap;
   const dist = Math.abs(rook.x - hook.x) + Math.abs(rook.y - hook.y);
-  const pounce = T.abilitiesOf(rook).find((a) => a.id === 'pounce');
-  if (b.turn === 1 && !rook.moved && !rook.acted && dist > 4) return 'Rook is a <b>Bruiser</b>: he wins up close. Blue tiles are his walk range (1 AP per tile). Walk him <b>2 tiles</b> toward Hook and keep 2 AP for an action.';
-  if (dist > 1 && pounce && !T.cooldownLeft(rook, 'pounce') && rook.ap >= 2) {
-    const prev = T.previewShot(b, rook, hook, 'pounce');
-    if (prev && prev.ok) return `In range. Pick <b>Pounce</b> and tap Hook — Rook leaps in (no overwatch can catch him) and swings at <b style="color:${chanceColor(prev.chance)}">${prev.chance}%</b>.`;
-    return 'Close the gap: <b>Pounce</b> reaches foes up to 4 tiles away.';
-  }
-  if (dist === 1 && rook.ap >= 2) {
+  const ab = (id) => T.abilitiesOf(rook).find((a) => a.id === id);
+  const ready = (id) => { const a = ab(id); return a && !T.cooldownLeft(rook, id) && ap >= (a.ap || 0) ? a : null; };
+  const pct = (prev) => `<b style="color:${chanceColor(prev.chance)}">${prev.chance}%</b>`;
+  const fresh = !rook.moved && !rook.acted;
+  // adjacent: strike (or pounce is pointless)
+  if (dist === 1 && ap >= 2) {
     const prev = T.previewShot(b, rook, hook, 'melee');
-    return `Tap Hook to <b>Strike</b> with the tyre iron${prev && prev.ok ? ` (<b style="color:${chanceColor(prev.chance)}">${prev.chance}%</b>, ${prev.dmg[0]}–${prev.dmg[1]} dmg)` : ''}. Every melee hit heals Rook 1 HP (Bruiser Grit).`;
+    return { id: `strike-${T0}-${ap}`, html: `He’s right there. Tap Hook to <b>Strike</b>${prev && prev.ok ? ` (${pct(prev)})` : ''}. Each melee hit heals Rook 1 HP.` };
   }
-  if (rook.hp <= rook.maxHp * 0.5 && !T.cooldownLeft(rook, 'secondwind') && rook.ap >= 1) return 'Hurt? <b>Second Wind</b> heals 35% of his health for 1 AP.';
-  if (dist > 1 && rook.ap >= 2) return dist <= 6 ? 'Just out of <b>Pounce</b> range (4 tiles). Fire your gun: tap <b>Shoot</b>, then tap Hook, to soften him up. Next turn, Pounce.' : 'Out of reach. Walk closer — Pounce reaches 4 tiles, Shoot 6.';
-  return 'Out of AP. <b>End turn</b> — the next fastest operator goes next. Tap Rook later to open his inventory and gear him up.';
+  // Pounce: only when Rook has the AP, it's off cooldown and Hook is actually in range right now
+  const pn = ready('pounce');
+  if (pn && dist > 1) {
+    const prev = T.previewShot(b, rook, hook, 'pounce');
+    if (prev && prev.ok) return { id: `pounce-${T0}-${ap}`, html: `Hook’s in range. Pick <b>Pounce</b>, then tap him (${pct(prev)}).` };
+  }
+  // start of the turn, too far: walk, leaving 2 AP for an action
+  if (fresh && dist > 1 && !(u.hintOff && u.hintOff.move)) { // (skipped if the player just waved the same advice away)
+    const range = (ab('pounce') || {}).range || 4;
+    const walk = Math.max(1, dist - (pn ? range : 1));
+    if (pn && walk <= ap - pn.ap) return { id: `walk-${T0}`, html: `Rook hits hardest up close. Walk him <b>${walk} tile${walk > 1 ? 's' : ''}</b> toward Hook, then Pounce.` };
+    if (walk <= ap - 2) return { id: `walk-${T0}`, html: `Rook hits hardest up close. Walk him <b>${walk} tile${walk > 1 ? 's' : ''}</b> toward Hook, then Strike.` };
+    return { id: `walk-${T0}`, html: 'Rook hits hardest up close. Get him next to Hook — blue tiles cost 1 AP each.' };
+  }
+  const sw = ready('secondwind');
+  if (sw && rook.hp <= rook.maxHp * 0.5) return { id: `sw-${T0}-${ap}`, html: 'Hurt? <b>Second Wind</b> heals him for 1 AP.' };
+  if (ap >= 2 && dist > 1) {
+    const prev = T.previewShot(b, rook, hook, 'shot');
+    if (prev && prev.ok) return { id: `shoot-${T0}-${ap}`, html: `Can’t get to him this turn. <b>Shoot</b> Hook instead (${pct(prev)}).` };
+  }
+  if (ap >= 1 && dist > 1) return { id: `close-${T0}-${ap}`, html: 'Walk him closer, then end the turn.' };
+  if (ap <= 0) return { id: `end-${T0}`, html: 'No AP left. Tap <b>End turn</b>.' };
+  return null;
+}
+
+// Where the hint sits: the top-right or top-left edge, whichever is clear of the acting piece, its target and
+// any open panel. Falls back to the bottom-right corner above the dock.
+function hintSide(b, u) {
+  if (!u.cam) return 'r';
+  const W = window.innerWidth || 844, H = window.innerHeight || 390;
+  const hard = [], soft = [];
+  const dpr = window.devicePixelRatio || 1; // the camera works in device pixels, the hint boxes in CSS pixels
+  const add = (arr, un) => { if (!un) return; const q = toWorld(un.x, un.y); const sx = (u.cam.x + q.x * u.cam.z) / dpr, sy = (u.cam.y + q.y * u.cam.z) / dpr; arr.push([sx, sy], [sx, sy - Actors.actorHeight(un.hero) * u.cam.z / dpr]); };
+  // hard: the acting piece, the inspected piece, the lesson target and the previewed tile must stay visible
+  const actor = T.actingUnit(b);
+  add(hard, actor);
+  if (u.inspect) add(hard, b.units.find((q) => q.uid === u.inspect));
+  if (b.tutorial) add(hard, b.units.find((q) => q.hero === 'hook' && q.hp > 0));
+  if (u.preview) { const q = toWorld(u.preview.x, u.preview.y); hard.push([(u.cam.x + q.x * u.cam.z) / dpr, (u.cam.y + q.y * u.cam.z) / dpr]); }
+  // soft: every other piece (prefer the side that hides fewer of them)
+  for (const q of b.units) if (q.hp > 0 && q !== actor && q.uid !== u.inspect) add(soft, q);
+  const boxes = { r: [W - 320, 30, W - 50, 140], l: [8, 30, 280, 140], b: [W - 270, H - 170, W - 8, H - 90] };
+  const hits = (k, pts) => pts.filter(([x, y]) => x > boxes[k][0] - 24 && x < boxes[k][2] + 24 && y > boxes[k][1] - 24 && y < boxes[k][3] + 24).length;
+  const order = u.inspect ? ['l'] : ['r', 'l', 'b'];
+  const ok = order.filter((k) => !hits(k, hard));
+  if (!ok.length) return '';
+  return ok.sort((x, y) => hits(x, soft) - hits(y, soft))[0];
 }
 
 function queueHtml(b) {
@@ -2382,7 +2507,14 @@ export function render(ctx) {
   const abs = sel ? T.abilitiesOf(sel) : [];
   const cls = def ? classOf(def) : null;
   const perk = def ? speciesPerk(def.species) : null;
-  const coachHtml = coach(b, u) || battleHint(b, u, actor);
+  u.hintOff ||= {};
+  let hint = battleHint(b, u, actor) || coach(b, u);
+  if (hint && u.hintOff[hint.id]) hint = null;
+  const hside = hint ? hintSide(b, u) : '';
+  // v0.19.1 deselect: the acting operator stays in charge, but the board stops showing their range and every
+  // piece you tap just opens its status panel. Tap them (or Select) to pick them back up.
+  if (actor && u.lastActing !== actor.uid) u.deselFor = null;
+  const desel = !!(actor && actor.side === 'player' && u.deselFor === actor.uid);
   const actName = actor ? defOf(actor.hero).name : '';
   const turnLbl = actor ? `${actName} is up` : (b.side === 'player' ? 'Your turn' : 'Enemy turn');
   const canAct = b.side === 'player' && actor && actor.side === 'player' && !u.busy;
@@ -2421,7 +2553,7 @@ export function render(ctx) {
     banner = `<div class="tbanner ${foe ? 'foe' : ''}" style="animation-delay:-${Math.round(nowMs - u.bannerAt)}ms"><img loading="lazy" decoding="async" src="${ad.thumb || ad.portrait}" alt=""><div><b>${esc(ad.name)}</b><span>${foe ? 'Rival turn' : 'Your move'} · ${esc(ad.roleTag || (ac && ac.name) || ad.role)}</span></div></div>`;
   }
   return `
-  <div class="twrap">
+  <div class="twrap ${hside === 'l' ? 'hintl' : ''} ${desel ? 'desel' : ''}">
     <canvas id="tacv"></canvas><div class="tvig"></div>
     <div class="tbar">
       <div class="tturn">${esc(turnLbl)} · ${esc(b.label)} · T${b.turn}${b.highStakes ? ' · <b class="hsflag">HIGH STAKES</b>' : ''}</div>
@@ -2434,14 +2566,14 @@ export function render(ctx) {
     ${banner}
     <div class="tzoom"><button data-act="tzoom" data-z="in" aria-label="Zoom in">+</button><button data-act="tzoom" data-z="out" aria-label="Zoom out">−</button><button data-act="tzoom" data-z="fit" aria-label="Fit board">⤢</button></div>
     ${inspectHtml(b, u)}
-    ${actionBarHtml(b, u, canAct, actor)}
-    ${coachHtml ? `<div class="tcoach ${tip ? 'top' : ''}">${coachHtml}</div>` : ''}
-    ${sel ? `
+    ${desel ? '' : actionBarHtml(b, u, canAct, actor)}
+    ${hint && hside ? `<button class="thint ${hside}" data-act="dismissHint" data-id="${esc(hint.id)}" ${hint.once ? 'data-once="1"' : ''} aria-label="Hint, tap to dismiss"><span>${hint.html}</span><i aria-hidden="true">✕</i></button>` : ''}
+    ${desel ? `<div class="tdock desel"><button class="btn tselect" data-act="tselect"><img loading="lazy" decoding="async" src="${defOf(actor.hero).thumb || defOf(actor.hero).portrait}" alt=""><span><b>${esc(defOf(actor.hero).name)}</b> is up · tap to select</span></button><span class="tiny dim">Tap any piece to see its buffs and debuffs</span></div>` : sel ? `
     <div class="tdock">
       <div class="thero ${sel.side === 'enemy' ? 'foe' : ''}">
         <img loading="lazy" decoding="async" class="tport" src="${def.portrait}" alt="">
         <div class="tinfo">
-          <div class="tuname">${esc(def.name)} <span class="tcls">${esc(def.roleTag || (cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
+          ${canAct && sel.uid === actor.uid ? '<button class="tdesel" data-act="tdeselect" aria-label="Deselect" title="Deselect: look around the board">✕</button>' : ''}<div class="tuname">${esc(def.name)} <span class="tcls">${esc(def.roleTag || (cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
           <div class="thp"><i style="width:${Math.max(0, Math.round(100 * sel.hp / sel.maxHp))}%"></i><span>${sel.hp}/${sel.maxHp}</span></div>
           <div class="tstats">${apPips(sel.ap, sel.maxAp, 'big')}<span>Mv ${sel.move}</span><span>Spd ${sel.speed || def.speed}</span><span>${ico('ammo')} ${sel.ammo || 0}</span>${sel.medkits ? `<span>${ico('medkits')} ${sel.medkits}</span>` : ''}${sel.overwatch ? '<span class="tow">OW</span>' : ''}${sel.bleed ? `<span class="tst bleed">Bleed ${sel.bleed}</span>` : ''}${sel.shaken ? '<span class="tst shaken">Shaken</span>' : ''}${sel.rallied ? '<span class="tst rallied">Rallied</span>' : ''}${sel.dodge ? `<span title="Dodge">Dg ${sel.dodge}%</span>` : ''}</div>
         </div>
@@ -2471,6 +2603,10 @@ export function mount(ctx, el) {
   window.__tfx = {
     play: (evs) => playEvents(ctx, evs),
     bits: () => ui(ctx).fx.bits.map((q) => q.typ),
+    // CSS client position of a tile centre (v0.19.1 tests tap empty ground / pieces with it)
+    tileXY(x, y) { const uu = ui(ctx), cv = document.getElementById('tacv'); if (!uu.cam || !cv) return null; const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1, q = toWorld(x, y); return { x: r.left + (uu.cam.x + q.x * uu.cam.z) / d, y: r.top + (uu.cam.y + q.y * uu.cam.z) / d }; },
+    hint: () => { const el = document.querySelector('.thint'); return el ? { id: el.dataset.id, text: el.innerText, side: el.className, rect: el.getBoundingClientRect().toJSON() } : null; },
+    state: () => { const uu = ui(ctx); return { sel: uu.sel, desel: uu.deselFor || null, inspect: uu.inspect || null, preview: uu.preview || null }; },
     perf() { const pf = ui(ctx).perf; if (!pf) return null; const a = [...pf.ms.slice(0, Math.min(120, pf.n))].sort((x, y) => x - y); return { avg: a.reduce((s2, v) => s2 + v, 0) / a.length, p95: a[Math.floor(a.length * 0.95)], n: pf.n }; },
     move(uid, x, y) {
       const bb = ctx.state.tactics, un = bb && bb.units.find((q) => q.uid === uid);
@@ -2505,6 +2641,13 @@ export const actions = {
   },
   endTacticsTurn(ctx) { ui(ctx).inspect = null; doAct(ctx, { type: 'endTurn' }); },
   closeInspect(ctx) { ui(ctx).inspect = null; ctx.render(); },
+  dismissHint(ctx, el) {
+    const u = ui(ctx); u.hintOff ||= {}; u.hintOff[el.dataset.id] = 1;
+    if (el.dataset.once) learn(el.dataset.id);
+    ctx.render();
+  },
+  tdeselect(ctx) { deselect(ctx); },
+  tselect(ctx) { const u = ui(ctx); u.deselFor = null; u.inspect = null; ctx.render(); },
   tmoveGo(ctx) {
     const b = ctx.state.tactics, u = ui(ctx), sel = b && T.actingUnit(b);
     if (!sel || !u.preview) return;

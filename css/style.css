@@ -1214,3 +1214,21 @@ em.up{color:#7bd36a}em.dn{color:#ff6b5e}
 .joinrow { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; padding: 6px 8px; border: 1px solid rgba(201,162,74,0.55); border-radius: 8px; background: linear-gradient(90deg, rgba(201,162,74,0.18), rgba(0,0,0,0.25)); }
 .joinrow img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; border: 1px solid rgba(201,162,74,0.6); }
 .joinrow > span { display: flex; flex-direction: column; min-width: 0; }
+
+/* v0.19.1 compact battle hints: one small toast at a screen edge, away from the action; tap to dismiss */
+.thint{position:absolute;top:calc(max(6px,env(safe-area-inset-top)) + 52px);max-width:min(250px,30%);display:flex;align-items:flex-start;gap:6px;padding:6px 8px 6px 10px;background:rgba(12,10,9,.9);border:1px solid rgba(201,162,74,.75);border-left:3px solid var(--gold);border-radius:9px;color:#f3e7c9;font:inherit;font-size:12px;line-height:1.3;text-align:left;z-index:6;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.45);animation:thintIn .22s ease-out}
+.thint b{color:var(--gold)}
+.thint i{font-style:normal;font-size:10px;opacity:.6;margin-top:1px;flex:none}
+.thint.r{right:max(56px,calc(env(safe-area-inset-right) + 48px))}
+.thint.l{left:max(10px,env(safe-area-inset-left))}
+.thint.b{right:max(10px,env(safe-area-inset-right));top:auto;bottom:96px}
+.twrap.hintl .tfeed{display:none}
+@keyframes thintIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (max-height:350px){.thint{font-size:11px;padding:5px 7px 5px 9px;top:calc(max(6px,env(safe-area-inset-top)) + 46px)}.thint.b{bottom:80px}}
+/* v0.19.1 deselect: ✕ on the selected-unit bar, and a slim "X is up · tap to select" bar when nothing is selected */
+.thero{position:relative}
+.tdesel{position:absolute;top:-10px;right:-10px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line2);background:rgba(20,16,14,.95);color:#f3e7c9;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:3;cursor:pointer;padding:0}
+.tdesel:hover{border-color:var(--gold);color:var(--gold)}
+.tdock.desel{align-items:center;gap:12px}
+.tselect{display:flex;align-items:center;gap:8px;min-height:44px;padding:4px 14px 4px 4px}
+.tselect img{width:36px;height:36px;border-radius:8px;object-fit:cover}

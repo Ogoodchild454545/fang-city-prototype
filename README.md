@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.19.0)
+# Fang City: Animal Gangs (playable prototype v0.19.1)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,26 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.19.1 (Tutorial hints and deselect)
+
+- **Compact, well-timed tutorial hints.** The big lesson pop-up is gone. Every battle tip is now one small
+  toast at a screen edge (never over the selected piece, the target or the tile you are previewing). Tap it to
+  dismiss; only one shows at a time. Wording is short and in-world, e.g. "Rook hits hardest up close. Walk him 2
+  tiles toward Hook, then Pounce."
+- **A reusable tutorial-step system** (`js/ui/tutor.js`). Battle tips are an ordered list of steps that teach one
+  mechanic at a time, each only when it applies: whose turn it is and AP, moving (blue tiles, 1 AP each),
+  cover and threats on the move preview, abilities, picking a target, hit odds, ending the turn, and
+  deselecting to inspect pieces. A step is learned once per device (or silently when the player already did
+  it), so the hand-holding fades. The coming guided intro will be built on the same steps.
+- **Hints know the state.** Ability tips (like Pounce) only appear when the unit has the AP, the ability is off
+  cooldown and a target is in range. With no AP left the tip says to end the turn.
+- **Deselect.** Tap the selected piece again, tap empty ground, or tap the new ✕ on the unit bar. While
+  deselected, tap any piece (enemies too) to see its buffs and debuffs; tap the "is up · tap to select" bar or a
+  blue tile to carry on. Move preview, Move here, Undo and the attack bar work as before.
+- Tests: a tutorial-step unit test and `tests/v0191.py` (compact hint size and placement, tap-to-dismiss, AP /
+  cooldown / range checks, deselect by ✕ / self-tap / empty ground, enemy inspect while deselected, reselect by
+  move tap, Move here + Undo, attack bar, zero 404s/console errors) at 844×390 and 844×340.
 
 ## v0.19.0 (New Operators Day: five new operators)
 

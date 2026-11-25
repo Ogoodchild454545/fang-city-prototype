@@ -1832,3 +1832,24 @@ test('v0.19 save compatibility: old v10 saves load, Lv 12+ crews get Sledge, cle
   assert.match(unlockHint(newGame(T0, 3), 'jinx'), /Hot metal/);
   assert.ok(!canRecruit(newGame(T0, 3), 'vigil').ok, 'shard operators are not bought');
 });
+
+// ---------------------------------------------------------------- v0.19.1 tutorial-step runner
+test('v0.19.1 tutorial steps: one at a time, in order, only when relevant; done steps are learned silently', async () => {
+  const store = {}; globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); } };
+  const { runSteps, learned, learn, forget } = await import('../js/ui/tutor.js');
+  const steps = [
+    { id: 'a', when: (s) => s.ap > 0, done: (s) => s.moved, html: () => 'A' },
+    { id: 'b', when: (s) => s.ap >= 2, html: () => 'B' },
+    { id: 'c', once: false, when: () => true, html: () => 'C' },
+  ];
+  assert.equal(runSteps(steps, { ap: 4 }).id, 'a');
+  assert.equal(runSteps(steps, { ap: 0 }).id, 'c', 'irrelevant steps are skipped, not shown out of context');
+  assert.equal(runSteps(steps, { ap: 4, moved: 1 }).id, 'b', 'a satisfied step is learned without being shown');
+  assert.equal(learned().a, 1);
+  assert.equal(runSteps(steps, { ap: 1 }).id, 'c', 'B needs 2 AP');
+  learn('b');
+  assert.deepEqual(runSteps(steps, { ap: 4 }), { id: 'c', html: 'C', once: false });
+  assert.equal(runSteps(steps, { ap: 4 }, { c: 1 }), null, 'dismissed coaching stays hidden');
+  forget(); assert.equal(runSteps(steps, { ap: 4 }).id, 'a');
+  delete globalThis.localStorage;
+});
