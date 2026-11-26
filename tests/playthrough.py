@@ -159,6 +159,12 @@ async def main():
         await page.wait_for_selector('#basecv')
         await page.wait_for_timeout(900)
         await ev(page, "window.__game.fast = true")
+        # v0.20: a new game opens on the guided intro storyboard; skip the whole intro like a player would.
+        if await page.locator('.introsb').count():
+            await shot(page, '02-intro-storyboard')
+            await tap(page, '.sbskip'); await tap(page, '[data-sb="skipAll"]')
+            await page.wait_for_timeout(300)
+            if await page.locator('.toast').count(): await ev(page, "document.querySelectorAll('.toast').forEach(t=>t.remove())")
         # The first-run "Rook is ready" intro modal blocks the map; look around first.
         if await page.locator('.overlay [data-act="closeModal"].btn').count():
             await page.locator('.overlay [data-act="closeModal"].btn').first.click()

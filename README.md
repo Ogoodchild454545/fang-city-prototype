@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.19.1)
+# Fang City: Animal Gangs (playable prototype v0.20.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,29 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.20.0 (Guided intro: first sample)
+
+A rough first pass at the new-player intro, told through **Rook**, for judging the direction. A new game now
+opens on it; `?intro=1` replays it on any save (`?reset=1&intro=1` for a clean start). Skip is always there.
+
+- **Storyboard**: seven painted comic panels with slow pans (Ken Burns) and captions in Rook's voice: humans
+  spliced themselves into animals, burned their world down, the Waking and the wars, the Pact and Fang City, the
+  Slip, Ice and Helix under Augustus Vale, Bracken Hale's Thaw hiring Rook for the docks job, and Rook, paid in
+  Ice and quietly slipping. Tap shows the captions, tap again turns the page. Skip offers "skip the story" or
+  "skip the whole intro".
+- **Mission 1, the docks job**: the guided lesson fight retold as a hit on a Helix Ice shipment. A short story
+  line opens it, then the v0.19.1 tutorial steps teach turn and AP, moving, cover, abilities, odds and ending the
+  turn, one at a time. Teaching steps are re-armed when the intro starts so it always teaches.
+- **Base**: a one-panel beat ("Hale paid in Ice...") then a Rook step card on the hideout (Boss's orders wait):
+  build a Knock-off Stall, with the Build button glowing.
+- **Crafting**: a scrap bench (a light preview of the Lv 7 Factory): 6 parts from the Helix crate, craft two of
+  Leather Jacket / Steel-toe Boots / Taped Bat and put them on Rook.
+- **Mission 2, Helix strikes back** (placeholder): Vale's beat, then Rook holds the hideout against two hired
+  guns. Steps already learned stay quiet, so the hand-holding fades. A closing beat hands over to Boss's orders.
+- Saves without the intro (every existing save) never see it. Intro progress is saved (`s.intro`).
+- Tests: `tests/v020.py` (new-game start, all panels and captions, skip menu, both missions, build, bench,
+  hand-off, replay, old saves untouched, zero 404s/console errors) at 844×390 and 844×340.
 
 ## v0.19.1 (Tutorial hints and deselect)
 

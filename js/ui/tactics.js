@@ -1,5 +1,6 @@
 // Canvas tactics view: docklands yard, pan/zoom, hitchance, cover, speed queue and PvP timer.
 import { runSteps, learn } from './tutor.js';
+import { INTRO_BATTLE_STEPS, onFightEnd as introFightEnd } from './intro.js';
 import { ITEMS, QUALITY } from '../core/items.js';
 import { itemImg } from './character.js';
 import * as T from '../core/tactics.js';
@@ -2073,6 +2074,7 @@ function finish(ctx) {
   const fight = ctx.state.tactics;
   const squad = fight ? fight.units.filter((x) => x.side === 'player').map((x) => ({ hero: x.hero, hp: x.hp, kills: x.kills || 0 })) : [];
   const res = T.resolveTactics(ctx.state, fight);
+  introFightEnd(ctx, fight, res);
   ctx.save();
   ctx.sub.tactics = null;
   if (!res) { ctx.go('base'); return; }
@@ -2276,7 +2278,7 @@ export const BATTLE_STEPS = [
 ];
 function battleHint(b, u, actor) {
   if (b.pvp || b.status !== 'active' || !actor || actor.side !== 'player' || b.side !== 'player' || u.busy) return null;
-  return runSteps(BATTLE_STEPS, { b, u, a: actor }, u.hintOff || {});
+  return runSteps(b.intro ? [...INTRO_BATTLE_STEPS, ...BATTLE_STEPS] : BATTLE_STEPS, { b, u, a: actor }, u.hintOff || {});
 }
 
 function coach(b, u) {

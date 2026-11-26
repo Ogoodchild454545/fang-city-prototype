@@ -25,6 +25,7 @@ import { formatDrop } from '../core/shards.js';
 import { THEMES, loadTheme, saveTheme, themeAttr } from '../core/themes.js';
 import * as P from '../core/progression.js';
 import * as Actors from './actors.js';
+import * as Intro from './intro.js';
 
 const params = new URLSearchParams(location.search);
 const storage = makeLocalStorage(window.localStorage);
@@ -90,6 +91,7 @@ function nav() {
 function render() {
   const s = ctx.state;
   if (!s) return;
+  Intro.sync(ctx);
   if (s.tactics && ctx.tab !== 'tactics') ctx.tab = 'tactics';
   else if (s.battle && ctx.tab !== 'battle') ctx.tab = 'battle';
   const scr = SCREENS[ctx.tab];
@@ -112,6 +114,7 @@ function render() {
   scr.mount?.(ctx, el);
   live();
   flushTips();
+  Intro.afterRender(ctx);
 }
 
 // ---------------------------------------------------------------- theme (Settings)
@@ -266,6 +269,7 @@ const GLOBAL_ACTIONS = {
   refillEnergy: (c) => { const r = P.refillEnergy(c.state, c.now()); if (!r.ok) return toast(r.reason); closeModal(true); toast('Energy refilled'); render(); },
   lockedFeature: (c, el) => { const u = P.UNLOCKS.find((x) => x.id === el.dataset.id); toast(u ? `${u.name} unlocks at player level ${u.lv}` : 'Locked'); },
   collectStockHud: (c) => { const r = P.collectStockpile(c.state, c.now()); if (!r.ok) return toast(r.reason); Audio.play('collect'); toast(`Stockpile: +${money(r.cash)}${r.ammo ? ` · +${r.ammo} ammo` : ''}`); render(); },
+  ...Intro.actions,
   openEditor: (c, el) => { c.sub.editorBack = c.tab === 'editor' ? (c.sub.editorBack || 'heroes') : c.tab; c.closeModal && c.closeModal(); const id = el && el.dataset && el.dataset.id; loadEditor().then((Ed) => Ed.openEditor(c, id)).catch(() => toast('Could not load the editor')); },
 };
 function unlockAudio() { Audio.unlock(); syncBattleMute(); }
@@ -335,6 +339,8 @@ function welcomeBack(sum) {
 function startNewGame() {
   ctx.state = newGame(ctx.now());
   M.ensureJobs(ctx.state, ctx.now());
+  // v0.20: a new game opens on the guided intro (storyboard told through Rook). ?fast skips it for tests.
+  if (!ctx.fast) { Intro.begin(ctx.state); ctx.save(); render(); return; }
   ctx.save(); render();
   baseTip('Welcome to Fang City. Tap NEXT OP for Rook\'s street lesson — it is free.');
   if (!ctx.fast) {
@@ -413,6 +419,8 @@ function boot() {
     if (lv >= 3) { ctx.state.ops.cleared.t1 ||= 1; ctx.state.ops.cleared.t2 ||= 1; ctx.state.ops.cleared.t3 ||= 1; }
     ctx.save(); render(); toast(`Debug: player level ${lv}`);
   }
+  // ?intro=1 replays the guided intro on any save (a fresh one with ?reset=1)
+  if (params.has('intro') && ctx.state && !ctx.state.tactics) { closeModal(true); pendingTips = []; document.querySelectorAll('.toast').forEach((t) => t.remove()); Intro.begin(ctx.state, !!ctx.state.heroes.tutorialDone); ctx.save(); ctx.tab = 'base'; render(); }
   if (params.has('energy') && ctx.state) { ctx.state.energy = { n: Math.max(0, Math.min(P.ENERGY_MAX, +params.get('energy') || 0)), at: ctx.now() }; ctx.save(); render(); }
   if (ctx.state && ctx.state.migratedTo7) {
     delete ctx.state.migratedTo7; ctx.save();

@@ -12,6 +12,7 @@ import * as P from '../core/progression.js';
 import * as O from '../core/ops.js';
 import { TROOPS_UI } from './crew.js';
 import * as FAC from './facilities.js';
+import * as Intro from './intro.js';
 
 let view = null;
 const ui = (ctx) => (ctx.sub.base ||= { sel: null, place: null, cam: null, cat: 'money' });
@@ -23,8 +24,9 @@ export function render(ctx) {
   const s = ctx.state, now = ctx.now();
   const trackOn = P.isUnlocked(s, 'track');
   const tr = trackOn ? P.trackCurrent(s) : null;
-  const obj = trackOn ? null : M.currentObjective(s);
-  ctx.sub.objKey = obj ? `${obj.index}:${obj.done}` : tr ? `t${tr.i}:${tr.done}` : 'none';
+  const intro = Intro.active(s);
+  const obj = trackOn || intro ? null : M.currentObjective(s);
+  ctx.sub.objKey = intro ? Intro.key(ctx) : obj ? `${obj.index}:${obj.done}` : tr ? `t${tr.i}:${tr.done}` : 'none';
   const ad = E.adBoostActive(s, now);
   const stockOn = P.isUnlocked(s, 'stockpile');
   const sp = stockOn ? P.stockpile(s, now) : null;
@@ -34,6 +36,7 @@ export function render(ctx) {
     <canvas id="basecv"></canvas>
     <div class="hud hud-tl">
       <button class="pillbtn" data-act="builders"><span>🔨</span><b data-live="builders">${BS.buildersFree(s)}/${s.base.builders}</b><span class="tiny dim">builders</span></button>
+      ${intro ? Intro.baseCard(ctx) : ''}
       ${obj ? `<div class="objcard ${obj.done ? 'glow' : ''}" data-act="${obj.done ? 'claimObj' : 'objHint'}">
         <div class="tick">${obj.done ? '✔' : obj.index + 1}</div>
         <div class="grow"><div class="tiny red h">Boss's orders</div><div class="small">${obj.text}</div>
@@ -53,7 +56,7 @@ export function render(ctx) {
     <div class="hud hud-br">
       <button class="bigbtn gold nextop" data-act="startOp" data-id="${nx.id}" title="${esc(nx.name)}"><span class="i">🎯</span>${nx.tut ? 'Next op' : 'Next op'}<small>${esc(nx.name)}${nx.tut ? ' · free' : ' · ⚡1'}</small></button>
       <button class="bigbtn" data-act="nav" data-tab="missions"><span class="i">🗂️</span>Ops</button>
-      <button class="bigbtn" data-act="openBuild"><span class="i">🔨</span>Build</button>
+      <button class="bigbtn${Intro.glow(s, 'build')}" data-act="openBuild"><span class="i">🔨</span>Build</button>
       ${trackOn ? '<button class="bigbtn" data-act="openTrack"><span class="i">🛤️</span>Track</button>' : `<button class="bigbtn off" data-act="openTrack"><span class="i">🔒</span>Track<small>Lv ${P.unlockLv('track')}</small></button>`}
     </div>
     <div class="hud hud-bc" id="selpanel"></div>
@@ -226,9 +229,10 @@ function buildingPanel(ctx, b, now) {
 export function live(ctx, now) {
   const s = ctx.state;
   const trackOn = P.isUnlocked(s, 'track');
-  const obj = trackOn ? null : M.currentObjective(s);
+  const intro = Intro.active(s);
+  const obj = trackOn || intro ? null : M.currentObjective(s);
   const tr = trackOn ? P.trackCurrent(s) : null;
-  if ((obj ? `${obj.index}:${obj.done}` : tr ? `t${tr.i}:${tr.done}` : 'none') !== ctx.sub.objKey && !document.querySelector('.overlay')) return ctx.render();
+  if ((intro ? Intro.key(ctx) : obj ? `${obj.index}:${obj.done}` : tr ? `t${tr.i}:${tr.done}` : 'none') !== ctx.sub.objKey && !document.querySelector('.overlay')) return ctx.render();
   if (P.isUnlocked(s, 'stockpile')) { const n = document.querySelector('[data-live="hudstock"]'); const v = money(P.stockpile(s, now).cash); if (n && n.textContent !== v) n.textContent = v; }
   const set = (sel, v) => { const n = document.querySelector(sel); if (n && n.textContent !== v) n.textContent = v; };
   set('[data-live="builders"]', `${BS.buildersFree(s)}/${s.base.builders}`);
