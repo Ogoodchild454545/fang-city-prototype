@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.20.0)
+# Fang City: Animal Gangs (playable prototype v0.20.1)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -31,6 +31,18 @@ factions you fight in Missions.
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
 
+## v0.20.1 (Intro fixes from Oliver's notes)
+
+- Storyboard is now 9 panels. Panel 1 explains the splicing and the gene-drive virus; a new panel shows humans at
+  war with each other, fallout mutating the virus; the next says their own war finished them. A new ration-line
+  panel shows Rook's motive: Helix rations and prices Ice, merc pay can't cover it, and he's secretly slipping;
+  the rebels pay in Ice he can't buy anywhere else.
+- The rebels have no group name for now ("the Thaw" removed from game text).
+- First battle: a 6-step spotlight tour (AP, unit bar, actions, End turn, enemy, deselect), tap to advance, Skip.
+- "Action Points (AP)" spelled out on first mention (4 per turn, 1 per tile, ability pips); labelled `AP n/max` pips.
+- Pounce explained in plain words; ready tips pulse the actual button; press-and-hold any ability for its description.
+- Required equip step after crafting: open Rook, tap the slot, tap the item, see the stat change (Intro 4/5).
+
 ## v0.20.0 (Guided intro: first sample)
 
 A rough first pass at the new-player intro, told through **Rook**, for judging the direction. A new game now
@@ -38,7 +50,7 @@ opens on it; `?intro=1` replays it on any save (`?reset=1&intro=1` for a clean s
 
 - **Storyboard**: seven painted comic panels with slow pans (Ken Burns) and captions in Rook's voice: humans
   spliced themselves into animals, burned their world down, the Waking and the wars, the Pact and Fang City, the
-  Slip, Ice and Helix under Augustus Vale, Bracken Hale's Thaw hiring Rook for the docks job, and Rook, paid in
+  Slip, Ice and Helix under Augustus Vale, Bracken Hale's rebels hiring Rook for the docks job, and Rook, paid in
   Ice and quietly slipping. Tap shows the captions, tap again turns the page. Skip offers "skip the story" or
   "skip the whole intro".
 - **Mission 1, the docks job**: the guided lesson fight retold as a hit on a Helix Ice shipment. A short story
@@ -82,7 +94,7 @@ handoff in `docs/new-operators-day.md`.
 
 | Operator | Species · role | How to get | Signature kit |
 |---|---|---|---|
-| **Sledge** *(working name)* | Buffalo · Breaker (The Thaw) | Joins free at player Lv 12 | Cover Breaker (sledgehammer: knockback + Exposed), Shoulder Up (takes half the hits on a crewmate), Sweeping Cleave, Rebel Yell; Rebel Grit below half HP |
+| **Sledge** *(working name)* | Buffalo · Breaker (rebels) | Joins free at player Lv 12 | Cover Breaker (sledgehammer: knockback + Exposed), Shoulder Up (takes half the hits on a crewmate), Sweeping Cleave, Rebel Yell; Rebel Grit below half HP |
 | **Vigil** | Owl · Spotter | 30 shards (crates, pin) | Mark Target (+15 aim, ignores Dodge), Pinning Shot, Flare (marks an area); Night Eyes +1 range |
 | **Jinx** | Raccoon · Saboteur | First clear of op “Hot metal” | Flashbang (**Blinded**: −40 aim, no overwatch), Jammer (no abilities), Tripwire (4 dmg + Slowed) |
 | **Sable** | Cat · Infiltrator | 30 shards (crates, pin) | Shadow Step (Hidden), Backstab (sure crit from hiding or a flank), Hamstring, Rooftop Run; Alley Ghost dodge |

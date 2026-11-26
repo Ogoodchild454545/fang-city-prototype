@@ -35,7 +35,7 @@ with sync_playwright() as p:
     pg.goto(URL + '?reset=1'); pg.click('#play'); pg.wait_for_selector('.introsb', timeout=8000)
     assert intro(pg)['step'] == 'story'
     pg.wait_for_timeout(2600); s0 = sb(pg); print('new game panel', s0)
-    assert s0['dots'] == 7 and s0['on'] == 2 and s0['anim'] == 'kb', s0
+    assert s0['dots'] == 9 and s0['on'] == 2 and s0['anim'] == 'kb', s0
     shot(pg, 'storyboard-panel', 600)
     pg.close()
     pg = new_page(br)
@@ -48,24 +48,42 @@ with sync_playwright() as p:
     pg = new_page(br)
     pg.goto(URL + '?reset=1&intro=1&fast=1'); pg.wait_for_selector('.introsb'); pg.wait_for_timeout(400)
     seen = []
-    for i in range(7):
+    for i in range(9):
         s = sb(pg); seen.append(s)
         assert len(s['caps']) == 2 and all(len(c) <= 80 for c in s['caps']), s
-        assert re.search(r'assets/intro/\d-[a-z]+\.webp', s['img']), s
-        if i < 6:
+        assert re.search(r'assets/intro/\d[a-z]?-[a-z]+\.webp', s['img']), s
+        if i < 8:
             pg.mouse.click(420, VH // 2); pg.wait_for_timeout(150)
             if sb(pg)['tag'] == s['tag']: pg.mouse.click(420, VH // 2); pg.wait_for_timeout(150)
     text = ' '.join(' '.join(s['caps']) for s in seen)
     print('tags', [s['tag'] for s in seen])
-    for must in ['HUMANS', 'SLIP', 'ICE', 'HELIX', 'VALE', 'HALE', 'ROOK', 'DOCKS']: assert must in text.upper(), must
-    assert 'CONTRABAND' not in text.upper()
+    for must in ['HUMANS', 'GENE DRIVE', 'WAR WITH EACH OTHER', 'FALLOUT KILLED', 'SLIP', 'ICE', 'HELIX', 'VALE', 'RATIONS', 'SLIPPING', 'HALE', 'REBELS', 'ROOK', 'DOCKS']: assert must in text.upper(), must
+    assert 'CONTRABAND' not in text.upper() and 'THAW' not in (text + ' '.join(s['tag'] for s in seen)).upper()
     assert seen[-1]['next'].upper().startswith('TAKE THE JOB'), seen[-1]
     # every panel image is served
-    for k in ['1-spark', '2-fall', '3-pact', '4-slip', '5-helix', '6-hire', '7-rook']:
+    for k in ['1-spark', '2b-war', '2-fall', '3-pact', '4-slip', '5-helix', '7b-ration', '6-hire', '7-rook']:
         st = pg.evaluate(f"fetch('assets/intro/{k}.webp').then(r=>r.status)"); assert st == 200, (k, st)
     shot(pg, 'storyboard-last')
     tap(pg, '.sbnext.go')
-    pg.wait_for_selector('.twrap'); pg.wait_for_timeout(1500)
+    pg.wait_for_selector('.twrap')
+
+    # ---------------- 1b. first battle: the fight waits for a spotlight UI tour (AP, bar, actions, End turn, enemy, deselect)
+    pg.wait_for_selector('.ttour', timeout=8000); pg.wait_for_timeout(300)
+    assert not pg.locator('.thint').count(), 'tips wait while the tour runs'
+    caps = []
+    for k in range(8):
+        if not pg.locator('.ttour').count(): break
+        c = pg.locator('.ttourcap').inner_text(); caps.append(c)
+        hole = pg.locator('.ttourhole').bounding_box(); assert hole and hole['width'] > 10, hole
+        if k == 0: shot(pg, 'tour-ap')
+        if k == 2: shot(pg, 'tour-actions')
+        tap(pg, '[data-tour="next"]')
+    print('tour', [c.split('\n')[1][:50] for c in caps])
+    assert len(caps) == 6, caps
+    allc = ' '.join(caps).upper()
+    for must in ['ACTION POINTS', '1 AP PER TILE', 'UNIT BAR', 'ACTIONS', 'END TURN', 'HOOK', 'DESELECT']: assert must in allc, must
+    assert pg.evaluate("JSON.parse(localStorage.getItem('fangcity.hints')||'{}').tour") == 1
+    pg.wait_for_timeout(600)
 
     # ---------------- 2. Mission 1: the docks job, story line first, then the teaching steps ----------------
     b = pg.evaluate("(()=>{const b=window.__game.state.tactics; return {intro:b.intro,label:b.label,kind:b.kind,foes:b.units.filter(u=>u.side==='enemy').map(u=>u.hero)}})()")
@@ -74,7 +92,10 @@ with sync_playwright() as p:
     assert h and h['id'] == 'intro-m1' and 'Docks, midnight' in h['text'], h
     assert h['rect']['width'] <= 262 and h['rect']['height'] <= 120, h['rect']
     shot(pg, 'mission1-brief')
-    tap(pg, '.thint'); h = hint(pg); print('then', h); assert h and h['id'] == 'turn', h
+    tap(pg, '.thint'); h = hint(pg); print('then', h); assert h and h['id'] == 'turn' and 'Action Points (AP)' in h['text'] and '1 AP' in h['text'], h
+    assert h['rect']['height'] <= 120, h['rect']
+    assert 'AP 4/4' in pg.locator('.taplbl').inner_text()
+    shot(pg, 'ap-tip')
     tap(pg, '.thint'); h = hint(pg); print('then', h); assert h and h['id'] == 'move' and 'up close' in h['text'], h
     shot(pg, 'mission1-hint')
     # walk one tile toward Hook through the real preview -> Move here (learns move + cover)
@@ -83,6 +104,25 @@ with sync_playwright() as p:
     h = hint(pg); print('preview hint', h); assert h and h['id'] == 'cover', h
     tap(pg, '[data-act="tmoveGo"]'); pg.wait_for_timeout(800)
     assert pg.evaluate("window.__game.state.tactics.units.find(u=>u.hero==='rook').moved"), 'Move here did not move Rook'
+    # bring Hook within Pounce range: the tip names Pounce in plain words and its button pulses
+    pg.evaluate("""(async()=>{const T=await import('./js/core/tactics.js'); const c=window.__game,b=c.state.tactics; const r=b.units.find(u=>u.hero==='rook'), h=b.units.find(u=>u.hero==='hook');
+      for (const [dx,dy] of [[3,0],[-3,0],[0,3],[0,-3],[2,1],[1,2],[2,-1],[-2,1]]) { const x=r.x+dx,y=r.y+dy; if (T.walkable(b,x,y,h.uid)) { h.x=x; h.y=y; break; } } c.render();})()""")
+    pg.wait_for_timeout(500)
+    for _ in range(3):
+        h = hint(pg)
+        if h and h['id'] == 'special': break
+        if h: tap(pg, '.thint')
+    print('pounce hint', h)
+    assert h and h['id'] == 'special' and 'leap attack' in h['text'] and 'up to 4 tiles' in h['text'], h
+    assert pg.locator('.tabl.tglow[data-mode="pounce"]').count() == 1, 'Pounce button should pulse'
+    shot(pg, 'pounce-tip')
+    # press and hold an ability (touch) to read it without picking it
+    pg.evaluate("""(()=>{const el=document.querySelector('.tabl[data-mode="secondwind"]'); el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerType:'touch'}));})()""")
+    pg.wait_for_timeout(700)
+    tt = pg.locator('.ttip').inner_text() if pg.locator('.ttip').count() else ''
+    print('hold tip', tt); assert 'SECOND WIND' in tt.upper() and 'heal' in tt.lower(), tt
+    pg.evaluate("document.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerType:'touch'}))")
+    assert pg.evaluate("window.__game.sub.tactics.mode") in (None, '', 'melee', 'shot', 'pounce'), 'hold must not pick the ability'
     force_win(pg)
     assert pg.evaluate("window.__game.state.intro.step") == 'base'
     tap(pg, '.resultov [data-act="closeModal"].red, .resultov .btn.red')
@@ -93,7 +133,7 @@ with sync_playwright() as p:
     # ---------------- 3. base step: build one thing ----------------
     pg.wait_for_selector('.introcard'); pg.wait_for_timeout(500)
     card = pg.locator('.introcard').inner_text(); print('card', card)
-    assert 'Knock-off Stall' in card and 'INTRO 2/4' in card.upper()
+    assert 'Knock-off Stall' in card and 'INTRO 2/5' in card.upper()
     assert pg.locator('.bigbtn.introglow[data-act="openBuild"]').count() == 1
     assert not pg.locator('.objcard').count(), 'Boss\'s orders should wait while the intro runs'
     r = pg.locator('.introcard').bounding_box(); assert r['y'] + r['height'] <= VH - 60, r
@@ -103,7 +143,7 @@ with sync_playwright() as p:
     assert 'clear spot' in pg.locator('.introcard').inner_text()
     tap(pg, '[data-act="placeOk"]'); pg.wait_for_timeout(500)
     assert pg.evaluate("window.__game.state.intro.step") == 'craft'
-    card = pg.locator('.introcard').inner_text(); print('card', card); assert 'INTRO 3/4' in card.upper()
+    card = pg.locator('.introcard').inner_text(); print('card', card); assert 'INTRO 3/5' in card.upper()
 
     # ---------------- 4. scrap bench: craft two, put one on Rook ----------------
     tap(pg, '[data-act="introBench"]'); pg.wait_for_selector('.introbench')
@@ -112,12 +152,29 @@ with sync_playwright() as p:
     tap(pg, '[data-act="introCraft"][data-id="leather"]'); tap(pg, '[data-act="introCraft"][data-id="workboots"]')
     assert pg.locator('[data-act="introCraft"][data-id="bat"][disabled]').count() == 1, 'only two crafts'
     stash = pg.evaluate("window.__game.state.stash"); assert stash.get('leather') == 1 and stash.get('workboots') == 1, stash
-    tap(pg, '[data-act="introEquip"][data-id="leather"]')
-    assert pg.evaluate("window.__game.state.heroes.owned.rook.equip.jacket") == 'leather'
+    assert not pg.locator('[data-act="introEquip"]').count(), 'equipping happens in Rook\'s gear screen'
     assert 'emoji' not in pg.locator('.introbench').inner_html() and pg.locator('.introbench img.iimg').count() >= 3
     shot(pg, 'bench')
     tap(pg, '[data-act="introBenchDone"]')
-    pg.wait_for_selector('.introsb'); s = sb(pg); print('raid beat', s); assert s['tag'].upper() == 'HELIX TOWER'
+
+    # ---------------- 4b. equip, guided through the real gear screen ----------------
+    pg.wait_for_selector('.introcard'); assert pg.evaluate("window.__game.state.intro.step") == 'equip'
+    card = pg.locator('.introcard').inner_text(); print('card', card); assert 'INTRO 4/5' in card.upper() and 'Leather Jacket' in card
+    tap(pg, '.introcard [data-act="openHero"]'); pg.wait_for_selector('.charscr'); pg.wait_for_timeout(300)
+    co = pg.locator('.introcoach').inner_text(); print('coach', co); assert 'Jacket' in co and 'slot' in co
+    assert pg.locator('.cslot.introglow[data-slot="jacket"]').count() == 1
+    shot(pg, 'equip-step')
+    tap(pg, '.cslot[data-slot="jacket"]')
+    co = pg.locator('.introcoach').inner_text(); print('coach', co); assert 'Leather Jacket' in co
+    assert pg.locator('.sitem.introglow[data-id="leather"]').count() == 1
+    shot(pg, 'equip-pick')
+    tap(pg, '.sitem[data-id="leather"]')
+    assert pg.evaluate("window.__game.state.heroes.owned.rook.equip.jacket") == 'leather'
+    co = pg.locator('.introcoach').inner_text(); print('coach', co); assert 'HP 16 → 18' in co, co
+    shot(pg, 'equip-done')
+    tap(pg, '.introcoach [data-act="introEquipDone"]')
+    pg.wait_for_selector('.introsb'); assert not pg.locator('.introcoach').count()
+    s = sb(pg); print('raid beat', s); assert s['tag'].upper() == 'HELIX TOWER'
     tap(pg, '.sbnext.go')
 
     # ---------------- 5. Mission 2: Helix strikes back; learned steps stay quiet ----------------

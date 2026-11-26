@@ -287,9 +287,29 @@ document.getElementById('app').addEventListener('click', (e) => {
   if (el.tagName === 'SELECT') return; // wait for change
   dispatchAct(el, e);
 });
+// v0.20.1: press and hold an ability button (touch) to read what it does, without picking it.
+let lpTimer = null, lpFired = false, lpClear = null;
+document.getElementById('app').addEventListener('pointerdown', (e) => {
+  lpFired = false; clearTimeout(lpTimer);
+  if (e.pointerType === 'mouse') return;
+  const el = e.target.closest('.tabl[data-apcost]');
+  if (!el || ctx.tab !== 'tactics' || !ctx.sub.tactics) return;
+  clearTimeout(lpTimer); lpFired = false;
+  lpTimer = setTimeout(() => {
+    lpFired = true; clearTimeout(lpClear);
+    ctx.sub.tactics.abilityHover = { mode: el.dataset.mode || '', ap: +el.dataset.apcost, held: 1 };
+    render();
+    lpClear = setTimeout(() => { if (ctx.sub.tactics && ctx.sub.tactics.abilityHover && ctx.sub.tactics.abilityHover.held) { ctx.sub.tactics.abilityHover = null; if (ctx.tab === 'tactics') render(); } }, 3500);
+  }, 450);
+});
+['pointerup', 'pointercancel'].forEach((t) => document.addEventListener(t, () => clearTimeout(lpTimer)));
+document.getElementById('app').addEventListener('click', (e) => { if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); } }, true);
+document.getElementById('app').addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.tabl')) e.preventDefault(); });
 document.getElementById('app').addEventListener('pointerover', (e) => {
   if (e.pointerType && e.pointerType !== 'mouse') return; // touch has no hover: never leave a tip stuck on
   const el = e.target.closest('[data-apcost]');
+  // a hover tip left behind by a re-render (no pointerout on the old button) clears once the mouse is elsewhere
+  if (!el && ctx.tab === 'tactics' && ctx.sub.tactics && ctx.sub.tactics.abilityHover && !ctx.sub.tactics.abilityHover.held) { ctx.sub.tactics.abilityHover = null; render(); return; }
   if (!el || ctx.tab !== 'tactics' || !ctx.sub.tactics) return;
   ctx.sub.tactics.abilityHover = { mode: el.dataset.mode || '', ap: +el.dataset.apcost };
 });

@@ -800,7 +800,7 @@ if (typeof window !== 'undefined') window.__actors = { setUnitStyle, unitStyle, 
 export const BASE_THEME = {
   rook: 'docks', anvil: 'club', pip: 'drain', lumen: 'roof', brick: 'stagedoor', vesper: 'clinic',
   ivory: 'warehouse', nile: 'quay', marlow: 'scrap', stitch: 'clinic',
-  // v0.19: Thaw barricade, bell-tower slates, a gutted Helix lab, a neon fire escape, a canal lock
+  // v0.19: rebel barricade, bell-tower slates, a gutted Helix lab, a neon fire escape, a canal lock
   sledge: 'barricade', vigil: 'belfry', jinx: 'lab', sable: 'fireescape', reed: 'canal',
 };
 const BASE_COL = {

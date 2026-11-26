@@ -1,5 +1,5 @@
 // v0.20 guided intro (sample). Told through Rook. A comic storyboard (painted panels, slow pans, captions in
-// Rook's voice), then a guided Mission 1 (the docks job for the Thaw, paid in Ice), one base build, a quick
+// Rook's voice), then a guided Mission 1 (the docks job for the rebels, paid in Ice), one base build, a quick
 // scrap-bench craft, Mission 2 (Helix strikes back) and then the hand-holding fades. The in-battle teaching
 // reuses the v0.19.1 tutorial-step system (js/ui/tutor.js); the intro only adds a story line per fight.
 //
@@ -7,32 +7,36 @@
 // Steps: story -> m1 -> base -> craft -> m2 -> done. ?intro=1 replays it on any save.
 import * as T from '../core/tactics.js';
 import { opMap } from '../core/ops.js';
-import { ITEMS, QUALITY, addItem, equipItem } from '../core/items.js';
+import { ITEMS, QUALITY, addItem, statsFor, targetSlot, SLOT_BY_ID } from '../core/items.js';
 import { itemImg } from './character.js';
 import { esc, ico } from './fmt.js';
 import { forget } from './tutor.js';
 import * as Audio from './audio.js';
 
-export const STEPS = ['story', 'm1', 'base', 'craft', 'm2', 'done'];
+export const STEPS = ['story', 'm1', 'base', 'craft', 'equip', 'm2', 'done'];
 // Battle teaching steps are re-armed when the intro starts, so the guided fight always teaches.
-const TEACH = ['turn', 'move', 'cover', 'special', 'target', 'odds', 'end', 'look'];
+const TEACH = ['tour', 'turn', 'move', 'cover', 'special', 'target', 'odds', 'end', 'look'];
 
 // kb = Ken Burns pan: [scale, x%, y%] from -> to. cap: 'tl' | 'br' | 'bl' | 'tr' where the caption boxes sit.
 export const PANELS = [
   { img: 'assets/intro/1-spark.webp', tag: 'Before us', cap: 'tl', kb: [[1.18, 4, 2], [1.04, -2, 0]],
-    lines: ['Before us, there were humans.', 'They spliced themselves into us. Cheap muscle. Spare parts.'] },
-  { img: 'assets/intro/2-fall.webp', tag: 'The fall', cap: 'tl', kb: [[1.04, 0, -2], [1.2, -3, 2]],
-    lines: ['Then they burned their world down.', 'Their virus outlived them. Now every one of us is part human.'] },
+    lines: ['Humans spliced their own DNA into animals. Cheap muscle. Spare organs.', 'To spread it, they built a virus that passed their genes on: a gene drive.'] },
+  { img: 'assets/intro/2b-war.webp', tag: 'The human war', cap: 'tl', kb: [[1.05, 0, 2], [1.2, -2, 4]],
+    lines: ['Then humans went to war with each other. Their bombs brought fallout.', 'The radiation mutated the virus. It jumped to every species on Earth.'] },
+  { img: 'assets/intro/2-fall.webp', tag: 'The end of them', cap: 'tl', kb: [[1.04, 0, -2], [1.2, -3, 2]],
+    lines: ['The fallout killed the humans off. Their own war finished them.', 'The virus outlived them. Now every animal is part human, mind and body.'] },
   { img: 'assets/intro/3-pact.webp', tag: 'The Pact', cap: 'bl', kb: [[1.2, 5, -3], [1.05, -3, 1]],
-    lines: ['We stood up in their ruins. Fought two wars over the scraps.', 'Then we signed the Pact and built Fang City.'] },
+    lines: ['We stood up in their ruins. Fought two wars of our own over the scraps.', 'Then we signed the Pact and built Fang City.'] },
   { img: 'assets/intro/4-slip.webp', tag: 'Thirty years on', cap: 'br', kb: [[1.05, 3, 0], [1.22, 6, 3]],
     lines: ['Now the human in us is fading. Folk go wild.', 'Doctors call it the Slip.'] },
   { img: 'assets/intro/5-helix.webp', tag: 'Helix', cap: 'br', kb: [[1.22, 8, 3], [1.06, 0, 0]],
-    lines: ['Only Ice holds it off. Helix makes every vial.', 'Augustus Vale owns Helix. Vale sets the price.'] },
-  { img: 'assets/intro/6-hire.webp', tag: 'The Thaw', cap: 'br', kb: [[1.05, -2, 0], [1.2, 6, 2]],
-    lines: ['Bracken Hale runs the rebels. He wants Vale’s grip broken.', 'Tonight his Thaw hits a Helix shipment at the docks. They need muscle.'] },
+    lines: ['Only Ice holds the Slip off. Helix makes every vial.', 'Augustus Vale owns Helix. He sets the price, and who gets it.'] },
+  { img: 'assets/intro/7b-ration.webp', tag: 'The ration line', cap: 'br', kb: [[1.04, -2, 0], [1.2, 4, 2]],
+    lines: ['Helix rations Ice. Merc pay doesn’t cover Vale’s price any more.', 'And I’m slipping. My claws don’t stay in. Nobody can know.'] },
+  { img: 'assets/intro/6-hire.webp', tag: 'The rebels', cap: 'br', kb: [[1.05, -2, 0], [1.2, 6, 2]],
+    lines: ['Bracken Hale’s rebels steal Ice from Helix and pay their muscle in it.', 'Hit a Helix shipment at the docks. Get paid in Ice I can’t buy anywhere else.'] },
   { img: 'assets/intro/7-rook.webp', tag: 'Rook', cap: 'bl', kb: [[1.04, -3, 0], [1.24, -8, 2]],
-    lines: ['Name’s Rook. I work for whoever pays in Ice.', 'Lately I need it more than I let on.'] },
+    lines: ['I don’t care about their cause. I care about staying me.', 'Name’s Rook. Tonight, I work for the rebels.'] },
 ];
 // One-panel story beats between the guided steps.
 const BEATS = {
@@ -55,6 +59,24 @@ export function begin(s, replay = false) {
 function goStep(s, id) {
   s.intro.step = id;
   if (id === 'base') s.intro.b0 = builds(s);
+  if (id === 'equip') {
+    const rec = s.heroes.owned.rook, item = (s.intro.made || [])[0] || 'leather';
+    s.intro.e0 = s.stats.equips || 0;
+    s.intro.item = item;
+    s.intro.slot = targetSlot(rec, item, s, 'rook');
+    s.intro.st0 = rookStats(s);
+  }
+}
+// The stats the equip step compares before / after (Rook's sheet with his current gear).
+const SHOW = [['hp', 'HP'], ['armor', 'Armour'], ['mdmg', 'Melee dmg'], ['rdmg', 'Gun dmg'], ['aim', 'Aim'], ['dodge', 'Dodge'], ['speed', 'Speed'], ['move', 'Move']];
+function rookStats(s) {
+  const r = s.heroes.owned.rook, st = statsFor('rook', { stars: r.stars, lv: r.lv, perks: r.perks, gear: r.gear, equip: r.equip || {} });
+  const o = {}; for (const [k] of SHOW) o[k] = st[k] || 0; return o;
+}
+export const equipped = (s) => active(s) && s.intro.step === 'equip' && (s.stats.equips || 0) > (s.intro.e0 || 0);
+function statDiff(s) {
+  const a = s.intro.st0 || {}, b = rookStats(s);
+  return SHOW.filter(([k]) => (a[k] || 0) !== b[k]).map(([k, n]) => `${n} ${a[k] || 0} → <b class="${b[k] > (a[k] || 0) ? 'green' : 'red'}">${b[k]} ${b[k] > (a[k] || 0) ? '▲' : '▼'}</b>`).join(', ');
 }
 
 // Called on every render: moves the intro on from plain game state (so it survives reloads).
@@ -74,6 +96,7 @@ export function onFightEnd(ctx, b, res) {
 // After the base renders: play a waiting story beat (never over a modal or a fight).
 export function afterRender(ctx) {
   const s = ctx.state, it = s && s.intro;
+  equipCoach(ctx);
   if (!it) return;
   if (it.step === 'story') { if (!document.querySelector('.introsb')) storyboard(ctx, PANELS, { onDone: () => toMission1(ctx), skippable: true }); return; }
   if (!it.beat || ctx.tab !== 'base' || document.querySelector('.overlay, .introsb')) return;
@@ -83,6 +106,35 @@ export function afterRender(ctx) {
     ctx.save();
     if (id === 'raid') startM2(ctx); else ctx.render();
   } });
+}
+
+// Equip step away from the hideout: one compact coach line that follows what's on screen, and a glow on the
+// thing to tap (Rook -> his gear slot -> the crafted item -> see the stat change -> back).
+function equipCoach(ctx) {
+  const s = ctx.state, old = document.querySelector('.introcoach');
+  document.querySelectorAll('.introglow:not(.bigbtn)').forEach((n) => n.classList.remove('introglow'));
+  if (!active(s) || s.intro.step !== 'equip' || ctx.tab === 'base' || s.tactics) { old && old.remove(); return; }
+  const it = s.intro, nm = esc((ITEMS[it.item] || {}).name || 'new gear'), slotNm = esc((SLOT_BY_ID[it.slot] || {}).name || 'matching');
+  const c = ctx.sub.char || {};
+  let html = '', glowSel = '', cta = '';
+  if (equipped(s)) {
+    const d = statDiff(s);
+    html = `Equipped. ${d ? d + '. ' : ''}Gear changes his stats: check the panel by his portrait.`;
+    cta = '<button class="btn sm red" data-act="introEquipDone">Back to the hideout</button>';
+  } else if (ctx.tab === 'hero' && c.hero === 'rook') {
+    if (c.sel && c.sel.from === 'slot' && c.sel.slot === it.slot) { html = `Now tap the <b>${nm}</b> in the stash to put it on.`; glowSel = `.sitem[data-id="${it.item}"]`; }
+    else if (c.sel && c.sel.from === 'stash' && c.sel.id === it.item) { html = 'The arrows show what changes. Tap <b>Equip</b>.'; glowSel = `[data-act="charEquip"][data-id="${it.item}"]`; }
+    else { html = `Tap Rook’s <b>${slotNm}</b> slot to see what fits.`; glowSel = `.cslot[data-slot="${it.slot}"]`; }
+  } else { html = 'Open Rook’s gear to put on what you made.'; cta = '<button class="btn sm red" data-act="openHero" data-id="rook">Open Rook’s gear</button>'; }
+  const el = old || document.createElement('div');
+  el.className = 'introcoach';
+  el.innerHTML = `<img src="assets/heroes/rook-64.webp" alt="" decoding="async"><div class="small grow">${html}</div>${cta}`;
+  if (!old) document.getElementById('app').appendChild(el);
+  const tgt = glowSel && document.querySelector(glowSel);
+  if (tgt) tgt.classList.add('introglow');
+  // never sit on top of the thing it points at: hop to the top edge if the target is down by the coach
+  el.classList.remove('top');
+  if (tgt) { const a = tgt.getBoundingClientRect(), c = el.getBoundingClientRect(); if (a.bottom > c.top - 4 && a.top < c.bottom) el.classList.add('top'); }
 }
 
 // ---------------------------------------------------------------- storyboard overlay
@@ -200,20 +252,24 @@ export function baseCard(ctx) {
   const s = ctx.state;
   if (!active(s) || s.intro.step === 'story') return '';
   const it = s.intro, place = ctx.sub.base && ctx.sub.base.place;
-  const n = { m1: 1, base: 2, craft: 3, m2: 4 }[it.step] || 1;
+  const n = { m1: 1, base: 2, craft: 3, equip: 4, m2: 5 }[it.step] || 1;
   let line = '', cta = '';
   if (it.step === 'm1') { line = 'Hale pays in Ice. The Helix shipment is sitting at the docks.'; cta = '<button class="btn sm red" data-act="introM1">Hit the docks</button>'; }
   else if (it.step === 'base') {
     line = place ? 'Drag it to a clear spot, then tap <b>✔</b> to build.' : 'Ice doesn’t pay rent. Cash does. Build a <b>Knock-off Stall</b>.';
     cta = place ? '' : '<button class="btn sm red" data-act="openBuild">Build</button>';
   } else if (it.step === 'craft') { line = 'The crate had more than Ice: scrap and tools. Make Rook something useful.'; cta = '<button class="btn sm red" data-act="introBench">Open the bench</button>'; }
-  else if (it.step === 'm2') { line = 'Helix is at the door.'; cta = '<button class="btn sm red" data-act="introM2">Defend</button>'; }
+  else if (it.step === 'equip') {
+    const nm = esc((ITEMS[it.item] || {}).name || 'new gear');
+    line = equipped(s) ? 'Rook’s geared up. Helix won’t wait.' : `Gear sitting in the stash does nothing. Put the <b>${nm}</b> on Rook.`;
+    cta = equipped(s) ? '<button class="btn sm red" data-act="introEquipDone">Carry on</button>' : '<button class="btn sm red" data-act="openHero" data-id="rook">Open Rook’s gear</button>';
+  } else if (it.step === 'm2') { line = 'Helix is at the door.'; cta = '<button class="btn sm red" data-act="introM2">Defend</button>'; }
   return `<div class="introcard"><img src="assets/heroes/rook-64.webp" alt="" decoding="async">
-    <div class="grow"><div class="tiny h"><span class="red">Rook</span> · <span class="dim">Intro ${n}/4</span></div><div class="small">${line}</div></div>
+    <div class="grow"><div class="tiny h"><span class="red">Rook</span> · <span class="dim">Intro ${n}/5</span></div><div class="small">${line}</div></div>
     <div class="col">${cta}<button class="linkbtn tiny" data-act="introSkip">Skip intro</button></div></div>`;
 }
 // Hideout re-renders the card when this changes (step, or placing a building).
-export const key = (ctx) => `i:${step(ctx.state)}:${ctx.sub.base && ctx.sub.base.place ? 1 : 0}`;
+export const key = (ctx) => `i:${step(ctx.state)}:${ctx.sub.base && ctx.sub.base.place ? 1 : 0}:${equipped(ctx.state) ? 1 : 0}`;
 // Gentle glow on the hideout button the current step needs.
 export const glow = (s, what) => (active(s) && ((what === 'build' && s.intro.step === 'base'))) ? ' introglow' : '';
 
@@ -229,7 +285,7 @@ function benchHtml(ctx) {
     const made = done.includes(id);
     const worn = Object.values(s.heroes.owned.rook.equip || {}).includes(id);
     const bits = [item.hp ? `+${item.hp} HP` : '', item.dodge ? `+${item.dodge} dodge` : '', item.mdmg ? `+${item.mdmg} melee` : '', item.wpn ? `${item.wpn.dmg[0]}–${item.wpn.dmg[1]} dmg` : ''].filter(Boolean).join(' · ');
-    const btn = made ? (worn ? '<span class="tiny gold">On Rook ✔</span>' : `<button class="btn sm gold" data-act="introEquip" data-id="${id}">Put it on Rook</button>`)
+    const btn = made ? `<span class="tiny gold">${worn ? 'On Rook ✔' : 'Made ✔ · in the stash'}</span>`
       : `<button class="btn sm red" data-act="introCraft" data-id="${id}" ${left < BENCH_PARTS || done.length >= 2 ? 'disabled' : ''}>Craft · ${ico('parts')} ${BENCH_PARTS}</button>`;
     return `<div class="benchrow ${made ? 'made' : ''}"><span class="iframe q-${item.q}">${itemImg(id)}</span>
       <div class="grow"><b style="color:${q.col}">${esc(item.name)}</b><div class="tiny dim">${esc(q.name)} · ${bits}</div></div>${btn}</div>`;
@@ -265,15 +321,16 @@ export const actions = {
     Audio.play('collect'); ctx.toast(`${ITEMS[id].name} crafted`);
     ctx.save(); refreshBench(ctx);
   },
-  introEquip: (ctx, el) => {
-    const r = equipItem(ctx.state, 'rook', el.dataset.id);
-    if (!r.ok) return ctx.toast(r.reason);
-    ctx.toast(`${ITEMS[el.dataset.id].name} on Rook`); ctx.save(); refreshBench(ctx);
+  introEquipDone: (ctx) => {
+    const s = ctx.state;
+    if (!equipped(s)) return;
+    goStep(s, 'm2'); s.intro.beat = 'raid';
+    ctx.save(); ctx.go('base');
   },
   introBenchDone: (ctx) => {
     const s = ctx.state;
     if (!(s.intro.made || []).length) return;
-    goStep(s, 'm2'); s.intro.beat = 'raid';
+    goStep(s, 'equip');
     ctx.closeModal(true); ctx.save(); ctx.render();
   },
 };

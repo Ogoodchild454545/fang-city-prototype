@@ -14,7 +14,7 @@ species because the bible already uses them for named characters.
 
 | Operator | Species | Role | Faction | How to get |
 |---|---|---|---|---|
-| Sledge *(placeholder)* | Buffalo | Breaker | The Thaw | Joins free at player level 12 |
+| Sledge *(placeholder)* | Buffalo | Breaker | Rebels | Joins free at player level 12 |
 | Vigil | Owl | Spotter | Helix contractor | 30 shards from Ice crates, missions and bushes (pinnable; in the featured rotation) |
 | Jinx | Raccoon | Saboteur | Helix defector | Joins on the first clear of op “Hot metal” (player Lv 8) |
 | Sable | Cat | Infiltrator | Independent | 30 shards from Ice crates, missions and bushes (pinnable; in the featured rotation) |
@@ -22,8 +22,8 @@ species because the bible already uses them for named characters.
 
 ## Sledge — Buffalo Breaker (WORKING PLACEHOLDER name + backstory)
 
-- **Faction:** The Thaw
-- **One-liner:** A Thaw buffalo with a sledgehammer. Knocks crews out of cover and stands over his own.
+- **Faction:** The rebels (unnamed for now)
+- **One-liner:** A rebel buffalo with a sledgehammer. Knocks crews out of cover and stands over his own.
 - **How to get:** Joins free at player level 12
 - **Stats:** HP 28 · AP 4 · Move 3 · Aim 58 · Speed 4 · Armour 1
 - **Passive — Rebel Grit:** Below half health he takes 1 less damage from every hit and cannot be Shaken, Suppressed or Blinded.
@@ -42,14 +42,14 @@ species because the bible already uses them for named characters.
 
 **Bio**
 
-A dock-gang buffalo who carried Helix crates for nine years until the company cut his mother's Ice ration to make a quota. He walked into the depot the next morning with the sledgehammer from the loading bay and walked out a Thaw man. Bracken Hale calls him the door: when the Thaw needs a wall gone, a barricade held, or a crew dragged out of a raid, Sledge goes first and comes back last. He doesn't talk about the cure. He talks about Ice for everyone, and he swings like he means it.
+A dock-gang buffalo who carried Helix crates for nine years until the company cut his mother's Ice ration to make a quota. He walked into the depot the next morning with the sledgehammer from the loading bay and walked out a rebel. Bracken Hale calls him the door: when the rebels need a wall gone, a barricade held, or a crew dragged out of a raid, Sledge goes first and comes back last. He doesn't talk about the cure. He talks about Ice for everyone, and he swings like he means it.
 
 **Voice lines**
 
 - *move:* “Make a hole.” · “I'm coming through.” · “Stay behind the horns.”
 - *shoot:* “Nothing to hide behind now.” · “Wall's gone.” · “Down.”
 - *ko:* “Still… breathing…” · “Get them out first.”
-- *revive:* “Up. The Thaw doesn't kneel.” · “On your feet, comrade.”
+- *revive:* “Up. Rebels don't kneel.” · “On your feet, comrade.”
 - *win:* “Ice for everyone.” · “Tell Helix we were here.”
 
 ## Vigil — Owl Spotter
@@ -168,7 +168,7 @@ Nobody in the Neon Strip agrees on where Sable came from, and she likes it that 
 
 **Bio**
 
-Reed's family has worked the canals since before the Pact, and Reed worked out young that the barges Helix never searches are the ones that carry their own Ice. She runs vials up the locks to whoever is paying, knows every fixer between the docks and the rail yard, and keeps a radio on her collar and an envelope in every pocket. Lately some of her crates go to the Thaw for nothing. She tells everyone it's good business.
+Reed's family has worked the canals since before the Pact, and Reed worked out young that the barges Helix never searches are the ones that carry their own Ice. She runs vials up the locks to whoever is paying, knows every fixer between the docks and the rail yard, and keeps a radio on her collar and an envelope in every pocket. Lately some of her crates go to the rebels for nothing. She tells everyone it's good business.
 
 **Voice lines**
 

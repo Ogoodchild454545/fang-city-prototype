@@ -303,8 +303,8 @@ export const HEROES = {
   // bot (the buffalo rebel from the world bible). Kit, stats and art are final; name/bio may change.
   sledge: {
     id: 'sledge', name: 'Sledge', species: 'Buffalo', role: 'Breaker', roleTag: 'Breaker',
-    faction: 'The Thaw',
-    blurb: 'A Thaw buffalo with a sledgehammer. Knocks crews out of cover and stands over his own.',
+    faction: 'The rebels',
+    blurb: 'A rebel buffalo with a sledgehammer. Knocks crews out of cover and stands over his own.',
     portrait: 'assets/heroes/sledge.webp', thumb: 'assets/heroes/sledge-64.webp',
     mood: 'heroic',
     // Slowest piece on the board and the biggest health pool; he wins fights by breaking cover, not by shooting.
@@ -334,12 +334,12 @@ export const HEROES = {
         stash: ['bandolier', 'gilet'],
       },
     },
-    bio: "A dock-gang buffalo who carried Helix crates for nine years until the company cut his mother's Ice ration to make a quota. He walked into the depot the next morning with the sledgehammer from the loading bay and walked out a Thaw man. Bracken Hale calls him the door: when the Thaw needs a wall gone, a barricade held, or a crew dragged out of a raid, Sledge goes first and comes back last. He doesn't talk about the cure. He talks about Ice for everyone, and he swings like he means it.",
+    bio: "A dock-gang buffalo who carried Helix crates for nine years until the company cut his mother's Ice ration to make a quota. He walked into the depot the next morning with the sledgehammer from the loading bay and walked out a rebel. Bracken Hale calls him the door: when the rebels need a wall gone, a barricade held, or a crew dragged out of a raid, Sledge goes first and comes back last. He doesn't talk about the cure. He talks about Ice for everyone, and he swings like he means it.",
     quips: {
       move: ["Make a hole.", "I'm coming through.", "Stay behind the horns."],
       shoot: ["Nothing to hide behind now.", "Wall's gone.", "Down."],
       ko: ["Still… breathing…", "Get them out first."],
-      revive: ["Up. The Thaw doesn't kneel.", "On your feet, comrade."],
+      revive: ["Up. Rebels don't kneel.", "On your feet, comrade."],
       win: ["Ice for everyone.", "Tell Helix we were here."],
     },
     tags: ['tank', 'buffalo', 'melee'],
@@ -500,7 +500,7 @@ export const HEROES = {
         stash: ['burner'],
       },
     },
-    bio: "Reed's family has worked the canals since before the Pact, and Reed worked out young that the barges Helix never searches are the ones that carry their own Ice. She runs vials up the locks to whoever is paying, knows every fixer between the docks and the rail yard, and keeps a radio on her collar and an envelope in every pocket. Lately some of her crates go to the Thaw for nothing. She tells everyone it's good business.",
+    bio: "Reed's family has worked the canals since before the Pact, and Reed worked out young that the barges Helix never searches are the ones that carry their own Ice. She runs vials up the locks to whoever is paying, knows every fixer between the docks and the rail yard, and keeps a radio on her collar and an envelope in every pocket. Lately some of her crates go to the rebels for nothing. She tells everyone it's good business.",
     quips: {
       move: ["Shortcut by the locks.", "Keep moving.", "I know a way."],
       shoot: ["Nothing personal.", "Business.", "Missed a payment."],

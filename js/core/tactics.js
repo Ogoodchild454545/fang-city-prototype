@@ -647,7 +647,7 @@ export function apply(b, action) {
       o.shaken = 0; o.suppressed = 0; o.blinded = 0; o.bleed = 0; o.rallied = 1; hit.push(o.uid);
     }
     startCd();
-    log(b, `${nameOf(u)} roars for the Thaw. ${hit.length} rallied.`);
+    log(b, `${nameOf(u)} roars for the rebels. ${hit.length} rallied.`);
     return { ok: true, events: [{ typ: 'yell', uid: u.uid, radius: r, rallied: hit, ability: abl.id }], status: b.status };
   }
   if (action.type === 'mark') { // Vigil · Mark Target

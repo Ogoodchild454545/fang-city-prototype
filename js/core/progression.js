@@ -31,7 +31,7 @@ export const UNLOCKS = [
   { lv: 10, id: 'squad4', name: '4 v 4 ops', ico: '👥', text: 'Full squads of four.' },
   { lv: 10, id: 'allslots', name: 'All 13 gear slots', ico: '🎒', text: 'Every gear slot open on every operator.' },
   { lv: 10, id: 'bestgear', name: 'Best gear button', ico: '✨', text: 'Auto-equip the strongest kit in one tap.' },
-  { lv: 12, id: 'breaker', name: 'Sledge joins', ico: '🐃', text: 'Sledge, a Thaw buffalo Breaker, joins your crew for free.' },
+  { lv: 12, id: 'breaker', name: 'Sledge joins', ico: '🐃', text: 'Sledge, a rebel buffalo Breaker, joins your crew for free.' },
   { lv: 15, id: 'highstakes', name: 'High Stakes', ico: '🎲', text: 'Bet XP and gear for double rewards.' },
   { lv: 15, id: 'pvpcopy', name: 'PvP vs copies', ico: '⚔️', text: 'Fight AI-run copies of other crews’ squads for trophies.' },
   { lv: 20, id: 'livepvp', name: 'Live PvP', ico: '📡', text: 'Real head-to-head fights. Coming soon.' },
@@ -65,7 +65,7 @@ export function grantsFor(s, lv) {
     grantHero(s, 'anvil');
     s.player.gotTank = 1;
   }
-  // v0.19: the Thaw buffalo Breaker joins at Lv 12 (crews already past it get him on load).
+  // v0.19: the rebel buffalo Breaker joins at Lv 12 (crews already past it get him on load).
   if (lv >= 12 && !s.heroes.owned.sledge && !s.player.gotBreaker) {
     grantHero(s, 'sledge');
     s.player.gotBreaker = 1;
