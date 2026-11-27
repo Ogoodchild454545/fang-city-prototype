@@ -371,6 +371,21 @@ function drawStanceRing(g, x, y, z, now, kind) {
   g.restore();
 }
 
+// v0.20.2 lesson marker: a pulsing gold tile outline and a bobbing arrow over what the tip says to tap
+function drawSpot(g, sp, z, now, un) {
+  const p = toWorld(sp.x, sp.y), x = p.x * z, y = p.y * z, k = 0.5 + 0.5 * Math.sin(now / 220);
+  const hx = TW / 2 * z * (0.92 + 0.08 * k), hy = TH / 2 * z * (0.92 + 0.08 * k);
+  g.save();
+  g.beginPath(); g.moveTo(x, y - hy); g.lineTo(x + hx, y); g.lineTo(x, y + hy); g.lineTo(x - hx, y); g.closePath();
+  g.fillStyle = `rgba(240,190,60,${0.14 + 0.14 * k})`; g.fill();
+  g.lineJoin = 'round';
+  g.strokeStyle = `rgba(255,210,90,${0.65 + 0.35 * k})`; g.lineWidth = 2.2 * z; g.stroke();
+  const top = y - (un ? Actors.actorHeight(un.hero) + 14 : 18) * z - k * 5 * z, s = 6 * z;
+  g.beginPath(); g.moveTo(x - s, top - s); g.lineTo(x + s, top - s); g.lineTo(x, top + s * 0.6); g.closePath();
+  g.fillStyle = '#ffd25a'; g.strokeStyle = 'rgba(20,14,6,.85)'; g.lineWidth = 1.4 * z; g.fill(); g.stroke();
+  g.restore();
+}
+
 // v0.19 Jinx's tripwire on the board (only her own side sees it): two posts and a taut wire.
 function drawTrap(g, x, y, z, now) {
   const glint = 0.5 + 0.5 * Math.sin(now / 260);
@@ -1194,6 +1209,7 @@ function draw(ctx) {
   drawTags(g, tagQ, barR, z);
   drawBubbles(g, bubQ, z, now, barR.concat(tagQ));
 
+  if (u.spot && b.status === 'active') drawSpot(g, u.spot, z, now, T.unitAt(b, u.spot.x, u.spot.y));
   Vfx.draw(g, fx, z);
 
   // Howl: a shock ring out to the ability radius (a Manhattan diamond, exactly the tiles it reaches)
@@ -1462,6 +1478,7 @@ function clickTile(ctx, x, y) {
   if (desel) {
     // nothing selected: any piece opens its status panel; a reachable tile is a deliberate move, so pick the
     // operator back up and preview it; empty ground just closes the panel
+    if (occ && occ.uid === sel.uid) { u.deselFor = null; u.inspect = null; ctx.render(); return; }
     if (occ || down) { setInspect(ctx, (occ || down).uid); return; }
     if (T.walkable(b, x, y, sel.uid) && cachedReach(u, b, sel).dist.has(`${x},${y}`)) {
       u.deselFor = null; u.inspect = null;
@@ -1476,7 +1493,7 @@ function clickTile(ctx, x, y) {
   // button fires. A mouse click fires straight away when the shot is possible (hovering already shows the odds);
   // right-click inspects.
   const mouseFire = u.ptr === 'mouse' && occ && occ.side === 'enemy' && (() => { const pr = T.previewShot(b, sel, occ, EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(sel, occ)); return pr && pr.ok; })();
-  if (occ && occ.side === 'enemy' && u.inspect !== occ.uid && !mouseFire && !(u.modePicked && EXPLICIT_ATTACK.includes(u.mode))) {
+  if (occ && occ.side === 'enemy' && u.inspect !== occ.uid && !mouseFire && !(u.modePicked && EXPLICIT_ATTACK.includes(u.mode) && b.intro !== 1)) {
     u.hover = { x, y, uid: occ.uid };
     setInspect(ctx, occ.uid); return;
   }
@@ -2005,6 +2022,7 @@ async function doAct(ctx, action, opts = {}) {
   const snap = opts.undoable ? JSON.stringify(b, (k, v) => (k === 'anim' ? undefined : v)) : null;
   const r = T.apply(b, action);
   if (!r.ok) { u.busy = 0; ctx.toast(r.reason); return r; }
+  lessonNote(b, action);
   ctx.save();
   await playEvents(ctx, r.events);
   u.busy = 0;
@@ -2054,7 +2072,10 @@ async function enemyTurn(ctx) {
     if (up && up.uid !== lastUid) {
       lastUid = up.uid;
       // v0.17: a shorter beat (was 620ms); the camera glide still lands before they act
-      if (!ctx.fast) { ctx.render(); await new Promise((r) => setTimeout(r, (guard === 1 ? 520 : 400) / SPEED)); }
+      // v0.20.2: the docks lesson's first rival turn holds a moment longer so its note can be read
+      const lessonBeat = b.intro === 1 && b.lesson && !b.lesson.enemy ? 1600 : 0;
+      if (!ctx.fast) { ctx.render(); await new Promise((r) => setTimeout(r, ((guard === 1 ? 520 : 400) + lessonBeat) / SPEED)); }
+      else if (lessonBeat) ctx.render();
       if (u.closed || ctx.state.tactics !== b) return;
     }
     const act = chooseAction(b, T.think);
@@ -2328,7 +2349,12 @@ export function startTour(ctx) {
     if (m) { const c = m.getBoundingClientRect(); r = { left: Math.min(r.left, c.left), top: Math.min(r.top, c.top), right: Math.max(r.right, c.right), bottom: Math.max(r.bottom, c.bottom) }; }
     return { left: r.left, top: r.top, width: r.right - r.left, height: r.bottom - r.top };
   };
-  const done = () => { el.remove(); u.touring = 0; learn('tour'); ctx.render(); };
+  const done = () => {
+    el.remove(); u.touring = 0; learn('tour'); learn('look');
+    const b = ctx.state.tactics, a = b && T.actingUnit(b);
+    if (b && b.intro === 1 && a && a.side === 'player' && !a.moved && !a.acted) { u.deselFor = a.uid; u.inspect = null; u.preview = null; }
+    ctx.render();
+  };
   const draw = () => {
     while (i < TOUR.length && !rectOf(TOUR[i])) i++;
     if (i >= TOUR.length) return done();
@@ -2353,9 +2379,198 @@ export function startTour(ctx) {
   draw();
 }
 
+// v0.20.2 Mission 1 lesson (the docks job). After the UI tour, the fight teaches the basics one step at a time,
+// in order, and each step waits for the player to actually do it, with the thing to tap highlighted (a gold
+// ring on the board, or a pulsing button): pick Rook up, the blue tiles and AP, the move preview and cover,
+// Move here, attacking (Shoot / Strike, the hit %), Pounce, End turn and the enemy's turn. Progress lives on
+// the battle (b.lesson), so a replayed intro teaches again. The matching v0.19.1 steps are learned as it goes.
+const LESSON_LEARNS = { tiles: ['turn', 'move'], preview: ['cover'], 'atk-shot': ['target', 'odds'], 'atk-melee': ['target', 'odds'], 'atk-pounce': ['special', 'target', 'odds'], end: ['end'] };
+function lessonDone(b, id) { const L = (b.lesson ||= {}); if (L[id]) return; L[id] = 1; for (const k of LESSON_LEARNS[id] || []) learn(k); }
+const foeOf = (b) => b.units.find((q) => q.side === 'enemy' && q.hp > 0) || null;
+// the tile the lesson points at on turn 1: behind cover from Hook, with a decent shot, leaving 2 AP to attack
+function recTile(b, a, f) {
+  const L = (b.lesson ||= {});
+  if (L.rec && L.rec.turn === b.turn && L.rec.uid === a.uid) return L.rec;
+  const reach = T.reachable(b, a).dist, max = a.ap >= 3 ? a.ap - 2 : a.ap;
+  let best = null, bs = -1e9;
+  for (const [k, d] of reach) {
+    if (d < 1 || d > max) continue;
+    const [x, y] = k.split(',').map(Number);
+    const c = T.coverFrom(b, f.x, f.y, x, y), pr = T.previewShot(b, { ...a, x, y }, f, 'shot');
+    const sc = c * 40 + (pr && pr.ok ? pr.chance : 0) - MANH(x, y, f.x, f.y) * 2 - d;
+    if (sc > bs) { bs = sc; best = { x, y }; }
+  }
+  L.rec = best ? { ...best, turn: b.turn, uid: a.uid } : null;
+  return L.rec;
+}
+const ATK_NAME = { shot: 'Shoot', melee: 'Strike', pounce: 'Pounce' };
+// which attack to teach next: Shoot (or Strike) first, then Pounce; each kind once
+function nextAttack(b, a, f) {
+  if (!f || a.ap < 2) return null;
+  const L = b.lesson || {}, dist = MANH(a.x, a.y, f.x, f.y);
+  const order = dist <= 1 ? ['melee', 'pounce', 'shot'] : b.turn === 1 ? ['shot', 'pounce'] : ['pounce', 'shot'];
+  for (const k of order) {
+    if (L['atk-' + k] || (k === 'pounce' && T.cooldownLeft(a, 'pounce'))) continue;
+    const pr = T.previewShot(b, a, f, k);
+    if (pr && pr.ok) return k;
+  }
+  return null;
+}
+function lesson1(b, u, a) {
+  if (b.intro !== 1 || b.status !== 'active' || u.touring) return null;
+  const L = (b.lesson ||= {}), f = foeOf(b);
+  if (!f) return null;
+  const actor = T.actingUnit(b);
+  if (u.busy && !(actor && actor.side === 'enemy')) return null;
+  // the rival's turn: what is happening (once)
+  if (actor && actor.side === 'enemy') {
+    if (L.enemy) return null;
+    L.enemyShown = 1;
+    return { id: 'l-enemy', lesson: 1, spot: { x: actor.x, y: actor.y }, html: `<b>${nm(actor)}’s turn.</b> Rivals move and shoot on their own turn; you just watch. Cover makes them miss Rook more.` };
+  }
+  if (!a || a.side !== 'player' || b.side !== 'player') return null;
+  if (L.enemyShown && !L.enemy) L.enemy = 1;
+  const desel = u.deselFor === a.uid;
+  // 1. pick Rook up (the tour ends with him put down)
+  if (!L.select) {
+    if (desel) { L.selShown = 1; return { id: 'l-select', lesson: 1, spot: { x: a.x, y: a.y }, html: `<b>Docks, midnight.</b> Hook’s guarding the Helix shipment. Tap <b>${nm(a)}</b> to pick him up.` }; }
+    if (L.selShown || a.moved || a.acted || b.turn > 1 || learned().tour) lessonDone(b, 'select');
+  }
+  if (desel) return null;
+  // 2. the blue tiles and what a step costs
+  if (!L.tiles) {
+    if (u.preview || a.moved) lessonDone(b, 'tiles');
+    else if (b.turn === 1 && !a.acted && a.ap >= 1) {
+      const r = recTile(b, a, f);
+      return { id: 'l-tiles', lesson: 1, spot: r, html: `The <b>blue tiles</b> are where ${nm(a)} can walk. Each tile costs <b>1 AP</b>. Tap the glowing tile${r && T.coverFrom(b, f.x, f.y, r.x, r.y) ? ': it’s behind cover' : ''}.` };
+    }
+  }
+  // 3. the move preview, cover, Move here
+  if (!L.preview) {
+    if (a.moved) lessonDone(b, 'preview');
+    else if (u.preview) {
+      const pv = movePreview(u, b, a, u.preview.x, u.preview.y);
+      if (pv) {
+        const r = recTile(b, a, f), off = r && (r.x !== u.preview.x || r.y !== u.preview.y);
+        const cov = pv.cover >= 2 ? '<b>Full cover</b> there: Hook will miss Rook a lot more.' : pv.cover ? '<b>Half cover</b> there: Hook will miss Rook more.' : 'No cover there' + (off ? ': the glowing tile has some.' : '.');
+        return { id: 'l-preview', lesson: 1, glow: '.tabgo', spot: off ? r : null, html: `The <b>move preview</b>: the route and its cost (<b>${pv.cost} AP</b>). ${cov} Tap <b>Move here</b>.` };
+      }
+    } else if (b.turn === 1 && !a.acted && a.ap >= 1 && L.tiles) {
+      const r = recTile(b, a, f);
+      return { id: 'l-tiles2', lesson: 1, spot: r, html: `Tap a blue tile to preview the move. The glowing one is behind cover.` };
+    }
+  }
+  // 4. attacks: Shoot / Strike, the hit %, then Pounce
+  const k = nextAttack(b, a, f);
+  if (k) {
+    const mode = EXPLICIT_ATTACK.includes(u.mode) ? u.mode : null;
+    const insp = u.inspect === f.uid;
+    const eff = mode || defaultMode(a, f);
+    if (insp && eff === k) {
+      const pr = T.previewShot(b, a, f, k);
+      if (pr && pr.ok) {
+        const why = pr.cover ? `${nm(f)}’s cover lowers it.` : `${nm(f)} has no cover from here: a flank bonus.`;
+        return { id: 'l-odds-' + k, lesson: 1, glow: '.tabatk', html: `<b>${pr.chance}%</b> is your <b>hit chance</b>. Aim, cover and range change it; ${why} Tap the red <b>${ATK_NAME[k]}</b> button.` };
+      }
+    }
+    if (mode === k && u.modePicked) return { id: 'l-aim-' + k, lesson: 1, spot: { x: f.x, y: f.y }, html: `Now tap <b>${nm(f)}</b> to aim at him and see your odds.` };
+    const what = k === 'shot' ? `<b>Shoot</b> (2 AP) fires ${nm(a)}’s revolver from range. Uses a bullet.`
+      : k === 'melee' ? `He’s right next to you. <b>Strike</b> (2 AP) hits with ${nm(a)}’s melee weapon, and each hit heals him 1 HP.`
+        : `<b>Pounce</b> (2 AP) is ready. ${PLAIN.pounce}`;
+    return { id: 'l-atk-' + k, lesson: 1, glow: `.tabl[data-mode="${k}"]`, html: `${what} Tap <b>${ATK_NAME[k]}</b>.` };
+  }
+  // 5. End turn
+  if (!L.end && (a.ap <= 0 || (a.ap < 2 && (a.moved || a.acted)))) {
+    return { id: 'l-end', lesson: 1, glow: '[data-act="endTacticsTurn"]', html: `${a.ap > 0 ? `${a.ap} AP left: not enough to attack.` : 'Out of AP.'} Tap <b>End turn</b>. Leftover AP is lost, and the next piece in the turn order goes.` };
+  }
+  return null;
+}
+// called from doAct with every successful player action
+function lessonNote(b, action) {
+  if (!b || b.intro !== 1) return;
+  if (action.type === 'endTurn') lessonDone(b, 'end');
+  const m = action.mode || action.type;
+  if (['shot', 'melee', 'pounce'].includes(m) && action.target) lessonDone(b, 'atk-' + m);
+}
+
+// v0.20.2 Mission 2 (Helix strikes back): the advanced mechanics, each explained once, the first time it
+// matters. Lighter touch than the docks job: tap-to-dismiss notes, and they never block a move.
+const DEBUFFS = ['bleed', 'venom', 'shaken', 'suppressed', 'marked', 'exposed', 'blinded', 'taunted', 'slowed', 'jammed'];
+function pvOf(b, u, a) { return u.preview && a ? movePreview(u, b, a, u.preview.x, u.preview.y) : null; }
+function barrelNearFoe(b, a) {
+  if (!T.gunOf(a)) return null;
+  for (let y = 0; y < b.map.h; y++) for (let x = 0; x < b.map.w; x++) {
+    if (!T.isExplosiveAt(b, x, y)) continue;
+    const near = b.units.find((q) => q.side === 'enemy' && q.hp > 0 && MANH(q.x, q.y, x, y) <= Math.max(1, T.blastRadiusOf(tile(b.map, x, y))));
+    if (!near) continue;
+    const pr = T.previewProp(b, a, x, y);
+    if (pr && pr.ok) return { x, y, f: near };
+  }
+  return null;
+}
+export const ADV_STEPS = [
+  { id: 'adv-order',
+    when: ({ b, a }) => b.intro === 2 && !a.moved && !a.acted && b.units.filter((q) => q.side === 'enemy' && q.hp > 0).length > 1,
+    done: ({ a }) => !!(a.moved || a.acted),
+    glow: '.tqueue',
+    html: () => 'Two of them now. The faces up top are the <b>turn order</b>: pieces with higher <b>Speed (Spd)</b> act first.' },
+  { id: 'adv-overwatch',
+    when: ({ b, u, a }) => b.intro === 2 && (b.units.some((q) => q.side === 'enemy' && q.hp > 0 && q.overwatch) || !!((pvOf(b, u, a) || {}).overwatch || []).length),
+    spot: ({ b }) => { const o = b.units.find((q) => q.side === 'enemy' && q.hp > 0 && q.overwatch); return o ? { x: o.x, y: o.y } : null; },
+    html: ({ b }) => { const o = b.units.find((q) => q.side === 'enemy' && q.hp > 0 && q.overwatch); return `<b>Overwatch</b> (the eye): ${o ? nm(o) : 'a rival'} skipped his attack to watch. He shoots the first piece that moves in his sight (−15% aim). Stay out of view, or make him waste it.`; } },
+  { id: 'adv-cover',
+    when: ({ b, u, a }) => b.intro === 2 && ((pvOf(b, u, a) || {}).cover || 0) > 0,
+    html: () => '<b>Cover:</b> crates, barrels and cars are <b>half cover</b> (−20% to hit you). Containers and walls are <b>full cover</b> (−40%) and block line of sight.' },
+  { id: 'adv-threat',
+    when: ({ b, u, a }) => b.intro === 2 && !!((pvOf(b, u, a) || {}).threats || []).length,
+    html: () => '<b>Threat zone:</b> the red warning means rivals could hit Rook on that tile next turn; the red lines show who. Tiles marked safe can’t be shot.' },
+  { id: 'adv-flank',
+    when: ({ b, u, a }) => {
+      if (b.intro !== 2) return false;
+      const f = u.inspect && b.units.find((q) => q.uid === u.inspect && q.side === 'enemy' && q.hp > 0);
+      if (f) { const pr = T.previewShot(b, a, f, EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(a, f)); if (pr && pr.ok && pr.flanked && !pr.melee) return true; }
+      return !!((pvOf(b, u, a) || {}).threats || []).some((t) => t.flank && !t.melee);
+    },
+    html: ({ b, u }) => { const f = u.inspect && b.units.find((q) => q.uid === u.inspect && q.side === 'enemy'); return f ? `<b>Flanked:</b> nothing between Rook and ${nm(f)}, so no cover: <b>+10%</b> to hit. Get round the side of cover to flank.` : '<b>Flanked:</b> a rival has no cover between him and that tile, so he gets <b>+10%</b> on Rook there. Keep cover between you.'; } },
+  { id: 'adv-status',
+    when: ({ b }) => b.intro === 2 && b.units.some((q) => q.hp > 0 && T.statusesOf(b, q).some((s) => DEBUFFS.includes(s.id))),
+    spot: ({ b }) => { const q = b.units.find((x) => x.hp > 0 && T.statusesOf(b, x).some((s) => DEBUFFS.includes(s.id))); return q ? { x: q.x, y: q.y } : null; },
+    html: ({ b }) => { const q = b.units.find((x) => x.hp > 0 && T.statusesOf(b, x).some((s) => DEBUFFS.includes(s.id))); const s = T.statusesOf(b, q).find((x) => DEBUFFS.includes(x.id)); return `<b>${nm(q)} is ${esc(s.name)}:</b> ${esc(shortText(s.text))}. Statuses float over a piece; tap it to read them all.`; } },
+  { id: 'adv-barrel',
+    when: ({ b, a }) => b.intro === 2 && a.ap >= 2 && !!barrelNearFoe(b, a),
+    spot: ({ b, a }) => { const r = barrelNearFoe(b, a); return r && { x: r.x, y: r.y }; },
+    html: ({ b, a }) => { const r = barrelNearFoe(b, a); return `<b>Red barrels explode</b> when shot, hurting everyone next to them. ${nm(r.f)}’s standing by one: tap the barrel to shoot it (2 AP).`; } },
+  { id: 'adv-hunker',
+    when: ({ b, a }) => { if (b.intro !== 2 || !a.moved || a.ap !== 1 || a.fortify) return false; for (const [dx, dy] of DIRS4) { const t = tile(b.map, a.x + dx, a.y + dy); if (t && t.cover) return true; } return false; },
+    glow: '.tabl[data-mode="hunker"]',
+    html: () => '1 AP left. <b>Hunker</b> (1 AP) braces Rook in cover: it counts one step better (half becomes full) until his next turn.' },
+  { id: 'adv-cooldown',
+    when: ({ b, a }) => b.intro === 2 && T.abilitiesOf(a).some((x) => x.cd && T.cooldownLeft(a, x.id) > 0),
+    glow: '.tabl.cool',
+    html: ({ a }) => { const x = T.abilitiesOf(a).find((q) => q.cd && T.cooldownLeft(a, q.id) > 0); return `<b>${esc(x.name)}</b> is recharging. The number on its button is how many turns until he can use it again.`; } },
+  { id: 'adv-heal',
+    when: ({ b, a }) => b.intro === 2 && a.hp <= a.maxHp * 0.6 && ((T.abilitiesOf(a).some((x) => x.id === 'secondwind') && !T.cooldownLeft(a, 'secondwind') && a.ap >= 1) || (a.medkits && a.ap >= 2)),
+    glow: '.tabl[data-mode="secondwind"], .tabl[data-mode="medkit"]',
+    html: () => 'Rook’s hurt. <b>Second Wind</b> (1 AP) heals about a third of his HP; a <b>Medkit</b> (2 AP) patches him up too.' },
+  { id: 'adv-ammo',
+    when: ({ b, a }) => b.intro === 2 && !!T.gunOf(a) && (a.ammo || 0) <= 2,
+    html: ({ a }) => `${a.ammo || 0} bullet${a.ammo === 1 ? '' : 's'} left (the count on Rook’s bar). Out of <b>ammo</b> means no shooting: Strike and Pounce still work.` },
+];
+export const ADV_IDS = ADV_STEPS.map((s) => s.id);
+
 function battleHint(b, u, actor) {
   if (b.pvp || b.status !== 'active' || !actor || actor.side !== 'player' || b.side !== 'player' || u.busy) return null;
   return runSteps(b.intro ? [...INTRO_BATTLE_STEPS, ...BATTLE_STEPS] : BATTLE_STEPS, { b, u, a: actor }, u.hintOff || {});
+}
+
+// which tip shows now: the docks lesson in Mission 1, the advanced notes in Mission 2, else the usual steps
+function pickHint(b, u, actor) {
+  if (u.touring) return null;
+  if (b.intro === 1) return lesson1(b, u, actor) || coach(b, u);
+  const h = battleHint(b, u, actor);
+  if (h) return h;
+  if (b.intro === 2 && actor && actor.side === 'player' && b.side === 'player' && !u.busy && b.status === 'active') { const a = runSteps(ADV_STEPS, { b, u, a: actor }, u.hintOff || {}); if (a) return a; }
+  return coach(b, u);
 }
 
 function coach(b, u) {
@@ -2415,6 +2630,7 @@ function hintSide(b, u) {
   add(hard, actor);
   if (u.inspect) add(hard, b.units.find((q) => q.uid === u.inspect));
   if (b.tutorial) add(hard, b.units.find((q) => q.hero === 'hook' && q.hp > 0));
+  if (u.spot) { const q = toWorld(u.spot.x, u.spot.y); hard.push([(u.cam.x + q.x * u.cam.z) / dpr, (u.cam.y + q.y * u.cam.z) / dpr]); }
   if (u.preview) { const q = toWorld(u.preview.x, u.preview.y); hard.push([(u.cam.x + q.x * u.cam.z) / dpr, (u.cam.y + q.y * u.cam.z) / dpr]); }
   // soft: every other piece (prefer the side that hides fewer of them)
   for (const q of b.units) if (q.hp > 0 && q !== actor && q.uid !== u.inspect) add(soft, q);
@@ -2422,7 +2638,8 @@ function hintSide(b, u) {
   const hits = (k, pts) => pts.filter(([x, y]) => x > boxes[k][0] - 24 && x < boxes[k][2] + 24 && y > boxes[k][1] - 24 && y < boxes[k][3] + 24).length;
   const order = u.inspect ? ['l'] : ['r', 'l', 'b'];
   const ok = order.filter((k) => !hits(k, hard));
-  if (!ok.length) return '';
+  // the status panel fills the right and the attack bar the bottom: a tip about the inspected piece goes top left
+  if (!ok.length) return u.inspect && /^adv-/.test(u.hintId || '') ? 'l' : '';
   return ok.sort((x, y) => hits(x, soft) - hits(y, soft))[0];
 }
 
@@ -2587,12 +2804,16 @@ export function render(ctx) {
   const cls = def ? classOf(def) : null;
   const perk = def ? speciesPerk(def.species) : null;
   u.hintOff ||= {};
-  let hint = u.touring ? null : (battleHint(b, u, actor) || coach(b, u));
-  if (hint && u.hintOff[hint.id]) hint = null;
+  let hint = pickHint(b, u, actor);
+  if (hint && !hint.lesson && u.hintOff[hint.id]) hint = null;
+  // v0.20.2: what the tip points at (a gold ring on a tile or piece, and/or a pulsing button)
+  u.spot = (hint && hint.spot) || null; u.glowSel = (hint && hint.glow) || null;
   // v0.20.1: the tip's button pulses (the ability it names, or End turn)
   const glowMode = hint && !u.inspect ? (hint.id === 'special' ? ((usableSpecial(b, actor) || {}).ab || {}).id : /^pounce-/.test(hint.id) ? 'pounce' : /^sw-/.test(hint.id) ? 'secondwind' : null) : null;
   const glowEnd = !!(hint && (hint.id === 'end' || /^end-/.test(hint.id)));
-  const hside = hint ? hintSide(b, u) : '';
+  u.hintId = hint ? hint.id : null;
+  if (u.hintId && (!u.hintAt || u.hintAt.id !== u.hintId)) u.hintAt = { id: u.hintId, t: performance.now() };
+  const hside = hint ? (hintSide(b, u) || (hint.lesson ? 'r' : '')) : '';
   // v0.19.1 deselect: the acting operator stays in charge, but the board stops showing their range and every
   // piece you tap just opens its status panel. Tap them (or Select) to pick them back up.
   if (actor && u.lastActing !== actor.uid) u.deselFor = null;
@@ -2649,7 +2870,7 @@ export function render(ctx) {
     <div class="tzoom"><button data-act="tzoom" data-z="in" aria-label="Zoom in">+</button><button data-act="tzoom" data-z="out" aria-label="Zoom out">−</button><button data-act="tzoom" data-z="fit" aria-label="Fit board">⤢</button></div>
     ${inspectHtml(b, u)}
     ${desel ? '' : actionBarHtml(b, u, canAct, actor)}
-    ${hint && hside ? `<button class="thint ${hside}" data-act="dismissHint" data-id="${esc(hint.id)}" ${hint.once ? 'data-once="1"' : ''} aria-label="Hint, tap to dismiss"><span>${hint.html}</span><i aria-hidden="true">✕</i></button>` : ''}
+    ${hint && hside && hint.lesson ? `<div class="thint lsn ${hside}" data-id="${esc(hint.id)}" role="status"><span>${hint.html}</span></div>` : hint && hside ? `<button class="thint ${hside}" data-act="dismissHint" data-id="${esc(hint.id)}" ${hint.once ? 'data-once="1"' : ''} aria-label="Hint, tap to dismiss"><span>${hint.html}</span><i aria-hidden="true">✕</i></button>` : ''}
     ${desel ? `<div class="tdock desel"><button class="btn tselect" data-act="tselect"><img loading="lazy" decoding="async" src="${defOf(actor.hero).thumb || defOf(actor.hero).portrait}" alt=""><span><b>${esc(defOf(actor.hero).name)}</b> is up · tap to select</span></button><span class="tiny dim">Tap any piece to see its buffs and debuffs</span></div>` : sel ? `
     <div class="tdock">
       <div class="thero ${sel.side === 'enemy' ? 'foe' : ''}">
@@ -2681,6 +2902,7 @@ export function mount(ctx, el) {
     if (act && act.side === 'player') u.sel = act.uid;
   }
   bindCanvas(ctx);
+  if (u.glowSel) document.querySelectorAll(u.glowSel).forEach((n) => { if (!n.disabled) n.classList.add('tglow'); });
   maybeTour(ctx);
   // test/debug hook: replay a list of battle events (used by the v0.14 visual tests)
   window.__tfx = {
@@ -2725,7 +2947,10 @@ export const actions = {
   endTacticsTurn(ctx) { ui(ctx).inspect = null; doAct(ctx, { type: 'endTurn' }); },
   closeInspect(ctx) { ui(ctx).inspect = null; ctx.render(); },
   dismissHint(ctx, el) {
-    const u = ui(ctx); u.hintOff ||= {}; u.hintOff[el.dataset.id] = 1;
+    const u = ui(ctx);
+    // a tip that popped up under the finger (the tap that opened it) must not be dismissed by that same tap
+    if (u.hintAt && u.hintAt.id === el.dataset.id && performance.now() - u.hintAt.t < 250) return;
+    u.hintOff ||= {}; u.hintOff[el.dataset.id] = 1;
     if (el.dataset.once) learn(el.dataset.id);
     ctx.render();
   },

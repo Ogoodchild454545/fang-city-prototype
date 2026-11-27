@@ -54,7 +54,7 @@ export function render(ctx) {
       <button class="pillbtn ${ad ? 'gold' : ''}" data-act="adBoost">${ad ? `x2 cash · <span data-live="adleft"></span>` : '▶ x2 cash (ad)'}</button>
     </div>
     <div class="hud hud-br">
-      <button class="bigbtn gold nextop" data-act="startOp" data-id="${nx.id}" title="${esc(nx.name)}"><span class="i">🎯</span>${nx.tut ? 'Next op' : 'Next op'}<small>${esc(nx.name)}${nx.tut ? ' · free' : ' · ⚡1'}</small></button>
+      <button class="bigbtn gold nextop${Intro.glow(s, 'nextop')}" data-act="startOp" data-id="${nx.id}" title="${esc(nx.name)}"><span class="i">🎯</span>${nx.tut ? 'Next op' : 'Next op'}<small>${esc(nx.name)}${nx.tut ? ' · free' : ' · ⚡1'}</small></button>
       <button class="bigbtn" data-act="nav" data-tab="missions"><span class="i">🗂️</span>Ops</button>
       <button class="bigbtn${Intro.glow(s, 'build')}" data-act="openBuild"><span class="i">🔨</span>Build</button>
       ${trackOn ? '<button class="bigbtn" data-act="openTrack"><span class="i">🛤️</span>Track</button>' : `<button class="bigbtn off" data-act="openTrack"><span class="i">🔒</span>Track<small>Lv ${P.unlockLv('track')}</small></button>`}
@@ -85,6 +85,7 @@ export function mount(ctx, el) {
     screenOf: (id) => { const it = BS.byId(ctx.state, id); if (!it) return null; const sz = (BUILDINGS[it.t] || OBSTACLES[it.t]).size; const p = view.centerOfFootprint(it.x, it.y, sz); const r = cv.getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; },
     tileToClient: (i, j) => { const w = tileToWorld(i + 0.5, j + 0.5); const p = view.toScreen(w.x, w.y); const r = cv.getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; },
     bubbles: () => { const r = cv.getBoundingClientRect(); return view.hitBubbles.map((b) => ({ id: b.id, x: r.left + b.x, y: r.top + b.y })); },
+    deselect: () => { const u = ui(ctx); if (u.sel && !u.place) { u.sel = null; syncGhost(ctx); panel(ctx); } }, // v0.20.2: the hideout tour clears the panel
     centerOn: (id) => { const it = BS.byId(ctx.state, id); const sz = (BUILDINGS[it.t] || OBSTACLES[it.t]).size; view.centerOn(it.x, it.y, sz); view.draw(); },
   };
 }
@@ -112,6 +113,8 @@ function syncGhost(ctx) {
 
 function onTap(ctx, hit) {
   const u = ui(ctx), s = ctx.state;
+  // v0.20.2: buildings stay locked until the intro's hideout tour has shown them (placing one is fine)
+  if ((hit.kind === 'building' || hit.kind === 'bubble' || hit.kind === 'obstacle') && Intro.locked(s, 'den')) { ctx.toast('Locked for now: the intro will show you this.'); return; }
   if (hit.kind === 'bubble') {
     const r = BS.collect(s, hit.id);
     if (r.ok) { Audio.play('collect'); ctx.floaty(`+${r.res === 'cash' ? money(r.amount) : fmt(r.amount) + ' ' + resName(r.res)}`, hit.sx + cvLeft(), hit.sy + cvTop()); }

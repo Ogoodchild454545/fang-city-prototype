@@ -7,24 +7,26 @@
 // Steps: story -> m1 -> base -> craft -> m2 -> done. ?intro=1 replays it on any save.
 import * as T from '../core/tactics.js';
 import { opMap } from '../core/ops.js';
-import { ITEMS, QUALITY, addItem, statsFor, targetSlot, SLOT_BY_ID } from '../core/items.js';
+import { ITEMS, QUALITY, addItem, statsFor, targetSlot, SLOT_BY_ID, defaultEquip } from '../core/items.js';
 import { itemImg } from './character.js';
 import { esc, ico } from './fmt.js';
 import { forget } from './tutor.js';
 import * as Audio from './audio.js';
 
-export const STEPS = ['story', 'm1', 'base', 'craft', 'equip', 'm2', 'done'];
+export const STEPS = ['story', 'm1', 'base', 'craft', 'equip', 'm2', 'tour', 'done'];
 // Battle teaching steps are re-armed when the intro starts, so the guided fight always teaches.
-const TEACH = ['tour', 'turn', 'move', 'cover', 'special', 'target', 'odds', 'end', 'look'];
+const TEACH = ['tour', 'turn', 'move', 'cover', 'special', 'target', 'odds', 'end', 'look',
+  // v0.20.2 Mission 2 notes (js/ui/tactics.js ADV_STEPS)
+  'adv-order', 'adv-overwatch', 'adv-cover', 'adv-threat', 'adv-flank', 'adv-status', 'adv-barrel', 'adv-hunker', 'adv-cooldown', 'adv-heal', 'adv-ammo'];
 
 // kb = Ken Burns pan: [scale, x%, y%] from -> to. cap: 'tl' | 'br' | 'bl' | 'tr' where the caption boxes sit.
 export const PANELS = [
   { img: 'assets/intro/1-spark.webp', tag: 'Before us', cap: 'tl', kb: [[1.18, 4, 2], [1.04, -2, 0]],
-    lines: ['Humans spliced their own DNA into animals. Cheap muscle. Spare organs.', 'To spread it, they built a virus that passed their genes on: a gene drive.'] },
-  { img: 'assets/intro/2b-war.webp', tag: 'The human war', cap: 'tl', kb: [[1.05, 0, 2], [1.2, -2, 4]],
-    lines: ['Then humans went to war with each other. Their bombs brought fallout.', 'The radiation mutated the virus. It jumped to every species on Earth.'] },
-  { img: 'assets/intro/2-fall.webp', tag: 'The end of them', cap: 'tl', kb: [[1.04, 0, -2], [1.2, -3, 2]],
-    lines: ['The fallout killed the humans off. Their own war finished them.', 'The virus outlived them. Now every animal is part human, mind and body.'] },
+    lines: ['Humans spliced their genes into pigs to grow hearts and kidneys for transplants.', 'Apes and dogs were made smarter and stronger: cheap muscle for the worst jobs.'] },
+  { img: 'assets/intro/2c-nuke.webp', tag: 'World War Three', cap: 'tl', kb: [[1.05, 0, 2], [1.2, -2, 4]],
+    lines: ['Before they could finish the work, World War Three broke out.', 'The nuclear war wiped out human life as they knew it.'] },
+  { img: 'assets/intro/2-fall.webp', tag: 'After the bombs', cap: 'tl', kb: [[1.04, 0, -2], [1.2, -3, 2]],
+    lines: ['Their gene drive, a virus built to spread the change, got loose in the fallout.', 'It reached every species. Now every animal is part human, mind and body.'] },
   { img: 'assets/intro/3-pact.webp', tag: 'The Pact', cap: 'bl', kb: [[1.2, 5, -3], [1.05, -3, 1]],
     lines: ['We stood up in their ruins. Fought two wars of our own over the scraps.', 'Then we signed the Pact and built Fang City.'] },
   { img: 'assets/intro/4-slip.webp', tag: 'Thirty years on', cap: 'br', kb: [[1.05, 3, 0], [1.22, 6, 3]],
@@ -44,8 +46,8 @@ const BEATS = {
     lines: ['Hale paid in Ice. Two vials. A month of being me.', 'Helix will want it back. Time to dig in.'] },
   raid: { img: 'assets/intro/5-helix.webp', tag: 'Helix tower', cap: 'br', kb: [[1.06, 0, 0], [1.24, -4, 2]], btn: 'Defend the hideout',
     lines: ['Vale doesn’t lose shipments. He sends people.', 'They found my door.'] },
-  end: { img: 'assets/intro/7-rook.webp', tag: 'Fang City', cap: 'bl', kb: [[1.24, -8, 2], [1.04, 0, 0]], btn: 'Run the hideout',
-    lines: ['Helix will be back. So will I.', 'From here, you call the shots.'] },
+  end: { img: 'assets/intro/7-rook.webp', tag: 'Fang City', cap: 'bl', kb: [[1.24, -8, 2], [1.04, 0, 0]], btn: 'Look round the hideout',
+    lines: ['Helix will be back. So will I.', 'Time I knew what this place can do.'] },
 };
 
 export const active = (s) => !!(s && s.intro && s.intro.step && s.intro.step !== 'done');
@@ -55,6 +57,19 @@ const builds = (s) => (s.stats.builds || 0) + (s.stats.upgrades || 0);
 export function begin(s, replay = false) {
   s.intro = { step: 'story', crafted: 0, replay: replay ? 1 : 0 };
   forget(TEACH);
+  if (!replay) freshStart(s);
+}
+// v0.20.2 a brand-new crew starts lean: Rook carries only his tyre iron and snub revolver (the docks job needs
+// both), the stash is empty, and his gear slots open with HIS level (Lv 1: weapons, jacket, boots). Only a
+// save that is still exactly the new-game kit is touched, so ?intro=1 on a played save never strips anything.
+function freshStart(s) {
+  const rec = s.heroes && s.heroes.owned && s.heroes.owned.rook;
+  if (!rec || (s.player && (s.player.lv > 1 || s.player.xp > 0)) || rec.lv > 1 || rec.xp > 0) return;
+  const start = defaultEquip('rook'), eq = rec.equip || {};
+  if (Object.keys(eq).length !== Object.keys(start).length || Object.keys(start).some((k) => eq[k] !== start[k])) return;
+  rec.equip = { melee: start.melee || 'tyreiron', primary: start.primary || 'snub' };
+  s.stash = {};
+  s.slotsByHero = 1;
 }
 function goStep(s, id) {
   s.intro.step = id;
@@ -91,7 +106,7 @@ export function onFightEnd(ctx, b, res) {
   const s = ctx.state;
   if (!b || !b.intro || !s.intro || !res || !res.win) return;
   if (b.intro === 1 && s.intro.step === 'm1') { goStep(s, 'base'); s.intro.beat = 'paid'; }
-  if (b.intro === 2 && s.intro.step === 'm2') { goStep(s, 'done'); s.intro.beat = 'end'; }
+  if (b.intro === 2 && s.intro.step === 'm2') { goStep(s, 'tour'); s.intro.beat = 'end'; s.intro.seen ||= {}; s.intro.tourI = 0; }
 }
 // After the base renders: play a waiting story beat (never over a modal or a fight).
 export function afterRender(ctx) {
@@ -99,6 +114,8 @@ export function afterRender(ctx) {
   equipCoach(ctx);
   if (!it) return;
   if (it.step === 'story') { if (!document.querySelector('.introsb')) storyboard(ctx, PANELS, { onDone: () => toMission1(ctx), skippable: true }); return; }
+  if (ctx.tab === 'base') lockMarks(ctx);
+  if (!it.beat && it.step === 'tour' && ctx.tab === 'base' && !document.querySelector('.overlay, .introsb, .ttour')) { setTimeout(() => { if (ctx.tab === 'base' && step(s) === 'tour' && !document.querySelector('.ttour, .introsb, .overlay')) baseTour(ctx); }, ctx.fast ? 50 : 500); return; }
   if (!it.beat || ctx.tab !== 'base' || document.querySelector('.overlay, .introsb')) return;
   const id = it.beat, beat = BEATS[id];
   storyboard(ctx, [beat], { btn: beat.btn, onDone: () => {
@@ -208,6 +225,10 @@ export function startM1(ctx) {
   const s = ctx.state;
   const b = T.startTutorial(s, s.rng);
   b.intro = 1; b.label = 'Docks job';
+  // v0.20.2 lesson layout: Hook stands in the open where Rook can reach cover with a fair shot on turn 1
+  // (the lesson's turn 1: move into cover, Shoot, End turn; turn 2: Pounce).
+  const hook = b.units.find((q) => q.hero === 'hook');
+  if (hook && T.walkable(b, 11, 8, hook.uid)) { hook.x = 11; hook.y = 8; }
   s.tactics = b; ctx.sub.tactics = null; ctx.sub.afterBattle = 'base';
   ctx.go('tactics');
 }
@@ -222,6 +243,9 @@ export function startM2(ctx) {
     enemyRecs: [{ lv: 1 }, { lv: 1 }],
   });
   b.intro = 2; b.freeAmmo = 1;
+  // Helix came ready: one gun starts on Overwatch (it clears on his own turn), so the fight can teach it
+  const ow = b.units.find((q) => q.side === 'enemy' && T.gunOf(q));
+  if (ow) ow.overwatch = true;
   s.tactics = b; ctx.sub.tactics = null; ctx.sub.afterBattle = 'base';
   ctx.go('tactics');
 }
@@ -237,10 +261,6 @@ export function skipIntro(ctx) {
 // In-battle story lines: one short line at the start of each intro fight, before the teaching steps.
 // Shown through the same hint toast (tap to dismiss; gone once Rook moves).
 export const INTRO_BATTLE_STEPS = [
-  { id: 'intro-m1', once: false,
-    when: ({ b, a }) => b.intro === 1 && b.turn === 1 && !a.moved && !a.acted,
-    done: ({ u, a }) => !!(u.preview || a.moved || a.acted),
-    html: () => '<b>Docks, midnight.</b> The Helix shipment’s in that container. Hook’s guarding it. Helix hired him for the night.' },
   { id: 'intro-m2', once: false,
     when: ({ b, a }) => b.intro === 2 && b.turn === 1 && !a.moved && !a.acted,
     done: ({ u, a }) => !!(u.preview || a.moved || a.acted),
@@ -250,7 +270,7 @@ export const INTRO_BATTLE_STEPS = [
 // The step card on the hideout (replaces Boss's orders while the intro runs).
 export function baseCard(ctx) {
   const s = ctx.state;
-  if (!active(s) || s.intro.step === 'story') return '';
+  if (!active(s) || s.intro.step === 'story' || s.intro.step === 'tour') return '';
   const it = s.intro, place = ctx.sub.base && ctx.sub.base.place;
   const n = { m1: 1, base: 2, craft: 3, equip: 4, m2: 5 }[it.step] || 1;
   let line = '', cta = '';
@@ -271,7 +291,114 @@ export function baseCard(ctx) {
 // Hideout re-renders the card when this changes (step, or placing a building).
 export const key = (ctx) => `i:${step(ctx.state)}:${ctx.sub.base && ctx.sub.base.place ? 1 : 0}:${equipped(ctx.state) ? 1 : 0}`;
 // Gentle glow on the hideout button the current step needs.
-export const glow = (s, what) => (active(s) && ((what === 'build' && s.intro.step === 'base'))) ? ' introglow' : '';
+export const glow = (s, what) => ((active(s) && what === 'build' && s.intro.step === 'base') || (what === 'nextop' && s && s.intro && s.intro.nudge)) ? ' introglow' : '';
+
+// ---------------------------------------------------------------- v0.20.2 hideout tour + feature locks
+// Until the intro has shown a feature, it stays locked (dimmed, padlocked, a tap just says it's coming).
+// After Mission 2 the tour walks the hideout one feature at a time, unlocking each as it explains it, and ends
+// on Next op (the story) left open for the player to start.
+export const BASE_TOUR = [
+  { f: 'den', building: 'den', text: '<b>The Den</b>: the heart of the hideout. Upgrade it to raise every other building’s max level.' },
+  { f: 'stall', building: 'stall', text: 'Your <b>Knock-off Stall</b> makes Cash over time. Tap the coin bubble over it to collect.' },
+  { f: 'buildings', sel: '.hud-br [data-act="openBuild"]', text: '<b>Build</b>: new buildings and upgrades. More open as your Den and level grow. Tap any building to upgrade it.' },
+  { f: 'builders', sel: '[data-act="builders"]', text: '<b>Builders</b>: every build or upgrade keeps one busy until it’s done.' },
+  { f: 'supplies', sel: '.pillbtn.supplies', text: '<b>Ammo and medkits</b>. Fights use them up; the hideout makes more.' },
+  { f: 'cash', sel: '#topbar .res.cash', text: '<b>Cash</b> pays for buildings and upgrades. The bar shows how full your storage is.' },
+  { f: 'energy', sel: '#topbar [data-act="energyInfo"]', text: '<b>Energy</b>: each op costs ⚡1, and it refills 1 every 10 minutes.' },
+  { f: 'level', sel: '#topbar [data-act="openTrack"]', text: 'Your <b>player level</b>. Ops and goals give XP; each level opens something new.' },
+  { f: 'crew', sel: '#nav [data-tab="crew"]', text: '<b>Crew</b>: your operators. Tap one for gear, abilities and perks. Slots open as they level.' },
+  { f: 'ops', sel: '#nav [data-tab="missions"], .hud-br [data-tab="missions"]', text: '<b>Ops</b>: every job on the map. Replay a finished one for half rewards.' },
+  { f: 'locked', sel: '#nav .locked', text: 'Padlocked tabs open at the player level shown on them.' },
+  { f: 'ad', sel: '[data-act="adBoost"]', text: '<b>x2 cash</b> (optional): watch a short ad and your buildings make double for a while.' },
+  { f: 'story', sel: '.nextop', text: '<b>Next op</b> carries the story on. Tap it when you’re ready. The hideout’s yours.' },
+];
+const FEAT_SEL = Object.fromEntries(BASE_TOUR.filter((t) => t.sel).map((t) => [t.f, t.sel]));
+// what each tap needs (act -> feature); building taps need 'den'
+const ACT_FEAT = { builders: 'builders', adBoost: 'ad', energyInfo: 'energy', openTrack: 'level', startOp: 'story', openBuild: 'buildings', collectStockHud: 'supplies' };
+const TAB_FEAT = { crew: 'crew', missions: 'ops' };
+const IMPLICIT = { buildings: ['base', 'craft', 'equip', 'm2', 'tour'] };
+export function locked(s, f) {
+  if (!active(s) || !f) return false;
+  const it = s.intro;
+  if ((it.seen || {})[f]) return false;
+  if ((IMPLICIT[f] || []).includes(it.step)) return false;
+  return true;
+}
+// called by app.js before every tap: a message if the intro hasn't opened that feature yet
+export function lockFor(ctx, act, el) {
+  const s = ctx.state;
+  if (act === 'startOp' && s && s.intro && s.intro.nudge) { delete s.intro.nudge; }
+  if (!active(s)) return null;
+  if (s.intro.step === 'base' && act === 'openBuild') return null;
+  const f = act === 'nav' ? TAB_FEAT[el && el.dataset.tab] : ACT_FEAT[act];
+  return f && locked(s, f) ? 'Locked for now: the intro will show you this.' : null;
+}
+function lockMarks(ctx) {
+  const s = ctx.state;
+  document.querySelectorAll('.introlock').forEach((n) => n.classList.remove('introlock'));
+  if (!active(s)) return;
+  for (const [f, sel] of Object.entries(FEAT_SEL)) {
+    if (f === 'locked') continue;
+    if (locked(s, f)) document.querySelectorAll(sel).forEach((n) => n.classList.add('introlock'));
+  }
+}
+function baseTour(ctx) {
+  const s = ctx.state, it = s.intro;
+  if (document.querySelector('.ttour')) return;
+  it.seen ||= {};
+  const el = document.createElement('div');
+  el.className = 'ttour introtour';
+  const W = () => window.innerWidth, H = () => window.innerHeight;
+  const rectOf = (st) => {
+    if (st.building) {
+      const b = (s.base.buildings || []).find((x) => x.t === st.building);
+      if (!b || !window.__base) return null;
+      try { window.__base.centerOn(b.id); } catch (e) { /* view not ready */ }
+      const p = window.__base.screenOf(b.id);
+      return p ? { left: p.x - 55, top: p.y - 70, width: 110, height: 100 } : null;
+    }
+    const ns = [...document.querySelectorAll(st.sel)].filter((n) => n.getBoundingClientRect().width > 0);
+    if (!ns.length) return null;
+    const rs = ns.map((n) => n.getBoundingClientRect());
+    const l = Math.min(...rs.map((r) => r.left)), t = Math.min(...rs.map((r) => r.top)), r2 = Math.max(...rs.map((r) => r.right)), b2 = Math.max(...rs.map((r) => r.bottom));
+    return { left: l, top: t, width: r2 - l, height: b2 - t };
+  };
+  const finish = (all) => {
+    el.remove();
+    for (const t of BASE_TOUR) it.seen[t.f] = 1;
+    it.step = 'done'; it.nudge = 1; delete it.tourI;
+    ctx.save(); ctx.render();
+    if (!all) ctx.toast('Everything’s unlocked. Next op when you’re ready.');
+  };
+  const draw = () => {
+    let i = it.tourI || 0;
+    while (i < BASE_TOUR.length && !rectOf(BASE_TOUR[i])) { it.seen[BASE_TOUR[i].f] = 1; i++; }
+    it.tourI = i;
+    if (i >= BASE_TOUR.length) return finish();
+    try { window.__base && window.__base.deselect && window.__base.deselect(); } catch (e) { /* no panel */ }
+    const st = BASE_TOUR[i], r = rectOf(st), pad = 5;
+    it.seen[st.f] = 1; ctx.save();
+    document.querySelectorAll(st.sel || '.__none').forEach((n) => n.classList.remove('introlock'));
+    const hole = { l: Math.max(2, r.left - pad), t: Math.max(2, r.top - pad), w: r.width + pad * 2, h: r.height + pad * 2 };
+    const capW = Math.min(300, W() - 24);
+    const below = hole.t + hole.h / 2 < H() / 2;
+    const x = Math.min(Math.max(12, hole.l + hole.w / 2 - capW / 2), W() - capW - 12);
+    const pos = below ? `top:${Math.min(hole.t + hole.h + 10, H() - 130)}px` : `bottom:${Math.min(H() - hole.t + 10, H() - 60)}px`;
+    const last = i === BASE_TOUR.length - 1;
+    el.innerHTML = `<div class="ttourhole" style="left:${hole.l}px;top:${hole.t}px;width:${hole.w}px;height:${hole.h}px"></div>
+      <div class="ttourcap" style="left:${x}px;${pos};width:${capW}px" data-step="${i}" data-f="${st.f}"><div class="tiny dim">Hideout tour · ${i + 1}/${BASE_TOUR.length} · <span class="gold">Unlocked</span></div><div class="small">${st.text}</div>
+      <div class="ttourbtns"><button class="linkbtn tiny" data-tour="skip">Skip tour</button><button class="btn sm red" data-tour="next">${last ? 'Got it' : 'Next ›'}</button></div></div>`;
+  };
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const t = e.target.closest('[data-tour]');
+    if (t && t.dataset.tour === 'skip') return finish(true);
+    if ((it.tourI || 0) >= BASE_TOUR.length - 1) return finish();
+    it.tourI = (it.tourI || 0) + 1; draw();
+  });
+  document.getElementById('app').appendChild(el);
+  draw();
+}
 
 // ---------------------------------------------------------------- scrap bench (a light Factory preview)
 export const BENCH = ['leather', 'workboots', 'bat'];

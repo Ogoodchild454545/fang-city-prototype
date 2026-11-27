@@ -126,7 +126,7 @@ function detail(s, c) {
   const tgt = sel.slot || targetSlot(rec, sel.id, s, c.hero);
   if (!fits.length) return `<div class="cdetail">${itemCard(sel.id, `<div class="tiny cmp red">🔒 ${esc(SLOT_BY_ID[tgt].name)} slot opens at level ${SLOT_UNLOCK[tgt]}.</div>`, s)}</div>`;
   const cur = rec.equip[tgt];
-  if (slotLevel(s, c.hero) < it.lv) return `<div class="cdetail">${itemCard(sel.id, `${compareTable(sel.id, cur)}<div class="tiny cmp red">🔒 Needs level ${it.lv} (${esc(HEROES[c.hero].name)} or your player level).</div>`, s)}</div>`;
+  if (slotLevel(s, c.hero) < it.lv) return `<div class="cdetail">${itemCard(sel.id, `${compareTable(sel.id, cur)}<div class="tiny cmp red">🔒 Needs level ${it.lv} (${esc(HEROES[c.hero].name)}${s.slotsByHero ? '' : ' or your player level'}).</div>`, s)}</div>`;
   const btns = fits.length > 1
     ? fits.map((sl) => `<button class="btn sm ${sl.id === tgt ? 'gold' : ''}" data-act="charEquip" data-id="${sel.id}" data-slot="${sl.id}">Equip · ${esc(sl.short)} ${sl.id.slice(-1)}</button>`).join('')
     : `<button class="btn sm gold" data-act="charEquip" data-id="${sel.id}" data-slot="${tgt}">Equip</button>`;

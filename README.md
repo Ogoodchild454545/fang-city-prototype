@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.20.1)
+# Fang City: Animal Gangs (playable prototype v0.20.2)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,23 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.20.2 (Intro rework from Oliver's notes)
+
+- Story: panel 1 now says how splicing paid off (pig-grown human hearts and kidneys for transplants; apes and dogs
+  made smarter and stronger for the worst jobs). New panel 2: World War Three broke out before the work was done
+  and the nuclear war wiped out human life; panel 3: the gene-drive virus got loose in the fallout.
+- Mission 1 teaches the basics step by step after the UI tour, waiting for the player each time: select Rook,
+  blue tiles and AP, the glowing recommended tile, Move here, cover, picking Shoot/Strike, hit %, Pounce, End turn,
+  and what the rival does on his turn. Gold tile marker and pulsing buttons show where to tap.
+- Mission 2 ("Helix strikes back") explains advanced mechanics once, when they first matter: turn order,
+  overwatch (one gun starts on it), cover, threat zones, flanking, statuses, explosive barrels, Hunker, cooldowns,
+  healing and ammo.
+- After Mission 2 the "you call the shots" handover is gone: back at the hideout a 13-step guided tour shows each
+  feature (Den, stall, buildings, builders, supplies, cash, energy, level, Crew, Ops, locked items, ad boost,
+  Next op). Each stays locked until shown; the tour ends pointing at Next op, left for the player to start.
+- New games start Rook with only the tyre iron and snub revolver and an empty stash. Gear slots open with Rook's
+  own level: Lv 1 is weapons, jacket and boots only; locked slots show their unlock level. Old saves unchanged.
 
 ## v0.20.1 (Intro fixes from Oliver's notes)
 

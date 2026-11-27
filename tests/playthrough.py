@@ -376,6 +376,8 @@ async def main():
         assert await page.locator('.crewcol .opslot').count() == 4, 'crew column should show Rook, Vesper, Anvil (Lv 10) and Sledge (Lv 12)'
         assert await page.locator('.bslot[data-act="bossInfo"]').count() == 0, 'no bosses on the crew screen'
         assert await ev(page, "Object.keys(window.__game.state.army).length") == 0, 'new game should have no troops'
+        # v0.20.2: crews started through the intro open slots with the operator's own level (body armour at Lv 4)
+        await ev(page, "(()=>{const r=window.__game.state.heroes.owned.rook; r.lv=Math.max(r.lv||1,4);})()")
         await tap(page, '.crewcol .opslot[data-id="rook"]')
         await page.wait_for_selector('.charscr')
         await tap(page, '.sitem[data-id="gilet"]')

@@ -1853,3 +1853,16 @@ test('v0.19.1 tutorial steps: one at a time, in order, only when relevant; done 
   forget(); assert.equal(runSteps(steps, { ap: 4 }).id, 'a');
   delete globalThis.localStorage;
 });
+
+test('v0.20.2 new intro crews open gear slots with the operator\'s own level; old saves keep the player-level rule', () => {
+  const s = newGame(T0, 12);
+  PG.setPlayerLevel(s, 10, T0);
+  assert.equal(IT.openSlotCount(s, 'rook'), 12, 'old rule: player Lv 10 opens every slot');
+  s.slotsByHero = 1;
+  assert.equal(IT.openSlotCount(s, 'rook'), 4, 'Lv 1 Rook: weapons, jacket and boots only');
+  assert.ok(!IT.equipItem(s, 'rook', 'gilet').ok, 'body armour stays locked at Rook Lv 1');
+  s.heroes.owned.rook.lv = 2;
+  assert.equal(IT.openSlotCount(s, 'rook'), 6);
+  s.heroes.owned.rook.lv = 4;
+  assert.ok(IT.equipItem(s, 'rook', 'gilet').ok, 'Rook Lv 4 opens body armour');
+});

@@ -277,6 +277,9 @@ document.addEventListener('pointerdown', unlockAudio, { once: true, capture: tru
 
 function dispatchAct(el, e) {
   const act = el.dataset.act;
+  // v0.20.2: features the intro hasn't shown yet stay locked
+  const lk = Intro.lockFor(ctx, act, el);
+  if (lk) { toast(lk); return; }
   if (act !== 'toggleMute' && e.type === 'click') Audio.play('tap');
   const handler = GLOBAL_ACTIONS[act] || SCREENS[ctx.tab].actions?.[act] || Facilities.actions[act] || Shop.actions[act] || Crew.actions[act] || Hideout.actions[act] || Heroes.actions[act] || Loadout.actions[act];
   if (handler) { handler(ctx, el, e); ctx.save(); }

@@ -358,7 +358,9 @@ export function craftItem(s) {
 // Four slots are open at the start; the rest open with the operator's level (or the player's
 // account level, whichever is higher), so every slot is open by level 10.
 export const SLOT_UNLOCK = { melee: 1, primary: 1, jacket: 1, boots: 1, gloves: 2, head: 2, consumable: 3, body: 4, acc1: 6, utility: 7, acc2: 8, trinket: 10 };
-export const slotLevel = (s, heroId) => Math.max((s.heroes.owned[heroId] || {}).lv || 1, (s.player && s.player.lv) || 1);
+// v0.20.2: crews started through the new intro (s.slotsByHero) open slots with the operator's OWN level only, so a
+// level 1 Rook has just his weapons, jacket and boots. Older saves keep the old rule (never re-locks their kit).
+export const slotLevel = (s, heroId) => s.slotsByHero ? ((s.heroes.owned[heroId] || {}).lv || 1) : Math.max((s.heroes.owned[heroId] || {}).lv || 1, (s.player && s.player.lv) || 1);
 export const slotOpen = (s, heroId, slotId) => slotLevel(s, heroId) >= (SLOT_UNLOCK[slotId] || 1);
 export const openSlotCount = (s, heroId) => SLOT_IDS.filter((sl) => slotOpen(s, heroId, sl)).length;
 export const BEST_GEAR_LV = 10;

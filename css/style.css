@@ -1294,3 +1294,7 @@ em.up{color:#7bd36a}em.dn{color:#ff6b5e}
 .introcoach b.green{color:#7fd67f}.introcoach b.red{color:#ff7a6b}
 .introcoach{pointer-events:none}.introcoach .btn{pointer-events:auto}
 .introcoach.top{bottom:auto;top:max(8px,env(safe-area-inset-top))}
+/* v0.20.2 intro feature locks + lesson tip */
+.introlock{filter:grayscale(1) brightness(.55);position:relative}
+.introlock::after{content:'🔒';position:absolute;top:-4px;right:-4px;font-size:11px;filter:none}
+.thint.lsn{cursor:default;border-left-color:#ffd25a}

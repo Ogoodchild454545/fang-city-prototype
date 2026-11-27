@@ -27,7 +27,10 @@ export function runSteps(steps, s, dismissed = {}) {
     if (st.done && st.done(s)) { if (once) learn(st.id); continue; }
     if (dismissed[st.id]) continue;
     if (!st.when(s)) continue;
-    return { id: st.id, html: st.html(s), once };
+    const out = { id: st.id, html: st.html(s), once };
+    if (st.glow) out.glow = typeof st.glow === 'function' ? st.glow(s) : st.glow;
+    if (st.spot) out.spot = st.spot(s);
+    return out;
   }
   return null;
 }
