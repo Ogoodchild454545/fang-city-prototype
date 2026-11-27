@@ -81,3 +81,11 @@ Editor maps start from their theme's look and follow their own time, weather and
 The per-frame work is a few dozen small sprite draws (bloom, steam, beams, reflections) and one batched path
 per particle type. The expensive parts (the light map, shadows, decals and lit sprites) are baked once per map
 and zoom step. See the README for the `tests/bench.py` numbers.
+
+## v0.21.1 additions
+
+- Light shafts: one faint additive beam sprite per street lamp and crane floodlight.
+- Rain glints: up to 14 short streaks per lamp on rain maps, drawn as one batched stroke.
+- Faulty neons: flagged once in `lightsOf` (`faulty`); `neonOff()` drives both the pool flicker and the bloom.
+- Club mirror ball: 46 specks in one batched fill.
+- Graffiti sits in the lower third of a face, clear of container brand names.

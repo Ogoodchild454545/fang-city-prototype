@@ -115,9 +115,14 @@ export function lightsOf(m, prep) {
     const club = t.hue === 'club' || m.id === 'club_velvet', cold = t.hue === 'office' || t.hue === 'works';
     out.push({ x: x + dx * 0.55, y: y + dy * 0.55, h: 34, R: 2.4, col: club ? '200,90,255' : cold ? '200,222,255' : '255,196,120', I: 0.7, fl: club ? 2 : 0, kind: 'porch', self: [x, y], prop: 1 });
   }
+  // a couple of 'faulty' neons per map buzz and cut out (pool and bloom together)
+  let nn = 0;
+  for (const L of out) if (L.fl === 2) L.faulty = (nn++ % 5 === 1);
   LIGHTS.set(m, out);
   return out;
 }
+// faulty neon: off for a few short moments, in bursts
+function neonOff(L, t) { const s = Math.floor(t * 12 + L.x * 7); return hash(s, L.y | 0, 9) < 0.06 || (hash(Math.floor(t * 0.5 + L.x), 3, 9) < 0.18 && hash(s, 1, 4) < 0.5); }
 
 // ---------- baked lighting ----------
 // lum = ambient + light (multiplied into the ground), glow = light only (added on top for the colour).
@@ -432,14 +437,14 @@ export function graffiti(g, onFace, F, seed, z) {
   const col = SPRAY[Math.floor(r() * SPRAY.length)];
   const sigil = r() < 0.35;
   onFace(g, F, () => {
-    const u0 = 0.15 + r() * 0.2, v0 = 0.45 + r() * 0.18;
+    const u0 = 0.12 + r() * 0.2, v0 = 0.6 + r() * 0.06;
     if (sigil) {
       // the fang mark: a ring with two teeth, dripping
       g.strokeStyle = `rgba(${col},0.55)`; g.lineWidth = 0.025;
-      g.beginPath(); g.ellipse(u0 + 0.15, v0, 0.1, 0.22, 0, 0, TAU); g.stroke();
+      g.beginPath(); g.ellipse(u0 + 0.15, v0, 0.08, 0.16, 0, 0, TAU); g.stroke();
       g.fillStyle = `rgba(${col},0.55)`;
-      for (const du of [0.1, 0.2]) { g.beginPath(); g.moveTo(u0 + du - 0.03, v0 - 0.12); g.lineTo(u0 + du + 0.03, v0 - 0.12); g.lineTo(u0 + du, v0 + 0.12); g.closePath(); g.fill(); }
-      for (let k = 0; k < 3; k++) g.fillRect(u0 + 0.07 + r() * 0.16, v0 + 0.18, 0.008, 0.05 + r() * 0.12);
+      for (const du of [0.1, 0.2]) { g.beginPath(); g.moveTo(u0 + du - 0.025, v0 - 0.09); g.lineTo(u0 + du + 0.025, v0 - 0.09); g.lineTo(u0 + du, v0 + 0.09); g.closePath(); g.fill(); }
+      for (let k = 0; k < 3; k++) g.fillRect(u0 + 0.08 + r() * 0.14, v0 + 0.13, 0.008, 0.04 + r() * 0.1);
       return;
     }
   });
@@ -449,10 +454,10 @@ export function graffiti(g, onFace, F, seed, z) {
   const A = F.A, B = F.B, len = Math.hypot(B[0] - A[0], B[1] - A[1]);
   if (len < 20 * z * 0.6) return;
   g.save();
-  const u = 0.5, px = A[0] + (B[0] - A[0]) * u, py = A[1] + (B[1] - A[1]) * u - F.H * (0.5 + r() * 0.12);
+  const u = 0.5, px = A[0] + (B[0] - A[0]) * u, py = A[1] + (B[1] - A[1]) * u - F.H * (0.24 + r() * 0.08);  // sprayed low, at arm's reach, clear of painted brands
   g.translate(px, py);
   g.transform((B[0] - A[0]) / len, (B[1] - A[1]) / len, 0, 1, 0, 0);
-  const size = Math.min(F.H * 0.26, len * 1.5 / word.length);
+  const size = Math.min(F.H * 0.2, len * 1.4 / word.length);
   g.font = `700 ${size.toFixed(2)}px Oswald, sans-serif`;
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.rotate((r() - 0.5) * 0.12);
@@ -512,13 +517,12 @@ export function drawUnder(g, m, prep, z, now) {
   g.globalCompositeOperation = 'lighter';
   // flicker on top of the baked pools: fire breathes, neon buzzes and now and then drops out
   // (only fires and a couple of 'faulty' neons per map, kept small: additive fills are the costly part)
-  let neon = 0;
   for (const L of lightsOf(m, prep)) {
     if (!L.fl) continue;
-    if (L.fl === 2 && (neon++ % 5 !== 1)) continue;
+    if (L.fl === 2 && !L.faulty) continue;
     let a;
     if (L.fl === 1) a = 0.10 + 0.06 * Math.sin(t * 9 + L.x * 3) + 0.04 * Math.sin(t * 23 + L.y * 5);
-    else { const s = Math.floor(t * 12 + L.x * 7); a = hash(s, L.y | 0, 9) < 0.06 ? 0 : 0.09 + 0.02 * Math.sin(t * 40 + L.x); }
+    else a = neonOff(L, t) ? 0 : 0.09 + 0.02 * Math.sin(t * 40 + L.x);
     if (a <= 0.005) continue;
     const c = toWorld(L.x, L.y), rx = L.R * 0.5 * HX * 1.41 * z;
     g.globalAlpha = clamp(a * 1.4);
@@ -584,8 +588,18 @@ export function drawOver(g, m, prep, T, z, now, w, h) {
     const R = (L.kind === 'lamp' ? 26 : L.prop ? 14 : 18) * z;
     let a = L.kind === 'lamp' ? 0.22 : 0.12;
     if (L.fl === 1) a *= 0.85 + 0.15 * Math.sin(t * 11 + L.x);
+    else if (L.faulty) { if (neonOff(L, t)) { a = 0.015; } else a *= 1.5; }
     g.globalAlpha = a;
     g.drawImage(soft('bl:' + L.col, L.col), X - R, Y - R, R * 2, R * 2);
+  }
+  // light cones: a faint shaft of light under every street lamp and crane floodlight (dust and damp in the air)
+  for (const L of lights) {
+    if (L.kind !== 'lamp' && L.kind !== 'crane_base') continue;
+    const c = toWorld(L.x, L.y), X = c.x * z, Y = c.y * z, top = (c.y - L.h * 0.9) * z;
+    if (!vis(X, Y)) continue;
+    const wd = (L.kind === 'lamp' ? 34 : 46) * z;
+    g.globalAlpha = L.kind === 'lamp' ? 0.075 : 0.06;
+    g.drawImage(beamSprite(L.col), X - wd / 2, top, wd, Y - top + 4 * z);
   }
   // club: three coloured spot beams sweeping the floor, with a pool where they land
   if (look.beams) {
@@ -602,6 +616,39 @@ export function drawOver(g, m, prep, T, z, now, w, h) {
       g.restore();
       g.globalAlpha = 0.22; const R = 30 * z; g.drawImage(soft('bl:' + cols[i], cols[i]), X1 - R, Y1 - R * 0.5, R * 2, R);
     }
+  }
+  // rain caught in the lamp light: short bright streaks falling through each street lamp's cone
+  if (m.env && m.env.weather === 'rain') {
+    g.strokeStyle = 'rgba(255,236,200,1)'; g.lineWidth = Math.max(0.6, 0.55 * z);
+    g.globalAlpha = 0.32;
+    g.beginPath();
+    for (const L of lights) {
+      if (L.kind !== 'lamp') continue;
+      const c = toWorld(L.x, L.y), X = c.x * z, Y = c.y * z;
+      if (!vis(X, Y)) continue;
+      for (let i = 0; i < 14; i++) {
+        const f = (t * (1.6 + hash(i, 2, L.x | 0) * 0.8) + hash(i, 1, L.y | 0)) % 1;
+        const spread = (0.15 + f * 0.85) * 22;
+        const xx = X + (hash(i, 3, 7) - 0.5) * 2 * spread * z - f * 6 * z, yy = Y - (L.h * (1 - f) + 2) * z;
+        g.moveTo(xx, yy); g.lineTo(xx - 1.2 * z, yy + 6 * z);
+      }
+    }
+    g.stroke();
+  }
+  // club: a mirror ball throws specks that wheel slowly over the floor
+  if (look.beams) {
+    const c0 = toWorld(m.w / 2, m.h / 2), X0 = c0.x * z, Y0 = c0.y * z;
+    g.fillStyle = 'rgb(235,225,255)';
+    g.beginPath();
+    for (let i = 0; i < 46; i++) {
+      const rr = (40 + hash(i, 1, 55) * 200) * z, a = hash(i, 2, 55) * TAU + t * 0.25;
+      const X = X0 + Math.cos(a) * rr, Y = Y0 + Math.sin(a) * rr * 0.5;
+      if (!vis(X, Y)) continue;
+      const s2 = (0.8 + hash(i, 3, 55)) * z;
+      g.moveTo(X + s2, Y); g.ellipse(X, Y, s2, s2 * 0.5, 0, 0, TAU);
+    }
+    g.globalAlpha = 0.28 + 0.06 * Math.sin(t * 2);
+    g.fill();
   }
   // steam from manholes, pipes, presses; cold vapour off the fish boxes
   g.globalCompositeOperation = 'source-over';

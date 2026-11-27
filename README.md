@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.21.0)
+# Fang City: Animal Gangs (playable prototype v0.21.1)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,15 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.21.1 (Map beauty pass 2: light shafts and live details)
+
+- Street lamps and dock crane floodlights now cast a faint shaft of light down to the ground.
+- On the rain map (Neon Strip), rain shows as bright streaks where it falls through the lamp light.
+- The faulty neons now cut out properly: their glow goes dark along with the light pool, in short bursts.
+- In Club Velvet, a mirror ball throws specks of light that wheel slowly across the dance floor.
+- Graffiti is sprayed lower on walls and containers, at arm's reach, so it no longer clashes with painted
+  container names.
 
 ## v0.21.0 (Map beauty pass: light, shadow and atmosphere)
 
