@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.20.2)
+# Fang City: Animal Gangs (playable prototype v0.21.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,60 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.21.0 (Map beauty pass: light, shadow and atmosphere)
+
+Every battle map was relit. Rules, cover and line of sight are unchanged. Details are in `docs/map-beauty.md`.
+
+- **Real light.** The ground is darker away from the lights, with soft pools of light round every lamp, burn
+  barrel, neon sign, lantern and lit room. Props block the light, so crates, walls and containers throw shadows
+  away from each lamp. Windows let light out in patches. All of this is baked once per map, so it costs nothing
+  per frame.
+- **More lights.** New light sources:
+  - prop lights: phone boxes, bus shelters, fish stalls, fish boxes (a cold glow), stills, machine presses
+    (furnace glow), crane floodlights, warehouse and garage lamps, shack windows, club speakers and forklifts;
+  - a porch or bulkhead light over every outside door.
+- **Lit props.** Every prop is shaded by the lights around it: brighter on the side facing the lamp, with a
+  touch of the lamp's colour.
+- **Atmosphere.**
+  - bloom round light heads;
+  - burn barrels and lanterns flicker, and a couple of faulty neons buzz and cut out;
+  - lights shimmer in the water;
+  - steam rises from manholes, foundry pipes, presses and stills, and cold vapour comes off the fish boxes;
+  - spot beams sweep the club floor;
+  - low fog on the bayou;
+  - per map, one of: dust, embers, fireflies, dust motes, falling leaves, or moths round the lamps.
+- **Decals.**
+  - manholes;
+  - zebra crossings, double yellow lines and gutter grime;
+  - wet sheen on rain maps;
+  - fallen leaves;
+  - cigarette ends;
+  - rust bleed;
+  - metal filings and hazard chevrons in front of the foundry presses;
+  - duckweed and lily pads on the bayou;
+  - spilled drinks in the club.
+
+  Outward-facing walls and long container runs carry graffiti in real words ("HELIX LIES", "WAKE UP",
+  "ICE IS A LEASH"…) or a fang sigil. Outward-facing walls used to show indoor lockers.
+- **Colour grade per map.** A cool tint at the top and a warm tint at the bottom, set per map. Examples: teal
+  and orange on the docks, purple and teal on the Neon Strip, green on the bayou, orange in the foundry. The
+  sky gets a horizon glow and clouds, and the clear nights get stars and a moon.
+- **Readability.** Move tiles, threat zones, cover shields and paths are drawn on top of the lighting. Pieces
+  are never darkened. The over-layer stays faint.
+- **Performance.** The bayou fog is now drawn into a 1/8-size layer and upscaled once per frame, instead of as
+  four near-full-screen blobs, so the bayou is no longer the slowest map. `tests/bench.py` on the Neon Strip
+  with a 4v4 squad, run interleaved with v0.20.1 on the same box, gave these numbers:
+
+  | | v0.21.0 | v0.20.1 |
+  | --- | --- | --- |
+  | Battle fps | 56.8 / 59.3 | 56.7 / 60.0 |
+  | Draw JS per frame | 0.9 ms | 0.8–1.0 ms |
+  | 3x zoom fps | 58–60 | 60 |
+
+- New test: `tests/v021.py`. On all 9 maps it checks the lights, the light map, the grade, that props are lit,
+  that the frame loop runs and that move tiles stay readable. New tool: `tests/map_shots.py` takes a default
+  and a zoomed shot of every map.
 
 ## v0.20.2 (Intro rework from Oliver's notes)
 

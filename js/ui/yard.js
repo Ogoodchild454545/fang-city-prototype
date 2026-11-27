@@ -5,6 +5,7 @@
 // barrels, shelving. All drawn in canvas — original art, no third-party tiles.
 import { drawPackProp, packFootprint, neonCol, hasPackArt } from './props.js';
 import { propDef, THEMES, ROOM_STYLES } from '../core/catalog.js';
+import * as FX from './mapfx.js';
 export const TW = 58, TH = 29;
 const HX = TW / 2, HY = TH / 2;
 export function toWorld(x, y) { return { x: (x - y) * HX, y: (x + y) * HY }; }
@@ -283,6 +284,7 @@ function drawContainer(g, t, sx, sy, z) {
     // rim light on the near top edges
     line(g, P(sx, sy, z, x0, y1, h1), P(sx, sy, z, x1, y1, h1), 'rgba(255,214,170,0.28)', 0.9 * z);
     if (last) line(g, P(sx, sy, z, x1, y1, h1), P(sx, sy, z, x1, y0, h1), 'rgba(255,214,170,0.22)', 0.9 * z);
+    if (s === 0 && run.i === 0 && run.n >= 2 && !t.__mir) FX.graffiti(g, onFace, f.L, run.id * 13 + info.x + info.y * 5, z);
     if (s === 0 && last) {
       // brand + number painted along the run's long side, centred on the whole run
       const uc = 0.5 - (run.n - 1) / 2 + (run.n === 1 ? 0 : 0);
@@ -420,8 +422,13 @@ function drawWall(g, t, sx, sy, z) {
     const kind = kinds[Math.floor(hash(info.x, info.y, 4) * kinds.length)];
     const straightX = (c.E && c.W) && !c.N && !c.S;
     const straightY = (c.N && c.S) && !c.E && !c.W;
-    if (straightX) wallDecor(g, { A: P(sx, sy, z, -0.5, th, 0), B: P(sx, sy, z, 0.5, th, 0), H: H * z }, kind, z);
-    else if (straightY) wallDecor(g, { A: P(sx, sy, z, th, 0.5, 0), B: P(sx, sy, z, th, -0.5, 0), H: H * z }, kind, z);
+    // v0.21: a face that looks out of the building gets street graffiti instead of indoor dressing
+    const m = FX.current();
+    const inside = (xx, yy) => { const n = m && m.tiles[yy] && m.tiles[yy][xx]; return !m || !n || n.t === 'interior' || isWallish(n) || (n.decor && n.decor !== 'lamp'); };
+    const outX = straightX && !inside(info.x, info.y + 1), outY = straightY && !inside(info.x + 1, info.y);
+    const FXF = straightX ? { A: P(sx, sy, z, -0.5, th, 0), B: P(sx, sy, z, 0.5, th, 0), H: H * z } : straightY ? { A: P(sx, sy, z, th, 0.5, 0), B: P(sx, sy, z, th, -0.5, 0), H: H * z } : null;
+    if (FXF && (outX || outY)) FX.graffiti(g, onFace, FXF, info.x * 31 + info.y * 7, z);
+    else if (FXF) wallDecor(g, FXF, kind, z);
     if (info.wallLight && (straightX || straightY)) {
       const lp = straightX ? P(sx, sy, z, 0.18, th, H * 0.82) : P(sx, sy, z, th, -0.18, H * 0.82);
       const warm = t.hue !== 'office' && t.hue !== 'works' && t.hue !== 'shop';
@@ -796,16 +803,29 @@ function cached(g, obj, key, sx, sy, z, ox, oy, w0, h0, paint) {
   const tr = g.getTransform(), X = tr.a * (sx - ox * z) + tr.e, Y = tr.d * (sy - oy * z) + tr.f;
   if (tr.a > 0 && tr.d > 0 && !tr.b && !tr.c && (X > g.canvas.width + 8 || Y > g.canvas.height + 8 || X + w0 * z * tr.a < -8 || Y + h0 * z * tr.d < -8)) return;
   const CS = csFor(z);
-  key += '|' + CS;
+  key += '|' + CS + FX.litKey();
   let c = SPR.get(obj);
   if (!c || c.key !== key || c.v !== SPRV) {
     const cv = document.createElement('canvas');
     cv.width = Math.ceil(w0 * CS); cv.height = Math.ceil(h0 * CS);
     paint(cv.getContext('2d'), ox * CS, oy * CS, CS);
+    litSprite(cv, obj, ox * CS, oy * CS, CS);
     c = { key, cv, v: SPRV };
     SPR.set(obj, c);
   }
   g.drawImage(c.cv, sx - ox * z, sy - oy * z, w0 * z, h0 * z);
+}
+// v0.21: cached sprites are lit by the lights around them (see mapfx.js lightSprite)
+function litSprite(cv, obj, ox, oy, k) {
+  const m = FX.current();
+  if (!m || !obj) return;
+  let x, y;
+  if (obj.kind && obj.x != null) { if (!prepMap(m).scenery.includes(obj)) return; x = obj.x; y = obj.y; } else {
+    const inf = INFO.get(obj);
+    if (!inf || !m.tiles[inf.y] || m.tiles[inf.y][inf.x] !== obj) return;
+    x = inf.x; y = inf.y;
+  }
+  FX.lightSprite(cv, m, prepMap(m), x, y, ox, oy, k);
 }
 const DYNAMIC = new Set(['burn', 'lamp', 'boat']);
 export function drawYardProp(g, t, sx, sy, z, now) {
@@ -1051,9 +1071,11 @@ function paintThemeBackdrop(g, m, z, bd) {
   }
 }
 
+const FOG = { cv: null, step: -1 };
 // Weather and time-of-day overlay in screen space (purely visual).
 export function drawWeather(g, w, h, m, now, cssTint = false) {
   const env = (m && m.env) || {};
+  if (LIVE.m === m && LIVE.T) FX.drawOver(g, m, prepMap(m), LIVE.T, LIVE.z, now, w, h);
   // cssTint: the night tint is a CSS layer *above* the canvas, so the rain is pre-brightened by the
   // inverse of that tint to land on exactly the colour it had when it was drawn over the tint.
   const tint = env.time === 'night' ? NIGHT_TINT : 0;
@@ -1074,14 +1096,26 @@ export function drawWeather(g, w, h, m, now, cssTint = false) {
     }
     g.restore();
   } else if (env.weather === 'fog') {
+    // v0.21: the same drifting banks, painted into a 1/8-size layer a few times a second and drawn with a
+    // single upscale (four near-full-screen blobs a frame made the bayou the slowest map)
     const t = (now || 0) / 1000;
-    g.save();
-    for (let i = 0; i < 4; i++) {
-      const x = ((hash(i, 7) * w + t * 12 * (i + 1)) % (w * 1.6)) - w * 0.3, y = h * (0.25 + 0.18 * i);
-      const R = w * 0.45, fs = radialSprite('fog', [[0, 'rgba(150,170,160,0.09)'], [1, 'rgba(150,170,160,0)']]);
-      g.drawImage(fs, x - R, y - R, R * 2, R * 2);
+    const F = FOG.cv || (FOG.cv = document.createElement('canvas'));
+    const fw = Math.max(8, Math.ceil(w / 8)), fh = Math.max(8, Math.ceil(h / 8)), step = Math.floor(t * 8);
+    if (F.width !== fw || F.height !== fh || FOG.step !== step) {
+      F.width = fw; F.height = fh; FOG.step = step;
+      const fg = F.getContext('2d');
+      fg.clearRect(0, 0, fw, fh);
+      fg.fillStyle = 'rgba(60,76,70,0.05)'; fg.fillRect(0, 0, fw, fh);
+      const fs = radialSprite('fog', [[0, 'rgba(110,130,120,0.06)'], [1, 'rgba(110,130,120,0)']]);
+      for (let i = 0; i < 4; i++) {
+        const x = ((hash(i, 7) * fw + t * 1.5 * (i + 1)) % (fw * 1.6)) - fw * 0.3, y = fh * (0.25 + 0.18 * i);
+        const R = fw * 0.45;
+        fg.drawImage(fs, x - R, y - R, R * 2, R * 2);
+      }
     }
-    g.fillStyle = 'rgba(120,140,130,0.05)'; g.fillRect(0, 0, w, h);
+    g.save();
+    g.imageSmoothingEnabled = true;
+    g.drawImage(F, 0, 0, w, h);
     g.restore();
   }
 }
@@ -1537,6 +1571,9 @@ export function bakeYard(m, region) {
     g.fillStyle = r() < 0.6 ? 'rgba(200,190,170,0.35)' : 'rgba(150,60,40,0.5)';
     g.save(); g.translate(x, y); g.rotate(r() * 3); g.fillRect(-0.05, -0.03, 0.1, 0.06); g.restore();
   }
+  // v0.21 decals: manholes, road paint, leaves, rust, filings, duckweed, spilled drinks
+  FX.paintDecals(g, m, p);
+  GT();
   // outside the playable yard: darker and dirtier
   g.fillStyle = 'rgba(0,0,0,0.38)';
   g.beginPath();
@@ -1588,6 +1625,8 @@ export function bakeYard(m, region) {
     g.globalAlpha = 0.4; g.drawImage(ao, 0, 0, W, H);
     g.globalAlpha = 1;
   }
+  // --- v0.21 baked lighting: dark ambient, pools of light, shadows thrown away from each light ---
+  FX.applyLight(g, m, p, { W, H, minX, minY, S }, footprints);
   // --- edge fade into the night ---
   g.setTransform(1, 0, 0, 1, 0, 0);
   const fade = (x0, y0, x1, y1) => {
@@ -1684,8 +1723,11 @@ export function drawYardStatic(g, m, z) {
     g.drawImage(sc, c.x * z - rx, c.y * z - rx * 0.5, rx * 2, rx);
   }
 }
+const LIVE = { m: null, T: null, z: 1 };
 export function drawYardLive(g, m, z, now) {
   const p = prepMap(m);
+  FX.setCurrent(m);
+  LIVE.m = m; LIVE.T = g.getTransform(); LIVE.z = z;
   // shimmering canal (batched into a few alpha buckets)
   const t = now / 1000;
   g.save();
@@ -1706,31 +1748,19 @@ export function drawYardLive(g, m, z, now) {
     g.stroke();
   });
   g.restore();
-  // light pools (additive)
+  // v0.21: the light pools are baked into the ground (with shadows); live, only the flicker and fog
+  FX.drawUnder(g, m, p, z, now);
   g.save();
   g.globalCompositeOperation = 'lighter';
   for (const L of p.lights) {
-    let R, col, a;
-    if (L.kind === 'lamp') { R = 2.6; col = '255,170,80'; a = 0.26; }
-    else if (L.kind === 'fire') { R = 2.0; col = '255,120,40'; a = 0.24 + 0.05 * Math.sin(t * 9 + L.x) + 0.04 * Math.sin(t * 23 + L.y); }
-    else if (L.kind === 'neon') { R = 2.2; col = L.col || '255,80,150'; a = 0.16; }
-    else if (L.kind === 'lantern') { R = 2.0; col = '255,180,80'; a = 0.22 + 0.03 * Math.sin(t * 5 + L.x); }
-    else if (L.kind === 'warm') { R = 2.2; col = '255,190,120'; a = 0.16; }
-    else if (L.kind === 'wall') { R = 1.3; col = L.hue === 'cafe' ? '255,180,110' : '200,225,255'; a = 0.2; }
-    else { R = 2.4; col = '170,205,255'; a = 0.26; }
-    const c = toWorld(L.x + (L.kind === 'lamp' ? 0.3 : 0), L.y + (L.kind === 'lamp' ? 0.05 : 0));
-    const rx = R * HX * 1.41 * z;
-    const pool = radialSprite('pool:' + col, [[0, `rgba(${col},1)`], [0.5, `rgba(${col},0.45)`], [1, `rgba(${col},0)`]]);
-    g.globalAlpha = Math.max(0, Math.min(1, a));
-    g.drawImage(pool, c.x * z - rx, c.y * z - rx * 0.5, rx * 2, rx);
     if (L.kind === 'lamp' && L.x <= 4 && hasCanal(m)) {
       // reflection streak on the canal
       const w0 = toWorld(1.6, L.y);
       g.globalAlpha = 0.12 + 0.05 * Math.sin(t * 3 + L.y);
       g.drawImage(streakSprite(), (w0.x - 4) * z, (w0.y - 10) * z, 8 * z, 40 * z);
     }
-    g.globalAlpha = 1;
   }
+  g.globalAlpha = 1;
   g.restore();
   drawWet(g, m, z, now, p);
 }
@@ -1817,11 +1847,12 @@ export function drawNightSky(g, w, h, m) {
 const SKY = { key: '', cv: null };
 export function skyCanvas(w, h, m) {
   const c = themeOf(m).sky, night = !!(m && m.env && m.env.time === 'night');
-  const key = `${w}x${h}|${c.join(',')}|${night}`;
+  const key = `${w}x${h}|${c.join(',')}|${night}|${m && m.id}`;
   if (SKY.key === key) return SKY.cv;
   const cv = SKY.cv || document.createElement('canvas');
   cv.width = w; cv.height = h;
   drawNightSky(cv.getContext('2d'), w, h, m);
+  FX.paintSky(cv.getContext('2d'), w, h, m);
   SKY.key = key; SKY.cv = cv;
   return cv;
 }
@@ -1832,7 +1863,9 @@ export function screenTint(w, h, m) {
   const env = (m && m.env) || {};
   const r0 = Math.min(w, h) * 0.35, r1 = Math.max(w, h) * 0.72;
   const vig = `radial-gradient(circle ${r1.toFixed(1)}px at 50% 52%, rgba(0,0,0,0) ${(100 * r0 / r1).toFixed(2)}%, rgba(0,0,0,0.5) 100%)`;
-  return env.time === 'night' ? `${vig}, linear-gradient(rgba(4,6,14,${NIGHT_TINT}), rgba(4,6,14,${NIGHT_TINT}))` : vig;
+  const grade = FX.gradeCss(m);
+  const top = grade ? `${vig}, ${grade}` : vig;
+  return env.time === 'night' ? `${top}, linear-gradient(rgba(4,6,14,${NIGHT_TINT}), rgba(4,6,14,${NIGHT_TINT}))` : top;
 }
 
 export function drawVignette(g, w, h) {
