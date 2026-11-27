@@ -8,6 +8,7 @@ import os, json, time, statistics
 from playwright.sync_api import sync_playwright
 VH = int(os.environ.get('VH', '390')); URL = os.environ.get('BASE', 'http://localhost:8765/')
 OUT = os.environ.get('OUT', '/tmp/bench.json'); SECS = float(os.environ.get('SECS', '6')); QUICK = bool(os.environ.get('QUICK'))  # QUICK=1: battle only
+OP = os.environ.get('OP', 'o12')  # v0.22: OP=o14 benches Docklands
 FRAMES = """(secs)=>new Promise(res=>{const d=[];let last=performance.now();const t0=last;function f(t){d.push(t-last);last=t;if(t-t0<secs*1000)requestAnimationFrame(f);else res(d.slice(2));}requestAnimationFrame(f);})"""
 def frame_stats(d):
     d = sorted(d); n = len(d)
@@ -77,7 +78,7 @@ with sync_playwright() as p:
     res['squad'] = pg.evaluate("window.__game.state.heroes.squad")
     pg.evaluate("document.querySelector('[data-act=\"nav\"][data-tab=\"missions\"]').click()"); pg.wait_for_timeout(400)
     pg.evaluate("window.__game.fast=false")
-    pg.evaluate("document.querySelector('[data-act=\"startOp\"][data-id=\"o12\"]').click()")
+    pg.evaluate(f"document.querySelector('[data-act=\"startOp\"][data-id=\"{OP}\"]').click()")
     pg.wait_for_selector('.twrap'); pg.wait_for_timeout(2500); close(pg)
     for _ in range(60):
         if pg.evaluate("(()=>{const b=window.__game.state.tactics; const a=b.units.find(x=>x.uid===b.acting); return b.side==='player'&&a&&a.side==='player'})()"): break

@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.21.1)
+# Fang City: Animal Gangs (playable prototype v0.22.0)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,26 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.22.0 (Painted props: Docklands sample)
+
+Docklands (also the map for the intro's docks job) now uses painted props instead of shapes drawn in code.
+Footprints, cover heights, line of sight and every rule are unchanged; only the look is new.
+
+- **Vehicles:** a grey box truck, a charcoal panel van with a roof rack and a white Luton van. Each has
+  weathered paint, chrome, glass, dirt and rust. The headlights glow and throw light onto the ground ahead. A
+  blown-up van becomes a burnt-out wreck with embers still glowing in the cargo box.
+- **Cover and clutter:** three kinds of loaded pallet (wooden crates, steel cases, shrink-wrapped sacks), stacked
+  tyres, two kinds of concrete barrier, red fuel drums (and a burst drum once one explodes), and burn barrels with
+  live flames.
+- **Dockside:** painted street lamps with a glowing head, a rusty tug (the work boat and dinghy use it at a smaller
+  size), iron mooring bollards, and a cluttered site-office desk and shelving unit.
+- **Containers:** painted corrugated steel with rust runs, dents and grime on every container, still tinted to each
+  container's colour and still showing the clean code-drawn names.
+- Every painted prop sits on a soft contact shadow and is lit by the map's lights (the v0.21 light pass).
+- The art is 19 WebP files (about 330 KB) in `assets/props/docklands/`. They load only when Docklands is first
+  drawn. Until they arrive, or if one fails, the old code-drawn prop is shown.
+- Details and how to add another map: `docs/props-art.md`.
 
 ## v0.21.1 (Map beauty pass 2: light shafts and live details)
 

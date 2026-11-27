@@ -6,6 +6,7 @@
 import { drawPackProp, packFootprint, neonCol, hasPackArt } from './props.js';
 import { propDef, THEMES, ROOM_STYLES } from '../core/catalog.js';
 import * as FX from './mapfx.js';
+import * as PA from './propart.js';
 export const TW = 58, TH = 29;
 const HX = TW / 2, HY = TH / 2;
 export function toWorld(x, y) { return { x: (x - y) * HX, y: (x + y) * HY }; }
@@ -148,6 +149,13 @@ export function prepMap(m) {
   return p;
 }
 export function tileInfo(t) { return INFO.get(t) || { x: 0, y: 0 }; }
+// v0.22: the map whose painted prop art applies to this tile (null: draw the code prop)
+function artMap(t) {
+  const m = FX.current();
+  if (!m || !PA.has(m) || !t) return null;
+  const inf = INFO.get(t);
+  return inf && m.tiles[inf.y] && m.tiles[inf.y][inf.x] === t ? m : null;
+}
 
 // ---------- palettes ----------
 const HUES = {
@@ -228,6 +236,7 @@ function rust(g, r, n = 2) {
   }
 }
 
+function cTex(t) { const m = artMap(t); return m ? PA.img(m, 'container-tex') : null; }
 function drawContainer(g, t, sx, sy, z) {
   const run = t.run || { id: (tileInfo(t).x * 7 + tileInfo(t).y) % 9, i: 0, n: 1 };
   const last = run.i === run.n - 1;
@@ -252,8 +261,11 @@ function drawContainer(g, t, sx, sy, z) {
       g.beginPath(); g.moveTo(T[0][0], T[0][1]); for (const q of [T[1], T[2], T[3], T[0]]) g.lineTo(q[0], q[1]); g.stroke();
     }
     const r = rng(hash(info.x, info.y, s + 5) * 1e9);
+    const tex = cTex(t);
     onFace(g, f.L, () => {
-      corrugate(g, 8, 0.07, 0.93);
+      // v0.22: painted corrugated steel (rust runs, dents, grime) multiplied over the container colour
+      if (tex) { g.globalCompositeOperation = 'multiply'; g.drawImage(tex, (r() * 0.5) * tex.width, 0, tex.width * 0.5, tex.height, 0, 0, 1, 1); g.globalCompositeOperation = 'source-over'; }
+      else corrugate(g, 8, 0.07, 0.93);
       g.fillStyle = 'rgba(255,240,220,0.10)'; g.fillRect(0, 0, 1, 0.06);
       g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(0, 0.93, 1, 0.07);
       if (run.i === 0) { g.fillStyle = 'rgba(0,0,0,0.38)'; g.fillRect(0, 0, 0.05, 1); }
@@ -582,6 +594,7 @@ function drawBarrier(g, sx, sy, z) {
 function drawBarrel(g, sx, sy, z, kind, now) {
   const p = P(sx, sy, z, 0, 0);
   const rx = 6.2 * z, ry = 3.1 * z, H = 12.5 * z;
+  if (kind === 'flames') { burnFlames(g, p, 15 * z, z, now); return; }
   const wreck = kind === 'wreck';
   const col = kind === 'burn' ? '#5a3a26' : kind === 'drum' ? '#44525a' : wreck ? '#2a2420' : '#a2281e';
   const c = hex2(col);
@@ -614,7 +627,10 @@ function drawBarrel(g, sx, sy, z, kind, now) {
     g.beginPath(); g.ellipse(p[0], p[1] - top, rx * 0.5, ry * 0.5, 0, 0, Math.PI * 2); g.fill();
     return;
   }
-  if (kind === 'burn') {
+  if (kind === 'burn') burnFlames(g, p, top, z, now);
+}
+function burnFlames(g, p, top, z, now) {
+  {
     const t = (now || 0) / 1000;
     const glow = g.createRadialGradient(p[0], p[1] - top - 4 * z, 0, p[0], p[1] - top - 4 * z, 22 * z);
     glow.addColorStop(0, 'rgba(255,170,60,0.55)'); glow.addColorStop(1, 'rgba(255,90,20,0)');
@@ -686,6 +702,33 @@ function drawShelf(g, t, sx, sy, z) {
   }
 }
 
+function drawLampArt(g, m, sx, sy, z, now) {
+  const d = PA.def(m, 'lamp'), im = PA.img(m, 'lamp');
+  if (!d || !im) return false;
+  const h = d.h * z, w = h * im.width / im.height, x = sx - d.base * w, y = sy + 1.5 * z - h;
+  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(sx, sy + 0.5 * z, 5 * z, 2.5 * z, 0, 0, Math.PI * 2); g.fill();
+  g.drawImage(im, x, y, w, h);
+  const hx = x + d.head[0] * w, hy = y + d.head[1] * h + 1.5 * z;
+  const flick = 0.92 + 0.08 * Math.sin((now || 0) / 140 + sx);
+  const glow = g.createRadialGradient(hx, hy, 0, hx, hy, 16 * z);
+  glow.addColorStop(0, `rgba(255,220,150,${0.8 * flick})`); glow.addColorStop(0.25, 'rgba(255,170,80,0.22)'); glow.addColorStop(1, 'rgba(255,150,60,0)');
+  g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = glow; g.beginPath(); g.arc(hx, hy, 16 * z, 0, Math.PI * 2); g.fill(); g.restore();
+  return true;
+}
+function drawBoatArt(g, m, t, sx, sy, z, now) {
+  const d = PA.def(m, 'tug'), im = PA.img(m, 'tug');
+  if (!d || !im) return false;
+  const kind = t.hue || 'tug', k = kind === 'small' ? 0.62 : kind === 'work' ? 0.9 : 1;
+  const bob = Math.sin((now || 0) / 900 + sy) * 0.8 * z;
+  const by = sy + 5 * z + bob, rl = Math.sin((now || 0) / 1300 + sx) * 0.012;
+  // dark water shadow under the hull, then the boat, then a wake ring
+  g.fillStyle = 'rgba(0,6,10,0.35)'; g.beginPath(); g.ellipse(sx + 4 * z * k, by + 2 * z, 30 * z * k, 11 * z * k, -0.46, 0, Math.PI * 2); g.fill();
+  const r = PA.rect(d, im, 0, 0, z * k);
+  g.save(); g.translate(sx, by); g.rotate(rl); g.drawImage(im, r.x, r.y, r.w, r.h); g.restore();
+  g.strokeStyle = 'rgba(160,200,210,0.16)'; g.lineWidth = 0.8 * z;
+  g.beginPath(); g.ellipse(sx - 6 * z * k, by + 8 * z * k, 18 * z * k, 6 * z * k, -0.46, 0, Math.PI * 2); g.stroke();
+  return true;
+}
 function drawLamp(g, sx, sy, z, now) {
   const H = 54;
   const pole = palOf('#3a3c3e', 1.1, 0.8, 0.6);
@@ -840,8 +883,12 @@ export function drawYardProp(g, t, sx, sy, z, now) {
     const oy = HY + H + 14, h0 = oy + HY + 12;
     const ck = t.__cut || 0;
     if (ck > 0 && ck < 1) return paintProp(g, t, sx, sy, z, now);
-    const key = `${d}|${t.hue}|${t.cut}|${t.stack}|${ck >= 1 ? 'cut' : ''}|${t.dir || ''}`;
+    const am = artMap(t);
+    const key = `${d}|${t.hue}|${t.cut}|${t.stack}|${ck >= 1 ? 'cut' : ''}|${t.dir || ''}${am ? '|A' + PA.ver() : ''}`;
     cached(g, t, key, sx, sy, z, ox, oy, w0, h0, (cg, x, y, k) => paintProp(cg, t, x, y, k, now));
+    // v0.22: lit headlights / glowing embers on the painted vehicles, live over the lit sprite
+    if (am && (d === 'van' || d === 'car')) PA.headlights(g, am, artName(am, t, d), sx, sy, z, t.dir === 'S', now);
+    else if (am && d === 'wreck') PA.embers(g, am, 'truck-wreck', sx, sy, z, t.dir === 'S', now);
     return true;
   }
   return paintProp(g, t, sx, sy, z, now);
@@ -855,6 +902,8 @@ function paintProp(g, t, sx, sy, z, now) {
     try { return paintProp(g, t, sx, sy, z, now); } finally { t.__mir = 0; g.restore(); }
   }
   const d = t.decor;
+  const am = artMap(t);
+  if (am && paintArt(g, am, t, d, sx, sy, z, now)) return true;
   if (d === 'van' || d === 'car') { drawVan(g, t, sx, sy, z, false); return true; }
   if (d === 'wreck') { drawVan(g, t, sx, sy, z, true); return true; }
   if (d === 'boat') { drawBoat(g, t, sx, sy, z, now); return true; }
@@ -872,6 +921,34 @@ function paintProp(g, t, sx, sy, z, now) {
   if (d === 'lamp') { drawLamp(g, sx, sy, z, now); return true; }
   if (d === 'barrel-shelf') { drawRackShed(g, sx, sy, z); return true; }
   return drawPackProp(g, t, sx, sy, z);
+}
+
+// v0.22: painted prop art (see propart.js). Returns false to fall back to the code-drawn prop.
+function artName(m, t, d) {
+  const inf = tileInfo(t), h = hash(inf.x, inf.y, 7);
+  if (d === 'van' || d === 'car') return PA.vehicleArt(t, h);
+  if (d === 'wreck') return 'truck-wreck';
+  if (d === 'crate') return PA.crateArt(Math.floor(hash(inf.x, inf.y, 2) * 3), h);
+  if (d === 'barrier') return h < 0.5 ? 'barrier-yellow' : 'barrier-red';
+  if (d === 'barrel') return 'barrel-red';
+  if (d === 'barrelWreck') return 'barrel-wreck';
+  if (d === 'desk' && !(t.hue === 'cafe' || t.hue === 'club' || t.hue === 'shop')) return 'desk';
+  if (d === 'shelf' && !(t.__cut > 0)) return 'shelf';
+  return null;
+}
+function paintArt(g, m, t, d, sx, sy, z, now) {
+  if (d === 'burn') {
+    // drawn every frame (live flames): a cheap ellipse shadow, no blur
+    g.fillStyle = 'rgba(0,0,0,0.45)'; g.beginPath(); g.ellipse(sx, sy + 1.5 * z, 8 * z, 4 * z, 0, 0, Math.PI * 2); g.fill();
+    if (!PA.blit(g, m, 'barrel-burn', sx, sy, z, 0)) return false;
+    drawBarrel(g, sx, sy, z, 'flames', now); return true;
+  }
+  if (d === 'lamp') return !(t.__cut > 0) && drawLampArt(g, m, sx, sy, z, now);
+  if (d === 'boat') return drawBoatArt(g, m, t, sx, sy, z, now);
+  const n = artName(m, t, d);
+  if (!n) return false;
+  const big = d === 'van' || d === 'car' || d === 'wreck';
+  return PA.blit(g, m, n, sx, sy, z, big ? 0.7 : 0.5);
 }
 
 // ---------- scenery (not gameplay): border fences, bollards, backdrop ----------
@@ -908,6 +985,7 @@ export function drawScenery(g, sp, z, now) {
   const p = toWorld(sp.x, sp.y);
   const sx = p.x * z, sy = p.y * z;
   if (sp.kind === 'fence') cached(g, sp, 'f', sx, sy, z, HX + 6, 30 + HY + 8, TW + 12, 30 + 2 * HY + 14, (cg, x, y, k) => drawFence(cg, null, x, y, k, sp.alongY));
+  else if (sp.kind === 'bollard' && bollardArt(g, sp, sx, sy, z)) { /* painted */ }
   else if (sp.kind === 'bollard') {
     const pal = palOf('#3a3a3c', 1, 0.75, 0.55);
     box(g, sx, sy, z, -0.08, -0.08, 0.08, 0.08, 0, 5, pal);
@@ -917,6 +995,16 @@ export function drawScenery(g, sp, z, now) {
   }
 }
 export function sceneryOf(m) { return prepMap(m).scenery; }
+function bollardArt(g, sp, sx, sy, z) {
+  const m = FX.current();
+  if (!m || !PA.has(m) || !prepMap(m).scenery.includes(sp)) return false;
+  const d = PA.def(m, 'bollard'), im = PA.img(m, 'bollard');
+  if (!d || !im) return false;
+  const w = d.w * z, h = w * im.height / im.width;
+  g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(sx, sy + 0.5 * z, 6 * z, 3 * z, 0, 0, Math.PI * 2); g.fill();
+  g.drawImage(im, sx - w / 2, sy + d.dy * z - h, w, h);
+  return true;
+}
 
 // Distant crane, stacked boxes and the far canal bank. Drawn behind everything.
 const BACK = new WeakMap();
@@ -1727,6 +1815,7 @@ const LIVE = { m: null, T: null, z: 1 };
 export function drawYardLive(g, m, z, now) {
   const p = prepMap(m);
   FX.setCurrent(m);
+  PA.ensure(m);
   LIVE.m = m; LIVE.T = g.getTransform(); LIVE.z = z;
   // shimmering canal (batched into a few alpha buckets)
   const t = now / 1000;
