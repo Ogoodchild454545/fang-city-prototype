@@ -103,7 +103,7 @@ export const CATALOG = [
   P({ id: 'crate', name: 'Crates', cat: 'cover', h: 16, cover: 1, ch: 'x', ico: '🟫' }),
   P({ id: 'barrel', name: 'Explosive barrel', cat: 'hazard', h: 12, cover: 1, explosive: 1, blast: 1, dmg: 4, wreck: 'barrelWreck', ch: 'b', ico: '🛢️' }),
   P({ id: 'burn', name: 'Burn barrel', cat: 'street', h: 12, cover: 1, ch: 'f', ico: '🔥', light: { kind: 'fire' } }),
-  P({ id: 'barrier', name: 'Concrete barrier', cat: 'cover', h: 12, cover: 2, ch: 'B', ico: '🚧' }),
+  P({ id: 'barrier', name: 'Concrete barrier', cat: 'cover', h: 12, cover: 1, ch: 'B', ico: '🚧' }),
   P({ id: 'lamp', name: 'Lamp post', cat: 'street', h: 54, cover: 0, block: 0, ch: 'l', ico: '💡', light: { kind: 'lamp' } }),
   P({ id: 'fence', name: 'Chain-link fence', cat: 'structure', themes: ['docklands', 'ironclaw', 'estate', 'velvet'], h: 30, cover: 0, ch: 'n', ico: '⛓️' }),
   P({ id: 'wall', name: 'Wall', cat: 'structure', h: 40, cover: 2, los: 1, ch: 'W', chLow: 'w', ico: '🧱', special: 'wall' }),

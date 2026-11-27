@@ -143,7 +143,13 @@ with sync_playwright() as p:
     assert st['lesson'].get('enemyShown') and st['lesson'].get('end'), st['lesson']
     # (g) turn 2: Pounce (or Strike if Hook walked up) is taught the same way, its button pulsing
     pg.wait_for_timeout(500)
-    h = hint(pg); print('turn 2', h)
+    h = hint(pg); print('turn 2', h, [(q['hero'], q['x'], q['y'], q['ap']) for q in tstate(pg)['units']])
+    if h and h['id'] == 'l-close':
+        # Hook held his spot out of Pounce range: the lesson points at a tile (round his side if it can)
+        sp = tstate(pg)['spot']; assert sp, 'l-close spot'; shot(pg, 'mission1-close')
+        tap_tile(pg, sp['x'], sp['y']); h = hint(pg); print('close-go', h); assert h and h['id'] == 'l-close-go', h
+        tap(pg, '.tabgo'); pg.wait_for_timeout(1200)
+        h = wait_hint(pg, lambda i: i in ('l-atk-pounce', 'l-atk-melee'), 10); print('after walk', h)
     assert h and h['id'] in ('l-atk-pounce', 'l-atk-melee'), h
     if h['id'] == 'l-atk-pounce':
         assert 'leap attack' in h['text'] and 'up to 4 tiles' in h['text'], h
@@ -270,6 +276,9 @@ with sync_playwright() as p:
         if h: tap(pg, '.thint')
         h = hint(pg)
     print('flank', h); assert h and h['id'] == 'adv-flank' and 'Flanked' in h['text'] and '+10%' in h['text'], h
+    cv = pg.locator('.tinsp .ticov').inner_text(); print('cover line', cv)
+    assert cv.startswith('Cover') and 'None vs Rook' in cv and 'flanked' in cv and '+15% crit' in cv, cv
+    assert pg.locator('.tstats .tcov').count() == 1
     shot(pg, 'm2-flank')
     tap(pg, '.thint')
     pg.evaluate("(()=>{const c=window.__game,b=c.state.tactics; const o=b.units.find(q=>q.side==='enemy'&&q.hp>0); o.bleed=2; c.sub.tactics.inspect=null; c.render();})()")

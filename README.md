@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.22.0)
+# Fang City: Animal Gangs (playable prototype v0.22.1)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,20 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.22.1 (Cover that matches the art)
+
+- Concrete barriers are waist-high, so they now give half cover (−20 to hit) instead of full. Full cover (−40)
+  is for tall things: containers, vans and cars, walls. Crates, barrels, burn barrels, desks and shelves stay half.
+- Tapping a piece shows a Cover line in its status panel (Full / Half / None, flanked by whom, and the real
+  numbers, against the rivals who can see it); the unit bar shows a short cover chip.
+- Hunker on half cover now really counts as full (the extra −20 was being skipped).
+- Cover is directional (it always was in the rules; now it's shown): the Cover line lists each rival who can see the
+  piece, e.g. "Half vs Knack (−20) · None vs Hook (flanked)". The move preview tile says FULL / HALF / FLANKED
+  against the rivals that can see it, with the shield badges on the sides that have cover.
+- Flanking pays more: a flanked target has no cover, and the attacker gets +10 aim and now +15% crit, shown in the
+  attack bar, the odds panel and the tips. Mission 1 turn 2 now guides Rook round Hook's side when he's out of
+  Pounce reach (new l-close step).
 
 ## v0.22.0 (Painted props: Docklands sample)
 

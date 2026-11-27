@@ -817,7 +817,9 @@ function drawDestCover(g, b, x, y, sx, sy, z) {
     const ey = sy + (n.y * z - sy) * 0.42;
     drawShieldBadge(g, ex, ey, z * 0.92, t.cover);
   }
-  const label = best >= 2 ? 'FULL' : best === 1 ? 'HALF' : 'OPEN';
+  const me = T.actingUnit(b);
+  if (me) { const ci = T.coverInfo(b, { ...me, x, y }); if (ci.level >= 0) best = ci.level; }
+  const label = best >= 2 ? 'FULL' : best === 1 ? 'HALF' : (me && T.coverInfo(b, { ...me, x, y }).level === 0 && best === 0 && [...DIRS4].some(([dx, dy]) => (tile(b.map, x + dx, y + dy) || {}).cover)) ? 'FLANKED' : 'OPEN';
   g.font = `bold ${Math.round(8 * z)}px Inter, sans-serif`;
   g.textAlign = 'center';
   const tw = g.measureText(label).width + 8 * z;
@@ -1594,7 +1596,7 @@ function actionBarHtml(b, u, canAct, actor) {
       if (pr && pr.ok) {
         const band = pr.chance >= 75 ? 'hi' : pr.chance >= 50 ? 'mid' : 'lo';
         const dmg = pr.dmg ? `${pr.dmg[0]}–${pr.dmg[1]} dmg` : '';
-        out.push(`<button class="btn red tabatk" data-act="tconfirm" data-uid="${en.uid}"><span class="tabico">${abilityIcon(ICONS[mode] ? mode : 'shot')}</span><b>${esc(nm)}</b><span class="tabpct ${band}">${pr.chance}%</span><span class="tabdmg">${dmg}</span></button><span class="tabwarn dim">on ${esc(defOf(en.hero).name)}</span>${oddsBreakdownHtml(pr, true)}`);
+        out.push(`<button class="btn red tabatk" data-act="tconfirm" data-uid="${en.uid}"><span class="tabico">${abilityIcon(ICONS[mode] ? mode : 'shot')}</span><b>${esc(nm)}</b><span class="tabpct ${band}">${pr.chance}%</span><span class="tabdmg">${dmg}</span></button><span class="tabwarn dim">on ${esc(defOf(en.hero).name)}${pr.flanked ? ` · <b class="green">flanked: +${T.FLANK_CRIT}% crit</b>` : ''}</span>${oddsBreakdownHtml(pr, true)}`);
       } else {
         out.push(`<span class="tabwarn">${esc((pr && pr.reason) || 'Out of reach')}: move closer or pick another target</span>`);
       }
@@ -1606,6 +1608,16 @@ function actionBarHtml(b, u, canAct, actor) {
 }
 
 // The XCOM-style panel for the inspected piece: vitals, every buff and debuff in plain words.
+// v0.22.1: a plain cover line (worst case against the rivals who can see the piece)
+// v0.22.1: a plain cover line. Cover is directional, so it is listed per rival who can see the piece.
+function coverLine(b, un, short) {
+  const ci = T.coverInfo(b, un), mine = un.side === 'player';
+  if (short) return ci.level < 0 ? 'Unseen' : ci.level >= 2 ? 'Full' : ci.level === 1 ? 'Half' : 'Open';
+  if (ci.level < 0) return `<div class="ticov hid"><em>Cover</em> <b>Out of sight</b> · ${mine ? 'no rival can shoot him here' : 'you can’t shoot him from here'}</div>`;
+  const cls = ci.level >= 2 ? 'full' : ci.level === 1 ? 'half' : 'none';
+  const part = (e) => `${e.level >= 2 ? '<b>Full</b>' : e.level === 1 ? '<b>Half</b>' : '<b class="red">None</b>'} vs ${esc(defOf(e.by.hero).name)} ${e.level >= 2 ? '(−40 to hit)' : e.level === 1 ? '(−20 to hit)' : `(flanked: +${T.FLANK_AIM} aim, +${T.FLANK_CRIT}% crit)`}`;
+  return `<div class="ticov ${cls}"><em>Cover</em> ${ci.each.slice(0, 3).map(part).join(' · ')}</div>`;
+}
 function inspectHtml(b, u) {
   const un = u.inspect && b.units.find((x) => x.uid === u.inspect);
   if (!un) return '';
@@ -1621,7 +1633,7 @@ function inspectHtml(b, u) {
     const nm = (defOf(sel.hero).abilities.find((a) => a.id === mode) || {}).name || (mode === 'melee' ? 'Strike' : 'Shoot');
     // v0.15: the attack button lives in the action bar (bottom left); the panel lists the odds
     atk = prev && prev.ok
-      ? `<div class="tiodds">${esc(nm)}: <b>${prev.chance}%</b>${prev.dmg ? ` · ${prev.dmg[0]}–${prev.dmg[1]} dmg` : ''}</div>${oddsBreakdownHtml(prev, false)}`
+      ? `<div class="tiodds">${esc(nm)}: <b>${prev.chance}%</b>${prev.dmg ? ` · ${prev.dmg[0]}–${prev.dmg[1]} dmg` : ''} · ${prev.crit}% crit${prev.flanked ? ' <b class="green">Flanked</b>' : ''}</div>${oddsBreakdownHtml(prev, false)}`
       : `<div class="tinone">${esc((prev && prev.reason) || 'Out of reach')}</div>`;
   }
   const pct = Math.max(0, Math.round(100 * un.hp / un.maxHp));
@@ -1629,6 +1641,7 @@ function inspectHtml(b, u) {
     <div class="tihead"><img loading="lazy" decoding="async" src="${d.thumb || d.portrait}" alt=""><div><b>${esc(d.name)}</b><span>${foe ? 'Rival' : 'Your crew'} · ${esc(d.roleTag || (cls && cls.name) || d.role || '')} · ${esc(d.species || '')}</span></div><button class="tix" data-act="closeInspect" aria-label="Close">×</button></div>
     <div class="tihp"><i style="width:${pct}%"></i><span>${Math.max(0, un.hp)}/${un.maxHp} HP</span></div>
     <div class="tistats"><span><em>Armour</em>${un.armor || 0}</span><span><em>AP</em>${un.ap}/${un.maxAp}</span><span><em>Move</em>${un.move}</span><span><em>Aim</em>${d.aim + (un.aimMod || 0)}</span><span><em>Ammo</em>${gun ? (un.ammo || 0) : '–'}</span>${un.dodge ? `<span><em>Dodge</em>${un.dodge}%</span>` : ''}</div>
+    ${un.hp > 0 ? coverLine(b, un) : ''}
     <div class="tiwep">${gun ? `${esc(gun.name)} ${gun.dmg[0]}–${gun.dmg[1]} · rng ${gun.range + (un.rangeBonus || 0)}` : 'No gun'}${mel ? ` · ${esc(mel.name)} ${mel.dmg[0] + (un.mdmg || 0)}–${mel.dmg[1] + (un.mdmg || 0)}` : ''}</div>
     <div class="tists">${sts.length ? sts.map((st) => `<div class="tist ${st.kind}"><i>${statusSvg(st.id)}</i><div><b>${esc(st.name)}${st.turns != null ? `<small>${st.id === 'bleed' || st.id === 'venom' ? `${st.turns} left` : `${st.turns} turn${st.turns > 1 ? 's' : ''}`}</small>` : ''}</b><span>${esc(st.text)}</span></div></div>`).join('') : '<div class="tinone">No buffs or debuffs.</div>'}</div>
     ${atk}
@@ -2442,7 +2455,7 @@ function lesson1(b, u, a) {
     if (u.preview || a.moved) lessonDone(b, 'tiles');
     else if (b.turn === 1 && !a.acted && a.ap >= 1) {
       const r = recTile(b, a, f);
-      return { id: 'l-tiles', lesson: 1, spot: r, html: `The <b>blue tiles</b> are where ${nm(a)} can walk. Each tile costs <b>1 AP</b>. Tap the glowing tile${r && T.coverFrom(b, f.x, f.y, r.x, r.y) ? ': it’s behind cover' : ''}.` };
+      return { id: 'l-tiles', lesson: 1, spot: r, html: `The <b>blue tiles</b> are where ${nm(a)} can walk. Each tile costs <b>1 AP</b>. Tap the glowing tile${r && T.coverFrom(b, f.x, f.y, r.x, r.y) ? `: it has cover on ${nm(f)}’s side` : ''}.` };
     }
   }
   // 3. the move preview, cover, Move here
@@ -2452,7 +2465,7 @@ function lesson1(b, u, a) {
       const pv = movePreview(u, b, a, u.preview.x, u.preview.y);
       if (pv) {
         const r = recTile(b, a, f), off = r && (r.x !== u.preview.x || r.y !== u.preview.y);
-        const cov = pv.cover >= 2 ? '<b>Full cover</b> there: Hook will miss Rook a lot more.' : pv.cover ? '<b>Half cover</b> there: Hook will miss Rook more.' : 'No cover there' + (off ? ': the glowing tile has some.' : '.');
+        const cov = pv.cover >= 2 ? `<b>Full cover</b> against ${nm(f)} there (−40 to hit).` : pv.cover ? `<b>Half cover</b> against ${nm(f)} there (−20 to hit). Cover only works on the side it faces.` : `No cover from ${nm(f)} there` + (off ? ': the glowing tile has some.' : '.');
         return { id: 'l-preview', lesson: 1, glow: '.tabgo', spot: off ? r : null, html: `The <b>move preview</b>: the route and its cost (<b>${pv.cost} AP</b>). ${cov} Tap <b>Move here</b>.` };
       }
     } else if (b.turn === 1 && !a.acted && a.ap >= 1 && L.tiles) {
@@ -2469,7 +2482,7 @@ function lesson1(b, u, a) {
     if (insp && eff === k) {
       const pr = T.previewShot(b, a, f, k);
       if (pr && pr.ok) {
-        const why = pr.cover ? `${nm(f)}’s cover lowers it.` : `${nm(f)} has no cover from here: a flank bonus.`;
+        const why = pr.cover ? `${nm(f)}’s cover lowers it: get round its side to flank him.` : `${nm(f)} has no cover from this side: flanked, +${T.FLANK_AIM} aim and +${T.FLANK_CRIT}% crit.`;
         return { id: 'l-odds-' + k, lesson: 1, glow: '.tabatk', html: `<b>${pr.chance}%</b> is your <b>hit chance</b>. Aim, cover and range change it; ${why} Tap the red <b>${ATK_NAME[k]}</b> button.` };
       }
     }
@@ -2478,6 +2491,23 @@ function lesson1(b, u, a) {
       : k === 'melee' ? `He’s right next to you. <b>Strike</b> (2 AP) hits with ${nm(a)}’s melee weapon, and each hit heals him 1 HP.`
         : `<b>Pounce</b> (2 AP) is ready. ${PLAIN.pounce}`;
     return { id: 'l-atk-' + k, lesson: 1, glow: `.tabl[data-mode="${k}"]`, html: `${what} Tap <b>${ATK_NAME[k]}</b>.` };
+  }
+  // 4b. rival out of Pounce reach on a later turn: walk to a glowing tile first (one that flanks him if possible)
+  if (b.turn > 1 && !L['atk-pounce'] && !a.acted && a.ap >= 3 && !T.cooldownLeft(a, 'pounce') && !(u.preview)) {
+    const reach = T.reachable(b, a).dist;
+    let best = null, bs = -1e9;
+    for (const [key, d] of reach) {
+      if (d < 1 || d > a.ap - 2) continue;
+      const [x, y] = key.split(',').map(Number), pr = T.previewShot(b, { ...a, x, y }, f, 'pounce');
+      if (!pr || !pr.ok) continue;
+      const sc = (pr.flanked ? 30 : 0) + pr.chance - d * 5;
+      if (sc > bs) { bs = sc; best = { x, y, fl: pr.flanked }; }
+    }
+    if (best) return { id: 'l-close', lesson: 1, spot: { x: best.x, y: best.y }, html: `${nm(f)} is out of <b>Pounce</b> reach (4 tiles). Walk to the glowing tile${best.fl ? `: it’s round his side, so he’s <b>flanked</b> (no cover, +${T.FLANK_AIM} aim, +${T.FLANK_CRIT}% crit)` : ''}.` };
+  }
+  if (u.preview && b.turn > 1 && !L['atk-pounce'] && !a.acted && !a.moved) {
+    const pv = movePreview(u, b, a, u.preview.x, u.preview.y);
+    if (pv) return { id: 'l-close-go', lesson: 1, glow: '.tabgo', html: `Tap <b>Move here</b> (${pv.cost} AP), then Pounce.` };
   }
   // 5. End turn
   if (!L.end && (a.ap <= 0 || (a.ap < 2 && (a.moved || a.acted)))) {
@@ -2520,7 +2550,7 @@ export const ADV_STEPS = [
     html: ({ b }) => { const o = b.units.find((q) => q.side === 'enemy' && q.hp > 0 && q.overwatch); return `<b>Overwatch</b> (the eye): ${o ? nm(o) : 'a rival'} skipped his attack to watch. He shoots the first piece that moves in his sight (−15% aim). Stay out of view, or make him waste it.`; } },
   { id: 'adv-cover',
     when: ({ b, u, a }) => b.intro === 2 && ((pvOf(b, u, a) || {}).cover || 0) > 0,
-    html: () => '<b>Cover:</b> crates, barrels and cars are <b>half cover</b> (−20% to hit you). Containers and walls are <b>full cover</b> (−40%) and block line of sight.' },
+    html: () => '<b>Cover</b> only blocks shots from its side. Low things (crates, barriers, barrels): <b>half</b>, −20 to hit. Tall things (containers, vans, walls): <b>full</b>, −40.' },
   { id: 'adv-threat',
     when: ({ b, u, a }) => b.intro === 2 && !!((pvOf(b, u, a) || {}).threats || []).length,
     html: () => '<b>Threat zone:</b> the red warning means rivals could hit Rook on that tile next turn; the red lines show who. Tiles marked safe can’t be shot.' },
@@ -2531,7 +2561,7 @@ export const ADV_STEPS = [
       if (f) { const pr = T.previewShot(b, a, f, EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(a, f)); if (pr && pr.ok && pr.flanked && !pr.melee) return true; }
       return !!((pvOf(b, u, a) || {}).threats || []).some((t) => t.flank && !t.melee);
     },
-    html: ({ b, u }) => { const f = u.inspect && b.units.find((q) => q.uid === u.inspect && q.side === 'enemy'); return f ? `<b>Flanked:</b> nothing between Rook and ${nm(f)}, so no cover: <b>+10%</b> to hit. Get round the side of cover to flank.` : '<b>Flanked:</b> a rival has no cover between him and that tile, so he gets <b>+10%</b> on Rook there. Keep cover between you.'; } },
+    html: ({ b, u }) => { const f = u.inspect && b.units.find((q) => q.uid === u.inspect && q.side === 'enemy'); return f ? `<b>Flanked:</b> nothing between Rook and ${nm(f)}, so no cover: <b>+10%</b> to hit. Flanking also gives <b>+${T.FLANK_CRIT}% crit</b>: get round the side of their cover.` : '<b>Flanked:</b> a rival has no cover between him and that tile, so he gets <b>+10%</b> on Rook there. Keep cover between you.'; } },
   { id: 'adv-status',
     when: ({ b }) => b.intro === 2 && b.units.some((q) => q.hp > 0 && T.statusesOf(b, q).some((s) => DEBUFFS.includes(s.id))),
     spot: ({ b }) => { const q = b.units.find((x) => x.hp > 0 && T.statusesOf(b, x).some((s) => DEBUFFS.includes(s.id))); return q ? { x: q.x, y: q.y } : null; },
@@ -2878,7 +2908,7 @@ export function render(ctx) {
         <div class="tinfo">
           ${canAct && sel.uid === actor.uid ? '<button class="tdesel" data-act="tdeselect" aria-label="Deselect" title="Deselect: look around the board">✕</button>' : ''}<div class="tuname">${esc(def.name)} <span class="tcls">${esc(def.roleTag || (cls && cls.name) || def.role)} · ${esc(def.species)}</span></div>
           <div class="thp"><i style="width:${Math.max(0, Math.round(100 * sel.hp / sel.maxHp))}%"></i><span>${sel.hp}/${sel.maxHp}</span></div>
-          <div class="tstats"><span class="taplbl" title="Action Points: spent on moving, attacks and abilities">AP ${sel.ap}/${sel.maxAp}</span>${apPips(sel.ap, sel.maxAp, 'big')}<span>Mv ${sel.move}</span><span>Spd ${sel.speed || def.speed}</span><span>${ico('ammo')} ${sel.ammo || 0}</span>${sel.medkits ? `<span>${ico('medkits')} ${sel.medkits}</span>` : ''}${sel.overwatch ? '<span class="tow">OW</span>' : ''}${sel.bleed ? `<span class="tst bleed">Bleed ${sel.bleed}</span>` : ''}${sel.shaken ? '<span class="tst shaken">Shaken</span>' : ''}${sel.rallied ? '<span class="tst rallied">Rallied</span>' : ''}${sel.dodge ? `<span title="Dodge">Dg ${sel.dodge}%</span>` : ''}</div>
+          <div class="tstats"><span class="taplbl" title="Action Points: spent on moving, attacks and abilities">AP ${sel.ap}/${sel.maxAp}</span>${apPips(sel.ap, sel.maxAp, 'big')}${sel.hp > 0 ? (() => { const c = coverLine(b, sel, true); return `<span class="tcov ${c.split(' ')[0].toLowerCase()}" title="Cover against the rivals who can see him (worst side)">${c}</span>`; })() : ''}<span>Mv ${sel.move}</span><span>Spd ${sel.speed || def.speed}</span><span>${ico('ammo')} ${sel.ammo || 0}</span>${sel.medkits ? `<span>${ico('medkits')} ${sel.medkits}</span>` : ''}${sel.overwatch ? '<span class="tow">OW</span>' : ''}${sel.bleed ? `<span class="tst bleed">Bleed ${sel.bleed}</span>` : ''}${sel.shaken ? '<span class="tst shaken">Shaken</span>' : ''}${sel.rallied ? '<span class="tst rallied">Rallied</span>' : ''}${sel.dodge ? `<span title="Dodge">Dg ${sel.dodge}%</span>` : ''}</div>
         </div>
       </div>
       <div class="ttray">

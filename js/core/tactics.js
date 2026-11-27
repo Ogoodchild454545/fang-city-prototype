@@ -172,7 +172,7 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (def.dodge && !def.marked && defn.species !== 'Owl') { chance -= def.dodge; push('Dodge', -def.dodge); }
   if (cover === 1) { chance -= 20; push('Half cover', -20); }
   if (cover === 2) { chance -= 40; push('Full cover', -40); }
-  if (flanked) { chance += 10; push('Flank', +10); }
+  if (flanked) { chance += FLANK_AIM; push('Flank', +FLANK_AIM); }
   // range falloff / shotgun sweet spot
   if (!melee) {
     const mid = Math.max(2, Math.floor(range * 0.45));
@@ -198,13 +198,9 @@ export function previewShot(b, att, def, mode = 'shot') {
   if (mu.aim) push('Matchup', mu.aim);
   if (def.suppressed) chance += 0; // att is not suppressed
   if (att.suppressed) { chance -= 20; push('Suppressed', -20); }
-  if (def.fortify) cover = Math.min(2, cover + 1);
-  // re-apply cover penalty if fortify raised it after the first calc? already applied pre-fortify.
-  if (def.fortify) {
-    // add one extra step of penalty if we hadn't already counted the bumped cover
-    if (cover === 1) { chance -= 20; push('Fortify', -20); }
-    else if (cover === 2) { /* maybe already full */ }
-  }
+  // Hunker: cover counts one step better (none -> half, half -> full); full stays full. v0.22.1: half -> full now
+  // costs the extra -20 too (it used to be skipped).
+  if (def.fortify && cover < 2) { cover += 1; chance -= 20; push('Fortify', -20); }
   chance = Math.max(5, Math.min(95, Math.round(chance)));
   let [d0, d1] = melee
     ? (defn.abilities.find((a) => a.id === mode && a.dmg)?.dmg || w.dmg)
@@ -220,12 +216,15 @@ export function previewShot(b, att, def, mode = 'shot') {
   return {
     ok: true, chance, cover, flanked, dist, melee, dmg: [Math.max(1, d0), Math.max(1, d1)],
     ap, mode, note: mu.note, los: true, parts, weapon: w.name, bleed: abl?.bleed || 0, sure,
+    crit: critChance(att, mode, def, flanked),
   };
 }
 
-export function critChance(att, mode, def) {
+export const FLANK_AIM = 10, FLANK_CRIT = 15;
+export function critChance(att, mode, def, flanked) {
   const defn = defOf(att.hero);
   let c = 8 + (att.crit || 0);
+  if (flanked) c += FLANK_CRIT; // v0.22.1: catching a piece in the open is rewarded with crits too
   if (def && def.marked && def.markEye) c += 10; // v0.19 Spotter's Eye
   if (defn.passive?.id === 'cold' && !att.moved) c += 15;
   if (mode === 'aimed') c += 8;
@@ -467,7 +466,7 @@ function resolveHit(b, att, def, mode, prev) {
   if (!hit) { log(b, `${nameOf(att)} missed ${nameOf(def)} (${prev.chance}%).`); return ev; }
   const span = prev.dmg[1] - prev.dmg[0] + 1;
   let dmg = prev.dmg[0] + Math.floor(rngNext(b) * span);
-  const cc = critChance(att, mode, def);
+  const cc = critChance(att, mode, def, prev.flanked);
   if (prev.sure || Math.floor(rngNext(b) * 100) < cc) { ev.crit = 1; dmg += 2; } // Backstab from hiding always crits
   const raw = dmg; // v0.17: remember the blow before armour so the UI can call out what was soaked
   const tdef = defOf(def.hero);
@@ -1560,4 +1559,21 @@ export function statusesOf(b, u) {
   if (u.hp > 0 && d.passive?.id === 'rebelgrit' && u.hp <= u.maxHp / 2) add('grit', 'Rebel Grit', 'buff', '-1 damage from every hit; cannot be Shaken, Suppressed or Blinded.', null);
   if (u.hp > 0 && u.ammo != null && u.ammo <= 0 && gunOf(u)) add('noammo', 'Out of ammo', 'debuff', 'Cannot shoot until resupplied; melee only.', null);
   return out;
+}
+
+// v0.22.1: how much cover a piece has right now against the opposing pieces that can see it (worst case),
+// using the same rules as previewShot: half -20 to hit, full -40, none = flanked (+10), Hunker one step better.
+export function coverInfo(b, un) {
+  const foes = b.units.filter((q) => q.hp > 0 && q.side !== un.side && !q.paid);
+  const seen = foes.filter((q) => hasLOS(b, q.x, q.y, un.x, un.y) || MANH(q.x, q.y, un.x, un.y) <= 1);
+  if (!seen.length) return { level: -1, by: null, each: [] };
+  // cover is directional: a crate only protects against shots from its side, so it is worked out per rival
+  const each = seen.map((q) => {
+    let c = coverFrom(b, q.x, q.y, un.x, un.y);
+    if (un.exposed && c > 0) c -= 1;
+    if (un.fortify) c = Math.min(2, c + 1);
+    return { level: c, by: q };
+  });
+  const worst = each.reduce((m, e) => (e.level < m.level ? e : m), each[0]);
+  return { level: worst.level, by: worst.by, each };
 }

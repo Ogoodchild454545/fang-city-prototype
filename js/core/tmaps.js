@@ -104,7 +104,7 @@ export function describeDocklands() {
       else if (t.decor === 'van' || t.decor === 'van2') key = `van (${t.hue || 'white'}, explosive, 2 tiles)`;
       else if (t.decor === 'barrel') key = 'explosive barrel (half cover)';
       else if (t.decor === 'crate') key = 'crate / pallet (half cover)';
-      else if (t.decor === 'barrier') key = 'concrete barrier (full cover)';
+      else if (t.decor === 'barrier') key = 'concrete barrier (half cover)';
       else if (t.decor === 'wall') key = `building wall (${t.hue || 'office'}, full cover, blocks LOS)`;
       else if (t.decor === 'desk') key = 'interior desk / bar counter (half cover)';
       else if (t.decor === 'shelf') key = 'interior shelving (half cover)';

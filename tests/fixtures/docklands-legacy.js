@@ -106,8 +106,8 @@ export function legacyDocklandsMap() {
   putVan(m, 8, 12, 'grey');
   putVan(m, 19, 8, 'grey');
 
-  // Concrete barriers — full cover, not explosive, not destructible.
-  for (const [x, y] of [[7, 3], [7, 8], [7, 14], [10, 11]]) put(m, x, y, 'barrier', 2);
+  // Concrete barriers — waist-high, so half cover since v0.22.1; not explosive, not destructible.
+  for (const [x, y] of [[7, 3], [7, 8], [7, 14], [10, 11]]) put(m, x, y, 'barrier', 1);
 
   // Crates / pallets — half cover, not destructible. (12,9) is Hook's tutorial cover from the west.
   for (const [x, y] of [[11, 7], [12, 9], [8, 10], [15, 10], [12, 12]]) put(m, x, y, 'crate', 1);
