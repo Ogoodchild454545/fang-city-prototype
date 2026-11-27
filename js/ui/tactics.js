@@ -455,6 +455,30 @@ function chanceColor(c) {
 }
 
 
+function drawAimLine(g, b, a, t, pr, z, now) {
+  const pa = toWorld(a.x, a.y), pt = toWorld(t.x, t.y);
+  const ax = pa.x * z, ay = (pa.y - Actors.actorHeight(a.hero) * 0.55) * z, tx = pt.x * z, ty = (pt.y - Actors.actorHeight(t.hero) * 0.55) * z;
+  const ct = T.coverTileFrom(b, a.x, a.y, t.x, t.y);
+  const col = pr.cover >= 2 ? '120,190,255' : pr.cover ? '240,200,90' : '255,90,70';
+  g.save();
+  g.setLineDash([6 * z, 5 * z]); g.lineDashOffset = -now / 40;
+  g.lineWidth = 2.2 * z; g.strokeStyle = 'rgba(0,0,0,.45)';
+  g.beginPath(); g.moveTo(ax, ay); g.lineTo(tx, ty); g.stroke();
+  g.lineWidth = 1.4 * z; g.strokeStyle = `rgba(${col},.85)`; g.stroke();
+  g.setLineDash([]);
+  if (ct && pr.cover) {
+    // the shield sits on the target's side that faces the shot, between him and the prop
+    const pc = toWorld(ct.x, ct.y);
+    drawShieldBadge(g, (pt.x + (pc.x - pt.x) * 0.45) * z, (pt.y + (pc.y - pt.y) * 0.45) * z - 6 * z, z * 1.15, pr.cover);
+  } else if (!pr.cover) {
+    g.font = `bold ${Math.round(7.5 * z)}px Oswald, sans-serif`; g.textAlign = 'center';
+    const mx = ax + (tx - ax) * 0.62, my = ay + (ty - ay) * 0.62, w = g.measureText('FLANKED').width + 8 * z;
+    g.fillStyle = 'rgba(120,20,14,.9)'; g.beginPath(); g.roundRect(mx - w / 2, my - 7 * z, w, 12 * z, 3 * z); g.fill();
+    g.fillStyle = '#fff'; g.fillText('FLANKED', mx, my + 2 * z);
+  }
+  g.restore();
+}
+
 function drawShieldBadge(g, x, y, z, cover) {
   const s = 6.5 * z;
   g.save();
@@ -1211,6 +1235,12 @@ function draw(ctx) {
   drawTags(g, tagQ, barR, z);
   drawBubbles(g, bubQ, z, now, barR.concat(tagQ));
 
+  // v0.22.2 aim line: shooter -> inspected rival, with a shield where the shot meets his cover (red when flanked)
+  if (sel && sel.side === 'player' && u.inspect && b.status === 'active' && !u.busy) {
+    const tg = b.units.find((q) => q.uid === u.inspect && q.side !== sel.side && q.hp > 0);
+    const pr = tg && T.previewShot(b, sel, tg, EXPLICIT_ATTACK.includes(u.mode) ? u.mode : defaultMode(sel, tg));
+    if (pr && pr.ok && !pr.melee) drawAimLine(g, b, sel, tg, pr, z, now);
+  }
   if (u.spot && b.status === 'active') drawSpot(g, u.spot, z, now, T.unitAt(b, u.spot.x, u.spot.y));
   Vfx.draw(g, fx, z);
 

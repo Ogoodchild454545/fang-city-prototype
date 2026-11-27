@@ -1,4 +1,4 @@
-# Fang City: Animal Gangs (playable prototype v0.22.1)
+# Fang City: Animal Gangs (playable prototype v0.22.2)
 
 Dark, modern-day animal gangster game for phones, played in **landscape**. Build a free-form hideout on an
 isometric dusk wasteland (clear junk, place and upgrade buildings, collect cash and Rep), train a mixed
@@ -30,6 +30,13 @@ factions you fight in Missions.
 - Ammo and medkits are finite. The Armoury, Clinic and Workshop are placeable, upgradeable producers with collect bubbles and storage caps (the Armoury also still upgrades troops). Before a fight each operator carries a limited load; each shot spends a round for good; unused rounds come back after the fight; there is no mid-battle refill (empty guns fall back to melee).
 - High Stakes is an opt-in mode with a confirm step and triple rewards. It is not permadeath: a KO'd operator stays in the crew, but their level and perks reset and any gear they carried is taken. Normal fights have no such penalty.
 - Saves are version 5. Older saves migrate and get a starting ammo / medkit stock.
+
+## v0.22.2 (Aim line)
+
+- Aiming at a rival draws a dashed aim line from the shooter to him: gold with a shield where the shot meets his
+  half cover, blue for full, red with a FLANKED tag when nothing covers him from that side. Makes it clear which
+  piece you're aiming at and why it's flanked or covered.
+- Unit tests for directional cover (straight, both diagonals, behind, side-on, two props).
 
 ## v0.22.1 (Cover that matches the art)
 

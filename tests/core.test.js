@@ -11,6 +11,7 @@ import { generateRivalBase, baseToRaidLayout, playerBaseLayout, RAID_W, RAID_H }
 import { aiNextActionFor } from '../js/core/ai.js';
 import { DISTRICTS, TROOPS, TROOP_ORDER, BOSSES, MISSIONS } from '../js/core/data.js';
 import * as T from '../js/core/tactics.js';
+import * as TM from '../js/core/tmaps.js';
 import { HERO_ORDER, HEROES, grantHero, finishTutorial, matchup, setSquad, CLASSES, SPECIES_PERKS, FUTURE_HEROES, FUTURE_ORDER } from '../js/core/heroes.js';
 import * as SH from '../js/core/shards.js';
 import { tutorialMap, avenueMap, docklandsMap, describeDocklands, tile } from '../js/core/tmaps.js';
@@ -1865,4 +1866,20 @@ test('v0.20.2 new intro crews open gear slots with the operator\'s own level; ol
   assert.equal(IT.openSlotCount(s, 'rook'), 6);
   s.heroes.owned.rook.lv = 4;
   assert.ok(IT.equipItem(s, 'rook', 'gilet').ok, 'Rook Lv 4 opens body armour');
+});
+
+test('v0.22.2 cover is directional: a prop next to the target covers shots from its side (incl. diagonals), not from behind or the open sides', () => {
+  const b = { map: TM.makeGrid(12, 12) };
+  b.map.tiles[5][4] = { ...b.map.tiles[5][4], decor: 'barrel', cover: 1, block: 1 }; // barrel west of a target at (5,5)
+  const cov = (ax, ay) => T.coverFrom(b, ax, ay, 5, 5);
+  assert.equal(cov(1, 5), 1, 'straight from the west: half');
+  assert.equal(cov(1, 2), 1, 'north-west diagonal: half');
+  assert.equal(cov(2, 8), 1, 'south-west diagonal: half');
+  assert.equal(cov(9, 5), 0, 'from the east (behind the target): flanked');
+  assert.equal(cov(5, 1), 0, 'straight from the north (side on): flanked');
+  assert.deepEqual(T.coverTileFrom(b, 1, 2, 5, 5), { x: 4, y: 5, cover: 1 });
+  assert.equal(T.coverTileFrom(b, 9, 5, 5, 5), null);
+  b.map.tiles[4][5] = { ...b.map.tiles[4][5], decor: 'container', cover: 2, block: 1 }; // add full cover to the north
+  assert.equal(cov(2, 2), 2, 'north-west: the better of the two props');
+  assert.equal(cov(5, 1), 2, 'north: the container');
 });

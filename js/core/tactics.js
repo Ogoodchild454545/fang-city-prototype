@@ -70,6 +70,17 @@ export function coverFrom(b, ax, ay, tx, ty) {
   return best;
 }
 
+// v0.22.2: which neighbouring prop gives that cover (for the aim line's shield), or null when flanked.
+export function coverTileFrom(b, ax, ay, tx, ty) {
+  let best = null;
+  for (const [dx, dy] of DIRS4) {
+    const t = tile(b.map, tx + dx, ty + dy);
+    if (!t || !t.cover || (ax - tx) * dx + (ay - ty) * dy <= 0) continue;
+    if (!best || t.cover > best.cover) best = { x: tx + dx, y: ty + dy, cover: t.cover };
+  }
+  return best;
+}
+
 export function isFlanked(b, ax, ay, tx, ty) {
   return coverFrom(b, ax, ay, tx, ty) === 0;
 }

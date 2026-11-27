@@ -279,7 +279,18 @@ with sync_playwright() as p:
     cv = pg.locator('.tinsp .ticov').inner_text(); print('cover line', cv)
     assert cv.startswith('Cover') and 'None vs Rook' in cv and 'flanked' in cv and '+15% crit' in cv, cv
     assert pg.locator('.tstats .tcov').count() == 1
+    print('m2 pieces', [(q['hero'], q['x'], q['y']) for q in tstate(pg)['units']])
     shot(pg, 'm2-flank')
+    # v0.22.2: the same kind of shot with a barrel between them gives Knack half cover, and the aim line shows it
+    bc = pg.evaluate("""(async()=>{const T=await import('./js/core/tactics.js'); const c=window.__game,b=c.state.tactics; const r=b.units.find(u=>u.hero==='rook'); const f=b.units.find(q=>q.uid===c.sub.tactics.inspect); const cand=[];
+      for (let y=0;y<b.map.h;y++) for (let x=0;x<b.map.w;x++) { const t=b.map.tiles[y][x]; if (!t.cover||t.los) continue;
+        for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) { const kx=x+dx, ky=y+dy; if ((r.x-kx)*(-dx)+(r.y-ky)*(-dy)<=0) continue; if (!T.walkable(b,kx,ky,f.uid)) continue;
+          const pr=T.previewShot(b,r,{...f,x:kx,y:ky},'shot'); if (pr&&pr.ok&&pr.cover) cand.push({x:kx,y:ky,prop:t.decor,cover:pr.cover,sc:(t.decor==='barrel'?10:0)-Math.abs(Math.abs(r.x-kx)+Math.abs(r.y-ky)-4)}); } }
+      cand.sort((p,q)=>q.sc-p.sc); const w=cand[0]; if (!w) return null; f.x=w.x; f.y=w.y; c.render(); return w;})()""")
+    print('barrel cover spot', bc); assert bc
+    pg.wait_for_timeout(400)
+    cv = pg.locator('.tinsp .ticov').inner_text(); print('cover line 2', cv); assert 'Half vs Rook' in cv or 'Full vs Rook' in cv, cv
+    shot(pg, 'm2-cover-aimline')
     tap(pg, '.thint')
     pg.evaluate("(()=>{const c=window.__game,b=c.state.tactics; const o=b.units.find(q=>q.side==='enemy'&&q.hp>0); o.bleed=2; c.sub.tactics.inspect=null; c.render();})()")
     h = None
